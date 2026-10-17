@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+bin/
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# Visual Studio & IDE
+.vs/
+*.user
+*.suo
+CMakeSettings.json
+
+# Qt generated
+CMakeLists.txt.user
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# Runtime data & media
+data/*.db-wal
+data/*.db-shm
+clips/*.mp4
+exports/*.csv
