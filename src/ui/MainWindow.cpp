@@ -34,6 +34,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
 
+    connect(view_monitor_, &MonitorWidget::request_change_video, this, [this](const QString& path) {
+        if (pipeline_) {
+            pipeline_->set_video_source(path.toStdString());
+        }
+    });
+    connect(view_settings_, &SettingsWidget::video_source_changed, this, [this](const QString& path) {
+        if (pipeline_) {
+            pipeline_->set_video_source(path.toStdString());
+        }
+    });
+
     pipeline_->start_pipeline("models/yolov8n.onnx", "configs/test_corridor.mp4");
 }
 

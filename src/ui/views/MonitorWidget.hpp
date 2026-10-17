@@ -16,6 +16,9 @@ public:
     void add_passage_event(const PassageEvent& ev);
     void update_active_roi(const RoiConfig& roi);
 
+signals:
+    void request_change_video(const QString& path);
+
 private:
     void setup_ui();
 
@@ -24,5 +27,6 @@ private:
     QLabel* entry_label_ = nullptr;
     QLabel* exit_label_ = nullptr;
     QLabel* total_label_ = nullptr;
+    QLabel* res_tag_ = nullptr;
     QListWidget* ticker_list_ = nullptr;
 };

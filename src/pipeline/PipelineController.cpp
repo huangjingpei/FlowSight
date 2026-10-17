@@ -216,6 +216,15 @@ void PipelineController::stop_pipeline() {
     }
 }
 
+void PipelineController::set_video_source(const std::string& video_source) {
+    std::string model = "models/yolov8n.onnx";
+    if (worker_ && !worker_->model_path_.empty()) {
+        model = worker_->model_path_;
+    }
+    stop_pipeline();
+    start_pipeline(model, video_source);
+}
+
 void PipelineController::update_roi_config(const RoiConfig& config) {
     if (worker_) {
         worker_->set_roi(config);

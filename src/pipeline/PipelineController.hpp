@@ -14,6 +14,7 @@ public:
 
     void start_pipeline(const std::string& model_path, const std::string& video_source);
     void stop_pipeline();
+    void set_video_source(const std::string& video_source);
     void update_roi_config(const RoiConfig& config);
     RoiConfig get_current_roi() const;
 

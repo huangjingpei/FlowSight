@@ -4,6 +4,9 @@
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QDateTime>
+#include <QPushButton>
+#include <QFileDialog>
+#include <QFileInfo>
 
 MonitorWidget::MonitorWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -29,11 +32,31 @@ void MonitorWidget::setup_ui() {
 
     auto* rec_dot = new QLabel("● 实时在线分析中", video_top_bar);
     rec_dot->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
-    auto* res_tag = new QLabel("分辨率: 1080P  |  编码: H.264  |  分析模式: 实时", video_top_bar);
-    res_tag->setStyleSheet("color: #8b949e; font-size: 12px;");
+    res_tag_ = new QLabel("分辨率: 1080P  |  编码: H.264  |  分析模式: 实时", video_top_bar);
+    res_tag_->setStyleSheet("color: #8b949e; font-size: 12px;");
+
+    auto* btn_load_video = new QPushButton("📁 载入 MP4 视频...", video_top_bar);
+    btn_load_video->setCursor(Qt::PointingHandCursor);
+    btn_load_video->setStyleSheet(
+        "QPushButton { background-color: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 4px; padding: 3px 12px; font-weight: 600; font-size: 11px; } "
+        "QPushButton:hover { background-color: #30363d; border-color: #58a6ff; color: #ffffff; }"
+    );
+    connect(btn_load_video, &QPushButton::clicked, this, [this]() {
+        QString file = QFileDialog::getOpenFileName(this, "选择客流分析 MP4 视频", "", "Video Files (*.mp4 *.avi *.mkv *.mov)");
+        if (!file.isEmpty()) {
+            QFileInfo fi(file);
+            if (res_tag_) {
+                res_tag_->setText(QString("当前视频: %1 | 模式: 本地循环解析").arg(fi.fileName()));
+            }
+            emit request_change_video(file);
+        }
+    });
+
     top_hbox->addWidget(rec_dot);
+    top_hbox->addSpacing(16);
+    top_hbox->addWidget(btn_load_video);
     top_hbox->addStretch();
-    top_hbox->addWidget(res_tag);
+    top_hbox->addWidget(res_tag_);
     video_vbox->addWidget(video_top_bar);
 
     canvas_ = new VideoCanvas(this);
