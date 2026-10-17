@@ -53,7 +53,7 @@ public slots:
 
         bool model_loaded = detector_->init(model_path_, 0.45f, 0.50f);
         if (!model_loaded) {
-            qWarning() << "[PipelineController] Model file not loaded, fallback to synthetic test generator mode.";
+            qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(model_path_);
         }
 
         // 打开视频源
@@ -61,6 +61,9 @@ public slots:
         bool has_real_video = false;
         if (!video_source_.empty()) {
             has_real_video = cap.open(video_source_);
+            if (!has_real_video) {
+                qWarning() << "[PipelineController] Could not open video source:" << QString::fromStdString(video_source_);
+            }
         }
 
         cv::Mat frame;
@@ -69,57 +72,55 @@ public slots:
         int frame_count = 0;
         float current_fps = 30.0f;
 
-        // 模拟合成行人运动坐标 (若无实际视频源)
-        float sim_x = 200.0f;
-        float sim_y = 150.0f;
-        float sim_speed_y = 4.0f;
-
         while (is_running_) {
             int64_t now_ms = QDateTime::currentMSecsSinceEpoch();
 
             if (has_real_video) {
                 if (!cap.read(frame) || frame.empty()) {
-                    cap.set(cv::CAP_PROP_POS_FRAMES, 0); // 循环播放
-                    if (!cap.read(frame)) break;
+                    // 循环读取本地视频文件
+                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                    if (!cap.read(frame) || frame.empty()) {
+                        qWarning() << "[PipelineController] Stream disconnected or EOF, retrying...";
+                        QThread::msleep(200);
+                        cap.open(video_source_);
+                        continue;
+                    }
                 }
             } else {
-                // 动态合成 1280x720 走廊测试背景与活动行人
-                frame = cv::Mat(720, 1280, CV_8UC3, cv::Scalar(40, 40, 40));
-                // 绘制透视地面
-                std::vector<cv::Point> corridor = {cv::Point(300, 100), cv::Point(980, 100), cv::Point(1200, 700), cv::Point(80, 700)};
-                cv::fillPoly(frame, std::vector<std::vector<cv::Point>>{corridor}, cv::Scalar(70, 70, 70));
-
-                sim_y += sim_speed_y;
-                if (sim_y > 600.0f || sim_y < 120.0f) sim_speed_y = -sim_speed_y;
-                sim_x = 640.0f + std::sin(sim_y * 0.02f) * 120.0f;
-
-                // 绘制模拟行人
-                cv::Rect sim_box(static_cast<int>(sim_x - 30), static_cast<int>(sim_y - 80), 60, 120);
-                cv::rectangle(frame, sim_box, cv::Scalar(180, 180, 240), -1);
-                cv::putText(frame, "Simulated Video Generator (Loop)", cv::Point(40, 50),
-                            cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+                // 无视频输入源时呈现专业待机画幅 (零虚假行人、零伪造检测)
+                frame = cv::Mat(720, 1280, CV_8UC3, cv::Scalar(18, 22, 28));
+                cv::putText(frame, "FlowSight AI Vision - Standby", cv::Point(80, 260),
+                            cv::FONT_HERSHEY_SIMPLEX, 1.2, cv::Scalar(88, 166, 255), 2);
+                cv::putText(frame, "No Active Video Stream Connected", cv::Point(80, 320),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(200, 200, 200), 2);
+                cv::putText(frame, "Click [ Load MP4 Video... ] above to analyze real MP4 file or RTSP stream.", cv::Point(80, 380),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(139, 148, 158), 1);
+                if (model_loaded) {
+                    cv::putText(frame, "[Status] YOLOv8n ONNX Model: Ready (models/yolov8n.onnx)", cv::Point(80, 440),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(63, 185, 80), 2);
+                } else {
+                    cv::putText(frame, "[Status] YOLOv8n ONNX Model: Missing in models/yolov8n.onnx", cv::Point(80, 440),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(248, 81, 73), 2);
+                }
+                QThread::msleep(100);
             }
 
             clip_recorder_->push_frame(frame);
 
-            // 1. 目标检测
+            // 1. 目标检测 (真实模型推理)
             std::vector<Detection> detections;
             QElapsedTimer infer_timer;
             infer_timer.start();
 
-            if (model_loaded) {
+            if (model_loaded && has_real_video) {
                 detector_->detect(frame, detections);
-            } else {
-                // 模拟一个检测框输入供无权重时验证全链路
-                Detection sim_det;
-                sim_det.bbox = cv::Rect2f(sim_x - 30, sim_y - 80, 60, 120);
-                sim_det.confidence = 0.92f;
-                sim_det.class_id = 0;
-                detections.push_back(sim_det);
+            } else if (!model_loaded && has_real_video) {
+                cv::putText(frame, "Model not loaded! Place yolov8n.onnx in models/ folder.", cv::Point(30, 40),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
             }
             float infer_ms = static_cast<float>(infer_timer.nsecsElapsed()) / 1e6f;
 
-            // 2. 目标跟踪
+            // 2. 目标跟踪 (ByteTrack 跟踪真实检测框)
             auto tracks = tracker_->update(detections);
 
             // 3. 区域滞后防抖计数

@@ -159,6 +159,8 @@ void MainWindow::on_nav_item_changed(int row) {
     stacked_views_->setCurrentIndex(row);
     if (row == 2) {
         view_evidence_->refresh_events();
+    } else if (row == 3) {
+        view_analytics_->refresh_report();
     }
 }
 

@@ -21,7 +21,6 @@ ui_*.h
 qrc_*.cpp
 
 # Runtime data & media
-data/*.db-wal
-data/*.db-shm
-clips/*.mp4
-exports/*.csv
+data/
+clips/
+exports/
