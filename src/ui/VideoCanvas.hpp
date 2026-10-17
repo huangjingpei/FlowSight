@@ -40,6 +40,7 @@ private:
     bool is_point_in_video_rect(const QPointF& pt_c) const;
     int get_hovered_vertex_index(const QPointF& pt_c) const;
     bool validate_polygon(const std::vector<cv::Point2f>& pts) const;
+    void draw_standby_screen(QPainter& painter);
 
     bool read_only_ = false;
     QImage current_frame_;

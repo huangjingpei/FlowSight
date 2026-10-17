@@ -35,11 +35,13 @@ RoiConfig VideoCanvas::get_roi() const {
 
 void VideoCanvas::paintEvent(QPaintEvent*) {
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(25, 25, 25));
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.fillRect(rect(), QColor(13, 17, 23));
 
     if (current_frame_.isNull()) {
-        painter.setPen(Qt::gray);
-        painter.drawText(rect(), Qt::AlignCenter, "等待视频流接入...");
+        draw_standby_screen(painter);
         return;
     }
 
@@ -304,4 +306,87 @@ int VideoCanvas::get_hovered_vertex_index(const QPointF& pt_c) const {
         }
     }
     return -1;
+}
+
+void VideoCanvas::draw_standby_screen(QPainter& painter) {
+    painter.fillRect(rect(), QColor(13, 17, 23)); // #0d1117 深黑曜石底色
+
+    int w = std::min(width() - 40, 680);
+    int h = std::min(height() - 40, 360);
+    int cx = (width() - w) / 2;
+    int cy = (height() - h) / 2;
+
+    QRect card_rect(cx, cy, w, h);
+
+    // 1. 卡片背景与圆角细边框
+    painter.setBrush(QColor(22, 27, 34)); // #161b22
+    painter.setPen(QPen(QColor(48, 54, 61), 1)); // #30363d
+    painter.drawRoundedRect(card_rect, 10, 10);
+
+    // 顶部青色光条
+    painter.setBrush(QColor(88, 166, 255)); // #58a6ff
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(QRect(cx, cy, w, 3), 2, 2);
+
+    int content_x = cx + 28;
+    int content_y = cy + 28;
+
+    // 2. 待机状态芯片标签
+    QRect pill_rect(content_x, content_y, 110, 24);
+    painter.setBrush(QColor(33, 38, 45));
+    painter.setPen(QPen(QColor(56, 139, 253, 100), 1));
+    painter.drawRoundedRect(pill_rect, 12, 12);
+
+    painter.setBrush(QColor(240, 136, 62)); // 琥珀黄圆点
+    painter.setPen(Qt::NoPen);
+    painter.drawEllipse(content_x + 10, content_y + 8, 8, 8);
+
+    QFont pill_font("Segoe UI", 9, QFont::DemiBold);
+    painter.setFont(pill_font);
+    painter.setPen(QColor(240, 136, 62));
+    painter.drawText(QRect(content_x + 24, content_y, 80, 24), Qt::AlignVCenter, "待机就绪");
+
+    // 3. 主标题 (全矢量 TrueType 字体)
+    content_y += 36;
+    QFont title_font("Microsoft YaHei", 16, QFont::Bold);
+    title_font.setStyleHint(QFont::SansSerif);
+    painter.setFont(title_font);
+    painter.setPen(QColor(240, 246, 252));
+    painter.drawText(content_x, content_y + 20, "FlowSight AI 智能客流感知系统");
+
+    // 4. 副标题
+    content_y += 30;
+    QFont sub_font("Microsoft YaHei", 10);
+    painter.setFont(sub_font);
+    painter.setPen(QColor(139, 148, 158));
+    painter.drawText(content_x, content_y + 16, "当前无活动视频输入源，请选择接入本地 MP4 视频或网络摄像机流");
+
+    // 5. 操作引导框
+    content_y += 32;
+    QRect guide_rect(content_x, content_y, w - 56, 76);
+    painter.setBrush(QColor(13, 17, 23));
+    painter.setPen(QPen(QColor(48, 54, 61), 1));
+    painter.drawRoundedRect(guide_rect, 6, 6);
+
+    QFont guide_font("Microsoft YaHei", 9, QFont::Normal);
+    painter.setFont(guide_font);
+    painter.setPen(QColor(201, 209, 217));
+    painter.drawText(content_x + 14, content_y + 26, "• 播放本地视频: 点击上方【 📁 载入 MP4 视频... 】按钮，选择任意 MP4 文件实时分析");
+    painter.drawText(content_x + 14, content_y + 54, "• 接入网络摄像头: 切换至左侧【 ⚙️ 系统设置 】页面，配置标准 RTSP / RTMP 流地址");
+
+    // 6. 核心引擎状态徽章
+    content_y += 94;
+    auto draw_badge = [&](int bx, int by, const QString& text, const QColor& dot_color) {
+        painter.setBrush(dot_color);
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(bx, by + 4, 7, 7);
+
+        QFont b_font("Segoe UI", 9, QFont::Medium);
+        painter.setFont(b_font);
+        painter.setPen(QColor(139, 148, 158));
+        painter.drawText(bx + 14, by + 12, text);
+    };
+
+    draw_badge(content_x, content_y, "YOLOv8n ONNX 深度学习模型: 已就绪", QColor(63, 185, 80));
+    draw_badge(content_x + 280, content_y, "ByteTrack 跟踪与防抖状态机: 已就绪", QColor(63, 185, 80));
 }

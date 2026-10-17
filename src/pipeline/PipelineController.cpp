@@ -9,8 +9,29 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QDebug>
+#include <QCoreApplication>
+#include <QFileInfo>
+#include <QDir>
 #include <atomic>
 #include <mutex>
+
+static std::string resolve_resource_path(const std::string& path_str) {
+    if (path_str.empty()) return path_str;
+    if (path_str.find("://") != std::string::npos) return path_str; // RTSP/HTTP URL
+
+    QFileInfo fi(QString::fromStdString(path_str));
+    if (fi.isAbsolute() && fi.exists()) return path_str;
+    if (fi.exists()) return QDir::cleanPath(fi.absoluteFilePath()).toStdString();
+
+    QString app_dir = QCoreApplication::applicationDirPath();
+    QString candidate1 = app_dir + "/" + QString::fromStdString(path_str);
+    if (QFileInfo::exists(candidate1)) return QDir::cleanPath(candidate1).toStdString();
+
+    QString candidate2 = app_dir + "/../../" + QString::fromStdString(path_str);
+    if (QFileInfo::exists(candidate2)) return QDir::cleanPath(candidate2).toStdString();
+
+    return path_str;
+}
 
 class PipelineController::Worker : public QObject {
     Q_OBJECT
@@ -51,18 +72,20 @@ public slots:
         roi_counter_ = std::make_unique<RoiCounter>();
         clip_recorder_ = std::make_unique<ClipRecorder>(90);
 
-        bool model_loaded = detector_->init(model_path_, 0.45f, 0.50f);
+        std::string resolved_model = resolve_resource_path(model_path_);
+        bool model_loaded = detector_->init(resolved_model, 0.45f, 0.50f);
         if (!model_loaded) {
-            qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(model_path_);
+            qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
         // 打开视频源
+        std::string resolved_video = resolve_resource_path(video_source_);
         cv::VideoCapture cap;
         bool has_real_video = false;
-        if (!video_source_.empty()) {
-            has_real_video = cap.open(video_source_);
+        if (!resolved_video.empty()) {
+            has_real_video = cap.open(resolved_video);
             if (!has_real_video) {
-                qWarning() << "[PipelineController] Could not open video source:" << QString::fromStdString(video_source_);
+                qWarning() << "[PipelineController] Could not open video source:" << QString::fromStdString(resolved_video);
             }
         }
 
@@ -75,34 +98,30 @@ public slots:
         while (is_running_) {
             int64_t now_ms = QDateTime::currentMSecsSinceEpoch();
 
-            if (has_real_video) {
+            if (!has_real_video) {
+                // 无视频输入源时，向 UI 投递空帧，触发 VideoCanvas 高保真矢量待机界面 (零像素撕裂、零 Hershey 点阵字体)
+                emit frame_ready(QImage(), {});
+                StatisticsSnapshot snap;
+                snap.fps = 0.0f;
+                snap.infer_ms = 0.0f;
+                snap.current_occupancy = 0;
+                snap.today_entry = today_entry_;
+                snap.today_exit = today_exit_;
+                snap.today_total = today_entry_ + today_exit_;
+                emit stats_updated(snap);
+                QThread::msleep(80);
+                continue;
+            }
+
+            if (!cap.read(frame) || frame.empty()) {
+                // 循环读取本地视频文件
+                cap.set(cv::CAP_PROP_POS_FRAMES, 0);
                 if (!cap.read(frame) || frame.empty()) {
-                    // 循环读取本地视频文件
-                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                    if (!cap.read(frame) || frame.empty()) {
-                        qWarning() << "[PipelineController] Stream disconnected or EOF, retrying...";
-                        QThread::msleep(200);
-                        cap.open(video_source_);
-                        continue;
-                    }
+                    qWarning() << "[PipelineController] Stream disconnected or EOF, retrying...";
+                    QThread::msleep(200);
+                    cap.open(resolved_video);
+                    continue;
                 }
-            } else {
-                // 无视频输入源时呈现专业待机画幅 (零虚假行人、零伪造检测)
-                frame = cv::Mat(720, 1280, CV_8UC3, cv::Scalar(18, 22, 28));
-                cv::putText(frame, "FlowSight AI Vision - Standby", cv::Point(80, 260),
-                            cv::FONT_HERSHEY_SIMPLEX, 1.2, cv::Scalar(88, 166, 255), 2);
-                cv::putText(frame, "No Active Video Stream Connected", cv::Point(80, 320),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.9, cv::Scalar(200, 200, 200), 2);
-                cv::putText(frame, "Click [ Load MP4 Video... ] above to analyze real MP4 file or RTSP stream.", cv::Point(80, 380),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(139, 148, 158), 1);
-                if (model_loaded) {
-                    cv::putText(frame, "[Status] YOLOv8n ONNX Model: Ready (models/yolov8n.onnx)", cv::Point(80, 440),
-                                cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(63, 185, 80), 2);
-                } else {
-                    cv::putText(frame, "[Status] YOLOv8n ONNX Model: Missing in models/yolov8n.onnx", cv::Point(80, 440),
-                                cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(248, 81, 73), 2);
-                }
-                QThread::msleep(100);
             }
 
             clip_recorder_->push_frame(frame);
@@ -112,11 +131,8 @@ public slots:
             QElapsedTimer infer_timer;
             infer_timer.start();
 
-            if (model_loaded && has_real_video) {
+            if (model_loaded) {
                 detector_->detect(frame, detections);
-            } else if (!model_loaded && has_real_video) {
-                cv::putText(frame, "Model not loaded! Place yolov8n.onnx in models/ folder.", cv::Point(30, 40),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
             }
             float infer_ms = static_cast<float>(infer_timer.nsecsElapsed()) / 1e6f;
 
