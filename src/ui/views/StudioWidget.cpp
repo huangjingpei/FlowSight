@@ -3,7 +3,6 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
-#include <QMessageBox>
 
 StudioWidget::StudioWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -11,55 +10,75 @@ StudioWidget::StudioWidget(QWidget* parent) : QWidget(parent) {
 
 void StudioWidget::setup_ui() {
     auto* main_layout = new QHBoxLayout(this);
-    main_layout->setContentsMargins(8, 8, 8, 8);
-    main_layout->setSpacing(8);
+    main_layout->setContentsMargins(14, 14, 14, 14);
+    main_layout->setSpacing(14);
 
     // 1. 左侧大标定交互画布
     canvas_ = new VideoCanvas(this);
     canvas_->set_read_only(false);
+    canvas_->setStyleSheet("border: 1px solid #30363d; border-radius: 8px;");
     main_layout->addWidget(canvas_, 4);
 
-    // 2. 右侧标定工具箱
+    // 2. 右侧标定控制面板
     auto* right_panel = new QWidget(this);
-    right_panel->setFixedWidth(280);
+    right_panel->setFixedWidth(310);
     auto* right_vbox = new QVBoxLayout(right_panel);
     right_vbox->setContentsMargins(0, 0, 0, 0);
+    right_vbox->setSpacing(12);
 
-    auto* tool_group = new QGroupBox("空间标定工作台", this);
+    auto* tool_group = new QGroupBox("空间几何标定工具", this);
     auto* tool_vbox = new QVBoxLayout(tool_group);
+    tool_vbox->setSpacing(10);
 
-    // 绘制操作
-    auto* op_label = new QLabel("操作指引: 点击[新建多边形]后，在画面上单击添加顶点，双击闭合多边形；拖拽红色圆点可微调位置，多边形内部按住拖拽可整体平移。", this);
+    auto* op_card = new QWidget(this);
+    op_card->setStyleSheet("background-color: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 10px;");
+    auto* op_layout = new QVBoxLayout(op_card);
+    op_layout->setContentsMargins(2, 2, 2, 2);
+
+    auto* tip_title = new QLabel("📌 标定交互指引", op_card);
+    tip_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;");
+    auto* op_label = new QLabel(
+        "1. 点击 [新建多边形]，在画面上依次单击打下顶点；\n"
+        "2. 在最后一个点双击，自动闭合生成 N 边形；\n"
+        "3. 拖拽红色圆点微调单点，内部按住拖拽整体平移。",
+        op_card
+    );
     op_label->setWordWrap(true);
-    op_label->setStyleSheet("color: #bbb; font-size: 12px; margin-bottom: 10px;");
-    tool_vbox->addWidget(op_label);
+    op_label->setStyleSheet("color: #8b949e; font-size: 11px; line-height: 150%;");
+    op_layout->addWidget(tip_title);
+    op_layout->addWidget(op_label);
+    tool_vbox->addWidget(op_card);
 
-    btn_draw_ = new QPushButton("新建多边形 (N边形)", this);
-    btn_draw_->setStyleSheet("padding: 8px; font-weight: bold; background: #0984e3; color: white; border-radius: 4px;");
+    btn_draw_ = new QPushButton("✏️  新建多边形 (N边形)", this);
+    btn_draw_->setObjectName("btn_accent");
+    btn_draw_->setFixedHeight(38);
     tool_vbox->addWidget(btn_draw_);
 
-    btn_reset_ = new QPushButton("清空重置", this);
-    btn_reset_->setStyleSheet("padding: 6px;");
+    btn_reset_ = new QPushButton("🗑️  清空当前区域", this);
+    btn_reset_->setFixedHeight(32);
     tool_vbox->addWidget(btn_reset_);
 
-    status_label_ = new QLabel("状态: 等待标定", this);
-    status_label_->setStyleSheet("color: #ffeaa7; font-weight: bold; margin-top: 5px;");
+    status_label_ = new QLabel("● 状态: 空闲 / 等待标定", this);
+    status_label_->setStyleSheet("color: #ffa502; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     tool_vbox->addWidget(status_label_);
 
-    tool_vbox->addSpacing(15);
+    tool_vbox->addSpacing(10);
 
-    // 参数微调
-    auto* param_group = new QGroupBox("防抖状态机参数", this);
+    // 防抖参数微调
+    auto* param_group = new QGroupBox("滞后防抖状态机参数", this);
     auto* param_vbox = new QVBoxLayout(param_group);
+    param_vbox->setSpacing(8);
 
-    buffer_val_label_ = new QLabel("几何缓冲带: 20 px", this);
+    buffer_val_label_ = new QLabel("几何缓冲带半径: 20 px", this);
+    buffer_val_label_->setStyleSheet("color: #c9d1d9; font-size: 12px;");
     buffer_slider_ = new QSlider(Qt::Horizontal, this);
     buffer_slider_->setRange(10, 40);
     buffer_slider_->setValue(20);
     param_vbox->addWidget(buffer_val_label_);
     param_vbox->addWidget(buffer_slider_);
 
-    confirm_val_label_ = new QLabel("连续确认帧: 4 帧", this);
+    confirm_val_label_ = new QLabel("连续穿越确认帧: 4 帧", this);
+    confirm_val_label_->setStyleSheet("color: #c9d1d9; font-size: 12px;");
     confirm_slider_ = new QSlider(Qt::Horizontal, this);
     confirm_slider_->setRange(2, 8);
     confirm_slider_->setValue(4);
@@ -69,12 +88,14 @@ void StudioWidget::setup_ui() {
     tool_vbox->addWidget(param_group);
     tool_vbox->addStretch();
 
-    // 生效与取消按钮
+    // 底部保存控制
     auto* btn_box = new QHBoxLayout();
     btn_cancel_ = new QPushButton("取消修改", this);
-    btn_cancel_->setStyleSheet("padding: 8px;");
-    btn_apply_ = new QPushButton("立即应用生效", this);
-    btn_apply_->setStyleSheet("padding: 8px; font-weight: bold; background: #00b894; color: white; border-radius: 4px;");
+    btn_cancel_->setFixedHeight(36);
+
+    btn_apply_ = new QPushButton("✓  立即应用生效", this);
+    btn_apply_->setObjectName("btn_primary");
+    btn_apply_->setFixedHeight(36);
 
     btn_box->addWidget(btn_cancel_);
     btn_box->addWidget(btn_apply_);
@@ -83,7 +104,7 @@ void StudioWidget::setup_ui() {
     right_vbox->addWidget(tool_group);
     main_layout->addWidget(right_panel, 1);
 
-    // 信号槽连接
+    // 连接信号槽
     connect(btn_draw_, &QPushButton::clicked, this, &StudioWidget::on_btn_start_draw);
     connect(btn_reset_, &QPushButton::clicked, this, &StudioWidget::on_btn_reset);
     connect(btn_apply_, &QPushButton::clicked, this, &StudioWidget::on_btn_apply);
@@ -91,11 +112,11 @@ void StudioWidget::setup_ui() {
     connect(canvas_, &VideoCanvas::polygon_status_changed, this, &StudioWidget::on_polygon_status);
 
     connect(buffer_slider_, &QSlider::valueChanged, this, [this](int val) {
-        buffer_val_label_->setText(QString("几何缓冲带: %1 px").arg(val));
+        buffer_val_label_->setText(QString("几何缓冲带半径: %1 px").arg(val));
     });
 
     connect(confirm_slider_, &QSlider::valueChanged, this, [this](int val) {
-        confirm_val_label_->setText(QString("连续确认帧: %1 帧").arg(val));
+        confirm_val_label_->setText(QString("连续穿越确认帧: %1 帧").arg(val));
     });
 
     connect(canvas_, &VideoCanvas::roi_applied, this, [this](const RoiConfig& roi) {
@@ -117,12 +138,14 @@ void StudioWidget::set_roi(const RoiConfig& roi) {
 
 void StudioWidget::on_btn_start_draw() {
     canvas_->start_drawing();
-    status_label_->setText("状态: 单击打点，双击闭合");
+    status_label_->setText("● 正在打点: 单击加点，双击闭合");
+    status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_btn_reset() {
     canvas_->reset_roi();
-    status_label_->setText("状态: 已清空");
+    status_label_->setText("● 状态: 已清空区域");
+    status_label_->setStyleSheet("color: #ff7675; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_btn_apply() {
@@ -131,20 +154,25 @@ void StudioWidget::on_btn_apply() {
     cfg.min_confirm_frames = confirm_slider_->value();
     canvas_->set_roi(cfg);
     canvas_->apply_changes();
-    status_label_->setText("状态: 已应用生效");
+    status_label_->setText("● 状态: 配置已成功应用");
+    status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_btn_cancel() {
     canvas_->cancel_changes();
-    status_label_->setText("状态: 已取消修改");
+    status_label_->setText("● 状态: 已恢复上次配置");
+    status_label_->setStyleSheet("color: #8b949e; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_polygon_status(bool is_valid, int vertex_count) {
     if (vertex_count < 3) {
-        status_label_->setText(QString("状态: 正在打点 (%1点)").arg(vertex_count));
+        status_label_->setText(QString("● 打点中: 已落 %1 点").arg(vertex_count));
+        status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     } else if (is_valid) {
-        status_label_->setText(QString("状态: 合法 %1 边形 (可拖拽微调)").arg(vertex_count));
+        status_label_->setText(QString("● 合法多边形: %1 个顶点 (可拖拽微调)").arg(vertex_count));
+        status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     } else {
-        status_label_->setText("状态: 非法多边形 (请避免自交)");
+        status_label_->setText("● 非法多边形: 请避免线段自相交");
+        status_label_->setStyleSheet("color: #ff4757; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     }
 }

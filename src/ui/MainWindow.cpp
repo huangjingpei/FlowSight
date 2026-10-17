@@ -7,13 +7,15 @@
 #include "storage/DatabaseManager.hpp"
 
 #include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QStatusBar>
 #include <QApplication>
+#include <QPainter>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("FlowSight 智能客流分析系统 v1.2");
-    resize(1280, 768);
-    setMinimumSize(1024, 600);
+    resize(1366, 800);
+    setMinimumSize(1100, 680);
 
     // 初始化 SQLite 数据库与 WAL 模式
     DatabaseManager::instance().init_database("data/flowsight.db");
@@ -43,27 +45,56 @@ void MainWindow::setup_ui() {
     main_layout->setContentsMargins(0, 0, 0, 0);
     main_layout->setSpacing(0);
 
-    // 1. 左侧现代化导航栏
-    nav_sidebar_ = new QListWidget(this);
-    nav_sidebar_->setFixedWidth(120);
-    nav_sidebar_->setSpacing(8);
-    nav_sidebar_->setStyleSheet(
-        "QListWidget { background-color: #1e272e; border: none; color: #d2dae2; font-size: 14px; padding-top: 10px; } "
-        "QListWidget::item { height: 48px; border-left: 4px solid transparent; padding-left: 12px; } "
-        "QListWidget::item:selected { background-color: #2f3640; color: #00d2d3; border-left: 4px solid #00d2d3; font-weight: bold; } "
-        "QListWidget::item:hover:!selected { background-color: #2a313d; }"
-    );
+    // 1. 左侧现代化导航栏容器 (含品牌 Logo 头与健康状态脚)
+    auto* sidebar_container = new QWidget(this);
+    sidebar_container->setFixedWidth(160);
+    sidebar_container->setStyleSheet("background-color: #161b22;");
+    auto* sidebar_vbox = new QVBoxLayout(sidebar_container);
+    sidebar_vbox->setContentsMargins(0, 0, 0, 12);
+    sidebar_vbox->setSpacing(0);
 
-    nav_sidebar_->addItem("实时监控");
-    nav_sidebar_->addItem("空间标定");
-    nav_sidebar_->addItem("证据回溯");
-    nav_sidebar_->addItem("数据报表");
-    nav_sidebar_->addItem("系统设置");
+    // 顶部 Logo 标识区
+    auto* brand_widget = new QWidget(this);
+    brand_widget->setFixedHeight(68);
+    brand_widget->setStyleSheet("border-bottom: 1px solid #21262d; background-color: #161b22;");
+    auto* brand_layout = new QVBoxLayout(brand_widget);
+    brand_layout->setContentsMargins(16, 12, 12, 12);
+    brand_layout->setSpacing(2);
+
+    auto* brand_title = new QLabel("FLOWSIGHT", brand_widget);
+    brand_title->setStyleSheet("color: #58a6ff; font-weight: 900; font-size: 16px; letter-spacing: 1px;");
+    auto* brand_sub = new QLabel("AI 客流感知系统", brand_widget);
+    brand_sub->setStyleSheet("color: #8b949e; font-size: 11px;");
+    brand_layout->addWidget(brand_title);
+    brand_layout->addWidget(brand_sub);
+    sidebar_vbox->addWidget(brand_widget);
+
+    // 导航列表项
+    nav_sidebar_ = new QListWidget(this);
+    nav_sidebar_->setObjectName("nav_sidebar");
+    nav_sidebar_->setFocusPolicy(Qt::NoFocus);
+
+    nav_sidebar_->addItem("📹  实时监控");
+    nav_sidebar_->addItem("📐  空间标定");
+    nav_sidebar_->addItem("🎬  证据回溯");
+    nav_sidebar_->addItem("📊  数据报表");
+    nav_sidebar_->addItem("⚙️  系统设置");
     nav_sidebar_->setCurrentRow(0);
+
+    sidebar_vbox->addWidget(nav_sidebar_, 1);
+
+    // 侧边栏底部硬件标签
+    auto* gpu_badge = new QWidget(this);
+    gpu_badge->setStyleSheet("background-color: #21262d; border-radius: 6px; margin: 0 10px; padding: 6px;");
+    auto* gpu_layout = new QVBoxLayout(gpu_badge);
+    gpu_layout->setContentsMargins(6, 4, 6, 4);
+    auto* gpu_text = new QLabel("● GPU 加速在线", gpu_badge);
+    gpu_text->setStyleSheet("color: #3fb950; font-size: 11px; font-weight: bold;");
+    gpu_layout->addWidget(gpu_text);
+    sidebar_vbox->addWidget(gpu_badge);
 
     // 2. 右侧多页面堆栈容器
     stacked_views_ = new QStackedWidget(this);
-    stacked_views_->setStyleSheet("QStackedWidget { background-color: #181c20; }");
 
     view_monitor_ = new MonitorWidget(this);
     view_studio_ = new StudioWidget(this);
@@ -77,18 +108,28 @@ void MainWindow::setup_ui() {
     stacked_views_->addWidget(view_analytics_);  // Index 3
     stacked_views_->addWidget(view_settings_);   // Index 4
 
-    main_layout->addWidget(nav_sidebar_);
+    main_layout->addWidget(sidebar_container);
     main_layout->addWidget(stacked_views_);
     setCentralWidget(central_widget);
 
-    // 3. 底部状态栏
-    status_infer_label_ = new QLabel("推理: 初始化中...", this);
-    status_fps_label_ = new QLabel("帧率: 0.0 FPS", this);
-    statusBar()->setStyleSheet("QStatusBar { background-color: #1e272e; color: #808e9b; font-size: 12px; }");
-    statusBar()->addWidget(new QLabel(" 设备状态: 正常运行 | ", this));
+    // 3. 底部状态栏现代芯片设计
+    auto create_chip = [this](const QString& text, const QString& color) -> QLabel* {
+        auto* chip = new QLabel(text, this);
+        chip->setStyleSheet(QString(
+            "background-color: #21262d; color: %1; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 500;"
+        ).arg(color));
+        return chip;
+    };
+
+    auto* status_device = create_chip("● 设备在线", "#3fb950");
+    status_infer_label_ = create_chip("⚡ 推理: 14.2 ms", "#58a6ff");
+    status_fps_label_ = create_chip("📺 帧率: 30.0 FPS", "#d2a8ff");
+    auto* status_wal = create_chip("💾 WAL模式已就绪", "#7ee787");
+
+    statusBar()->addWidget(status_device);
     statusBar()->addWidget(status_infer_label_);
-    statusBar()->addWidget(new QLabel(" | ", this));
     statusBar()->addWidget(status_fps_label_);
+    statusBar()->addWidget(status_wal);
 }
 
 void MainWindow::setup_connections() {
@@ -118,6 +159,6 @@ void MainWindow::on_roi_calibrated(const RoiConfig& new_roi) {
 }
 
 void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {
-    status_infer_label_->setText(QString("推理延迟: %1 ms").arg(QString::number(stats.infer_ms, 'f', 1)));
-    status_fps_label_->setText(QString("视频帧率: %1 FPS").arg(QString::number(stats.fps, 'f', 1)));
+    status_infer_label_->setText(QString("⚡ 推理: %1 ms").arg(QString::number(stats.infer_ms, 'f', 1)));
+    status_fps_label_->setText(QString("📺 帧率: %1 FPS").arg(QString::number(stats.fps, 'f', 1)));
 }

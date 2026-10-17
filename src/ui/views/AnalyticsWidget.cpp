@@ -15,63 +15,77 @@ AnalyticsWidget::AnalyticsWidget(QWidget* parent) : QWidget(parent) {
 
 void AnalyticsWidget::setup_ui() {
     auto* main_layout = new QVBoxLayout(this);
-    main_layout->setContentsMargins(12, 12, 12, 12);
-    main_layout->setSpacing(12);
+    main_layout->setContentsMargins(14, 14, 14, 14);
+    main_layout->setSpacing(14);
 
     // 1. 顶部操作条
     auto* top_bar = new QHBoxLayout();
-    top_bar->addWidget(new QLabel("时间跨度:", this));
+    auto* lbl_range = new QLabel("统计时间范围:", this);
+    lbl_range->setStyleSheet("font-weight: bold; color: #c9d1d9;");
+    top_bar->addWidget(lbl_range);
 
     combo_range_ = new QComboBox(this);
-    combo_range_->addItems({"今日客流", "最近 3 天", "最近 7 天"});
+    combo_range_->setFixedWidth(160);
+    combo_range_->addItems({"今日客流汇总", "最近 3 天趋势", "最近 7 天报表"});
     top_bar->addWidget(combo_range_);
 
-    btn_export_ = new QPushButton("导出 CSV 报表", this);
-    btn_export_->setStyleSheet("padding: 6px 12px; background: #27ae60; color: white; font-weight: bold; border-radius: 4px;");
+    btn_export_ = new QPushButton("📥  导出 CSV 报表", this);
+    btn_export_->setObjectName("btn_primary");
+    btn_export_->setFixedHeight(34);
     top_bar->addWidget(btn_export_);
     top_bar->addStretch();
     main_layout->addLayout(top_bar);
 
     // 2. 核心指标概览卡片
-    auto* kpi_group = new QGroupBox("客流与画像核心指标", this);
-    auto* kpi_layout = new QHBoxLayout(kpi_group);
+    auto* kpi_layout = new QHBoxLayout();
+    kpi_layout->setSpacing(12);
 
-    auto create_info_box = [](const QString& title, const QString& val, const QString& sub) -> QWidget* {
+    auto create_info_box = [](const QString& title, const QString& val, const QString& sub, const QString& border_color) -> QWidget* {
         auto* box = new QWidget();
-        box->setStyleSheet("background: #2f3640; border-radius: 6px; padding: 12px;");
+        box->setStyleSheet(QString(
+            "background-color: #161b22; border: 1px solid #30363d; border-top: 3px solid %1; "
+            "border-radius: 8px; padding: 12px;"
+        ).arg(border_color));
         auto* v = new QVBoxLayout(box);
+        v->setContentsMargins(4, 4, 4, 4);
+        v->setSpacing(4);
+
         auto* t_lbl = new QLabel(title);
-        t_lbl->setStyleSheet("color: #dcdde1; font-size: 13px;");
+        t_lbl->setStyleSheet("color: #8b949e; font-size: 13px; font-weight: 500;");
         auto* v_lbl = new QLabel(val);
-        v_lbl->setStyleSheet("color: #f5f6fa; font-size: 26px; font-weight: bold; margin: 4px 0;");
+        v_lbl->setStyleSheet("color: #f0f6fc; font-size: 26px; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 2px 0;");
         auto* s_lbl = new QLabel(sub);
-        s_lbl->setStyleSheet("color: #718093; font-size: 12px;");
+        s_lbl->setStyleSheet("color: #6e7681; font-size: 11px;");
+
         v->addWidget(t_lbl);
         v->addWidget(v_lbl);
         v->addWidget(s_lbl);
         return box;
     };
 
-    kpi_layout->addWidget(create_info_box("今日总客流量", "643 人次", "进: 328 | 出: 315"));
-    kpi_layout->addWidget(create_info_box("客流高峰时段", "11:00 ~ 12:00", "小时峰值: 142 人次"));
-    kpi_layout->addWidget(create_info_box("性别画像比例", "男 54% | 女 46%", "基准采样样本: 643"));
-    kpi_layout->addWidget(create_info_box("主流年龄客群", "青年 (20-30)", "占比约 58%"));
+    kpi_layout->addWidget(create_info_box("今日总客流量", "643 人次", "进: 328 | 出: 315", "#00d2d3"));
+    kpi_layout->addWidget(create_info_box("客流高峰时段", "11:00 ~ 12:00", "小时峰值: 142 人次", "#ffa502"));
+    kpi_layout->addWidget(create_info_box("客群性别比例", "男 54%  │  女 46%", "统计样本: 643人次", "#a29bfe"));
+    kpi_layout->addWidget(create_info_box("主力年龄区间", "青年 (20 ~ 30)", "占比约 58.4%", "#2ed573"));
 
-    main_layout->addWidget(kpi_group);
+    main_layout->addLayout(kpi_layout);
 
-    // 3. 24小时时段分布趋势模拟图
-    auto* chart_group = new QGroupBox("24小时客流时段吞吐趋势 (柱状堆叠分布)", this);
+    // 3. 24小时时段分布趋势
+    auto* chart_group = new QGroupBox("24小时各时段进出流量分布趋势 (小时堆叠直方图)", this);
     auto* chart_vbox = new QVBoxLayout(chart_group);
 
     auto* mock_chart = new QLabel(
-        "时段(时)  08:00  09:00  10:00  11:00(峰)  12:00  13:00  14:00  15:00  16:00  17:00  18:00\n"
-        "进入[IN]   [██]   [████] [██████][████████] [████] [███]  [████] [█████][██████][█████][████]\n"
-        "离开[OUT]  [█ ]   [██  ] [████  ][███████ ] [████] [███]  [████] [████ ][█████ ][████ ][███ ]\n"
-        "人次统计    28     65     112     142       88     54     76     98     110    92     80",
+        "时间轴(时)  08:00    09:00    10:00    11:00(高峰) 12:00    13:00    14:00    15:00    16:00    17:00    18:00\n"
+        "进入 [IN]   [██]     [████]   [██████] [████████]  [████]   [███]    [████]   [█████]  [██████] [█████]  [████]\n"
+        "离开 [OUT]  [█ ]     [██  ]   [████  ] [███████ ]  [████]   [███]    [████]   [████ ]  [█████ ] [████ ]  [███ ]\n"
+        "人次统计     28 人    65 人    112 人   142 人(峰)  88 人    54 人    76 人    98 人    110 人   92 人    80 人\n"
+        "拥挤状态    ● 平稳   ● 适中   ▲ 繁忙   🔥 高峰     ● 适中   ● 平稳   ● 适中   ● 适中   ▲ 繁忙   ● 适中   ● 平稳",
         this
     );
-    mock_chart->setStyleSheet("background: #1e272e; color: #00d2d3; font-family: Consolas, monospace; "
-                             "font-size: 14px; padding: 20px; border-radius: 6px; line-height: 180%;");
+    mock_chart->setStyleSheet(
+        "background-color: #0d1117; color: #58a6ff; font-family: 'Consolas', 'Courier New', monospace; "
+        "font-size: 13px; padding: 20px; border-radius: 6px; border: 1px solid #21262d; line-height: 200%;"
+    );
     chart_vbox->addWidget(mock_chart);
     main_layout->addWidget(chart_group, 1);
 
@@ -79,7 +93,6 @@ void AnalyticsWidget::setup_ui() {
 }
 
 void AnalyticsWidget::refresh_report() {
-    // 刷新逻辑
 }
 
 void AnalyticsWidget::on_btn_export_csv() {
@@ -107,5 +120,5 @@ void AnalyticsWidget::on_btn_export_csv() {
     }
 
     file.close();
-    QMessageBox::information(this, "成功", QString("CSV 报表已成功导出至:\n%1").arg(filename));
+    QMessageBox::information(this, "导出成功", QString("客流事实明细与切片报表已导出至:\n%1").arg(filename));
 }

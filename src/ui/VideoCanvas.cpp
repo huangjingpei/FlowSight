@@ -94,28 +94,50 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
         }
     }
 
-    // 4. 绘制检测跟踪框与足底点
-    painter.setBrush(Qt::NoBrush);
+    // 4. 绘制检测跟踪框与足底点 (高科技 HUD 视觉效果)
+    painter.setRenderHint(QPainter::Antialiasing, true);
     for (const auto& trk : current_tracks_) {
         cv::Point2f top_left(trk.bbox.x, trk.bbox.y);
         QPointF c_tl = frame_to_canvas(top_left);
         float w = trk.bbox.width * scale_;
         float h = trk.bbox.height * scale_;
 
-        painter.setPen(QPen(QColor(0, 255, 128), 2));
-        painter.drawRect(QRectF(c_tl.x(), c_tl.y(), w, h));
+        // 柔和半透明绿光边框
+        painter.setPen(QPen(QColor(46, 213, 115, 200), 2));
+        painter.setBrush(QColor(46, 213, 115, 20));
+        painter.drawRoundedRect(QRectF(c_tl.x(), c_tl.y(), w, h), 4, 4);
 
-        // 足底接触点
+        // 四角 HUD 科技高亮小拐角
+        float corner_len = std::min(w, h) * 0.25f;
+        painter.setPen(QPen(QColor(0, 230, 118), 3));
+        // 左上角
+        painter.drawLine(QPointF(c_tl.x(), c_tl.y()), QPointF(c_tl.x() + corner_len, c_tl.y()));
+        painter.drawLine(QPointF(c_tl.x(), c_tl.y()), QPointF(c_tl.x(), c_tl.y() + corner_len));
+        // 右下角
+        painter.drawLine(QPointF(c_tl.x() + w, c_tl.y() + h), QPointF(c_tl.x() + w - corner_len, c_tl.y() + h));
+        painter.drawLine(QPointF(c_tl.x() + w, c_tl.y() + h), QPointF(c_tl.x() + w, c_tl.y() + h - corner_len));
+
+        // 足底接触点 (外层光晕 + 内部红点)
         QPointF c_foot = frame_to_canvas(trk.foot_point);
-        painter.setBrush(Qt::red);
         painter.setPen(Qt::NoPen);
-        painter.drawEllipse(c_foot, 4, 4);
+        painter.setBrush(QColor(255, 71, 87, 80));
+        painter.drawEllipse(c_foot, 7, 7);
+        painter.setBrush(QColor(255, 71, 87, 230));
+        painter.drawEllipse(c_foot, 3.5, 3.5);
 
-        // 标签
-        painter.setPen(Qt::white);
+        // 顶部属性气泡胶囊标签
         QString tag = QString("ID:%1 [%2]").arg(trk.track_id).arg(QString::fromStdString(trk.gender));
-        painter.drawText(QPointF(c_tl.x(), c_tl.y() - 4), tag);
-        painter.setBrush(Qt::NoBrush);
+        QFontMetrics fm(painter.font());
+        int text_w = fm.horizontalAdvance(tag) + 12;
+        int text_h = 20;
+        QRectF tag_rect(c_tl.x(), c_tl.y() - text_h - 4, text_w, text_h);
+
+        painter.setBrush(QColor(22, 27, 34, 210));
+        painter.setPen(QPen(QColor(48, 54, 61), 1));
+        painter.drawRoundedRect(tag_rect, 3, 3);
+
+        painter.setPen(QColor(240, 246, 252));
+        painter.drawText(tag_rect, Qt::AlignCenter, tag);
     }
 }
 
