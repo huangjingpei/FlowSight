@@ -33,6 +33,48 @@ static std::string resolve_resource_path(const std::string& path_str) {
     return path_str;
 }
 
+static bool open_video_capture(cv::VideoCapture& cap, const std::string& path_str) {
+    if (path_str.empty()) return false;
+
+    // 1. 网络流 (RTSP / RTMP / HTTP)
+    if (path_str.find("://") != std::string::npos) {
+        if (cap.open(path_str, cv::CAP_FFMPEG)) return true;
+        if (cap.open(path_str, cv::CAP_ANY)) return true;
+        return false;
+    }
+
+    // 2. 本地文件 - 优先使用 FFMPEG 后端与 UTF-8
+    if (cap.open(path_str, cv::CAP_FFMPEG)) return true;
+    if (cap.open(path_str, cv::CAP_ANY)) return true;
+
+#if defined(_WIN32)
+    QString qpath = QString::fromStdString(path_str);
+
+    // 尝试 Windows 原生反斜杠路径 (如 D:\音频+视频\MP4视频\001桃子.mp4)
+    std::string native_utf8 = QDir::toNativeSeparators(qpath).toStdString();
+    if (native_utf8 != path_str) {
+        if (cap.open(native_utf8, cv::CAP_FFMPEG)) return true;
+        if (cap.open(native_utf8, cv::CAP_ANY)) return true;
+    }
+
+    // 若 OpenCV 使用 MSMF (Media Foundation) 后端，Windows MSMF 内部用 MultiByteToWideChar(CP_ACP)
+    // 此时需将 UTF-8 转为系统本地编码 (toLocal8Bit / GBK / CP936) 才能正确打开中文路径
+    std::string ansi_path = qpath.toLocal8Bit().toStdString();
+    if (ansi_path != path_str) {
+        if (cap.open(ansi_path, cv::CAP_MSMF)) return true;
+        if (cap.open(ansi_path, cv::CAP_ANY)) return true;
+    }
+
+    std::string native_ansi = QDir::toNativeSeparators(qpath).toLocal8Bit().toStdString();
+    if (native_ansi != ansi_path) {
+        if (cap.open(native_ansi, cv::CAP_MSMF)) return true;
+        if (cap.open(native_ansi, cv::CAP_ANY)) return true;
+    }
+#endif
+
+    return false;
+}
+
 class PipelineController::Worker : public QObject {
     Q_OBJECT
 public:
@@ -78,12 +120,12 @@ public slots:
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
-        // 打开视频源
+        // 打开视频源 (支持中文路径与各后端自适应)
         std::string resolved_video = resolve_resource_path(video_source_);
         cv::VideoCapture cap;
         bool has_real_video = false;
         if (!resolved_video.empty()) {
-            has_real_video = cap.open(resolved_video);
+            has_real_video = open_video_capture(cap, resolved_video);
             if (!has_real_video) {
                 qWarning() << "[PipelineController] Could not open video source:" << QString::fromStdString(resolved_video);
             }
@@ -119,7 +161,7 @@ public slots:
                 if (!cap.read(frame) || frame.empty()) {
                     qWarning() << "[PipelineController] Stream disconnected or EOF, retrying...";
                     QThread::msleep(200);
-                    cap.open(resolved_video);
+                    has_real_video = open_video_capture(cap, resolved_video);
                     continue;
                 }
             }

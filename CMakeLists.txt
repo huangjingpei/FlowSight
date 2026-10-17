@@ -88,11 +88,18 @@ if(WIN32)
         )
     endif()
 
-    # 拷贝 OpenCV DLL
+    # 拷贝 OpenCV DLL (含 FFmpeg 硬件解码插件)
     if(EXISTS "D:/opencv/build/x64/vc16/bin/opencv_world480.dll")
         add_custom_command(TARGET FlowSight POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "D:/opencv/build/x64/vc16/bin/opencv_world480.dll"
+            $<TARGET_FILE_DIR:FlowSight>
+        )
+    endif()
+    if(EXISTS "D:/opencv/build/x64/vc16/bin/opencv_videoio_ffmpeg480_64.dll")
+        add_custom_command(TARGET FlowSight POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "D:/opencv/build/x64/vc16/bin/opencv_videoio_ffmpeg480_64.dll"
             $<TARGET_FILE_DIR:FlowSight>
         )
     endif()
