@@ -219,13 +219,69 @@ public:
     virtual std::vector<ChannelStatus> get_all_channels_status() const = 0;
 };
 
+} // namespace flowsight
+
 // ============================================================================
-// 5. C 风格导出工厂 (便于跨语言绑定与 SDK 封装)
+// 5. 纯 C 兼容数据结构与 C-ABI 导出符号 (适用于 Python / C# / C / Java 跨语言绑定)
 // ============================================================================
+
+#pragma pack(push, 8)
+/**
+ * @brief 纯 C 标准 2D 坐标点
+ */
+typedef struct {
+    float x;
+    float y;
+} C_Point2D;
+
+/**
+ * @brief 纯 C 标准内存对齐的通行事件结构体
+ */
+typedef struct {
+    int32_t     channel_id;          ///< 通道编号 (默认 0)
+    int64_t     event_id;            ///< 全局事件自增 ID
+    int64_t     timestamp_ms;        ///< 事件触发 Unix 毫秒时间戳
+    int32_t     track_id;            ///< 目标跟踪轨迹 ID
+    uint8_t     direction;           ///< 0=UNKNOWN, 1=ENTRY, 2=EXIT
+    int32_t     roi_id;              ///< 触发的防区 ID
+    const char* roi_name;            ///< 触发的防区名称 (UTF-8)
+    float       confidence;          ///< 置信度 (0.0 ~ 1.0)
+    float       foot_x;              ///< 足底着地点 X
+    float       foot_y;              ///< 足底着地点 Y
+    const char* clip_file_path;      ///< 关联短视频切片路径
+    const char* gender;              ///< 性别 ("男"/"女"/"未知")
+    const char* age_group;           ///< 年龄段 ("20-30"等)
+} C_FlowEvent;
+
+/**
+ * @brief 纯 C 标准系统指标快照
+ */
+typedef struct {
+    int32_t current_occupancy;       ///< 当前区域内活跃/滞留人数
+    int32_t today_entry;             ///< 今日累计进入人次
+    int32_t today_exit;              ///< 今日累计离开人次
+    int32_t today_total;             ///< 今日累计总人次
+    float   infer_ms;                ///< 推理耗时 (ms)
+    float   fps;                     ///< 算法实时帧率
+} C_SystemStats;
+#pragma pack(pop)
+
+typedef void (*C_FlowEventCallback)(const C_FlowEvent* event, void* user_data);
+typedef void (*C_SystemStatsCallback)(const C_SystemStats* stats, void* user_data);
 
 extern "C" {
-    FLOWSIGHT_API IFlowSightEngine* CreateFlowSightEngine();
-    FLOWSIGHT_API void DestroyFlowSightEngine(IFlowSightEngine* engine);
-}
+    // 1. C++ 抽象类实例导出工厂
+    FLOWSIGHT_API flowsight::IFlowSightEngine* CreateFlowSightEngine();
+    FLOWSIGHT_API void DestroyFlowSightEngine(flowsight::IFlowSightEngine* engine);
 
-} // namespace flowsight
+    // 2. 扁平纯 C 导出接口 (针对 Python ctypes / C# P/Invoke 直调)
+    FLOWSIGHT_API void* FlowSight_Create();
+    FLOWSIGHT_API void  FlowSight_Destroy(void* handle);
+    FLOWSIGHT_API int   FlowSight_Initialize(void* handle, const char* model_path, float conf_thresh, int device_id);
+    FLOWSIGHT_API int   FlowSight_StartStream(void* handle, const char* video_uri);
+    FLOWSIGHT_API void  FlowSight_StopStream(void* handle);
+    FLOWSIGHT_API int   FlowSight_SetDetectionRegion(void* handle, int32_t roi_id, const char* roi_name, const C_Point2D* points, int num_points);
+    FLOWSIGHT_API void  FlowSight_RegisterEventCallback(void* handle, C_FlowEventCallback callback, void* user_data);
+    FLOWSIGHT_API void  FlowSight_RegisterStatsCallback(void* handle, C_SystemStatsCallback callback, void* user_data);
+    FLOWSIGHT_API int   FlowSight_GetStats(void* handle, C_SystemStats* out_stats);
+}

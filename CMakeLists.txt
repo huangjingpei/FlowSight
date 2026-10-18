@@ -4,6 +4,10 @@ project(FlowSight VERSION 1.2.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -34,6 +38,7 @@ else()
 endif()
 
 include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
     ${ONNXRUNTIME_ROOT_DIR}/include
@@ -53,8 +58,24 @@ file(GLOB_RECURSE SRC_NETWORK "src/network/*.cpp" "src/network/*.hpp")
 file(GLOB_RECURSE SRC_VIDEO "src/video/*.cpp" "src/video/*.hpp")
 file(GLOB_RECURSE SRC_PIPELINE "src/pipeline/*.cpp" "src/pipeline/*.hpp")
 file(GLOB_RECURSE SRC_UI "src/ui/*.cpp" "src/ui/*.hpp" "src/ui/views/*.cpp" "src/ui/views/*.hpp" "src/ui/components/*.cpp" "src/ui/components/*.hpp")
+file(GLOB_RECURSE SRC_API "src/api/*.cpp" "src/api/*.hpp")
 
-# 5. 生成可执行程序目标
+# 5.1 生成独立的 C-ABI 共享动态库 (SDK 核心引擎，0 Qt 依赖)
+add_library(FlowSightEngine SHARED
+    include/flowsight/FlowSightAPI.h
+    ${SRC_API}
+    ${SRC_COMMON}
+    ${SRC_AI}
+    ${SRC_TRACKING}
+    ${SRC_ANALYTICS}
+)
+target_compile_definitions(FlowSightEngine PRIVATE FLOWSIGHT_BUILD_SHARED)
+target_link_libraries(FlowSightEngine PRIVATE
+    ${OpenCV_LIBS}
+    onnxruntime
+)
+
+# 5.2 生成可执行程序目标 (GUI 客户端完整套件)
 add_executable(FlowSight
     ${SRC_COMMON}
     ${SRC_AI}
@@ -65,6 +86,7 @@ add_executable(FlowSight
     ${SRC_VIDEO}
     ${SRC_PIPELINE}
     ${SRC_UI}
+    ${SRC_API}
 )
 
 # 6. 链接库
