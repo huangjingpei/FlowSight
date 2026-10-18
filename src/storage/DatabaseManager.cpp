@@ -98,11 +98,43 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
     return db.commit();
 }
 
-std::vector<PassageEvent> DatabaseManager::query_recent_events(int limit) {
+std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_filter, int64_t start_ms, int64_t end_ms, const QString& keyword, int limit) {
     std::vector<PassageEvent> list;
+    QString sql = "SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group "
+                  "FROM passage_events WHERE 1=1";
+
+    if (direction_filter >= 0) {
+        sql += " AND direction = ?";
+    }
+    if (start_ms > 0) {
+        sql += " AND timestamp_ms >= ?";
+    }
+    if (end_ms > 0) {
+        sql += " AND timestamp_ms <= ?";
+    }
+    if (!keyword.trimmed().isEmpty()) {
+        sql += " AND (CAST(track_id AS TEXT) LIKE ? OR clip_path LIKE ? OR gender LIKE ? OR age_group LIKE ?)";
+    }
+    sql += " ORDER BY timestamp_ms DESC LIMIT ?";
+
     QSqlQuery q;
-    q.prepare("SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group "
-              "FROM passage_events ORDER BY timestamp_ms DESC LIMIT ?");
+    q.prepare(sql);
+    if (direction_filter >= 0) {
+        q.addBindValue(direction_filter);
+    }
+    if (start_ms > 0) {
+        q.addBindValue(static_cast<qint64>(start_ms));
+    }
+    if (end_ms > 0) {
+        q.addBindValue(static_cast<qint64>(end_ms));
+    }
+    if (!keyword.trimmed().isEmpty()) {
+        QString kw = "%" + keyword.trimmed() + "%";
+        q.addBindValue(kw);
+        q.addBindValue(kw);
+        q.addBindValue(kw);
+        q.addBindValue(kw);
+    }
     q.addBindValue(limit);
 
     if (q.exec()) {
@@ -121,6 +153,10 @@ std::vector<PassageEvent> DatabaseManager::query_recent_events(int limit) {
         }
     }
     return list;
+}
+
+std::vector<PassageEvent> DatabaseManager::query_recent_events(int limit) {
+    return query_filtered_events(-1, 0, 0, "", limit);
 }
 
 std::vector<PassageEvent> DatabaseManager::query_events_by_timerange(int64_t start_ms, int64_t end_ms, int limit) {
