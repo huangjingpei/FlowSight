@@ -7,6 +7,9 @@
 #include <QPushButton>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QDir>
+#include <QMessageBox>
+#include <QToolTip>
 
 MonitorWidget::MonitorWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -17,13 +20,13 @@ void MonitorWidget::setup_ui() {
     main_layout->setContentsMargins(14, 14, 14, 14);
     main_layout->setSpacing(14);
 
-    // 1. 左侧视频监控区 (带顶栏状态)
-    auto* video_container = new QWidget(this);
-    auto* video_vbox = new QVBoxLayout(video_container);
+    // 1. 左侧视频监控区 (带顶栏状态 + 画布 + 专业首尾时间控制条 + 动态通行跑马灯)
+    video_container_ = new QWidget(this);
+    auto* video_vbox = new QVBoxLayout(video_container_);
     video_vbox->setContentsMargins(0, 0, 0, 0);
     video_vbox->setSpacing(8);
 
-    // 视频顶栏指示条
+    // 1.1 视频顶栏指示条
     auto* video_top_bar = new QWidget(this);
     video_top_bar->setFixedHeight(36);
     video_top_bar->setStyleSheet("background-color: #161b22; border: 1px solid #30363d; border-radius: 6px;");
@@ -32,7 +35,7 @@ void MonitorWidget::setup_ui() {
 
     auto* rec_dot = new QLabel("● 实时在线分析中", video_top_bar);
     rec_dot->setStyleSheet("color: #3fb950; font-weight: bold; font-size: 12px;");
-    res_tag_ = new QLabel("分辨率: 1080P  |  编码: H.264  |  分析模式: 实时", video_top_bar);
+    res_tag_ = new QLabel("模式: 准备就绪  |  音频: 已启用", video_top_bar);
     res_tag_->setStyleSheet("color: #8b949e; font-size: 12px;");
 
     auto* btn_load_video = new QPushButton("📁 载入 MP4 视频...", video_top_bar);
@@ -46,7 +49,7 @@ void MonitorWidget::setup_ui() {
         if (!file.isEmpty()) {
             QFileInfo fi(file);
             if (res_tag_) {
-                res_tag_->setText(QString("当前视频: %1 | 模式: 本地循环解析").arg(fi.fileName()));
+                res_tag_->setText(QString("当前视频: %1  |  声画同步分析中").arg(fi.fileName()));
             }
             emit request_change_video(file);
         }
@@ -59,12 +62,19 @@ void MonitorWidget::setup_ui() {
     top_hbox->addWidget(res_tag_);
     video_vbox->addWidget(video_top_bar);
 
+    // 1.2 高科技 AI HUD 视频画布
     canvas_ = new VideoCanvas(this);
     canvas_->set_read_only(true);
     canvas_->setStyleSheet("border: 1px solid #30363d; border-radius: 8px;");
     video_vbox->addWidget(canvas_, 1);
 
-    // 底部跑马灯动态通行胶囊卡片
+    // 1.3 工业标准首尾时间播放控制条 (支持 MP4 声画同步 / RTSP 模式自适应)
+    control_bar_ = new PlaybackControlBar(this);
+    connect(control_bar_, &PlaybackControlBar::snapshot_requested, this, &MonitorWidget::take_snapshot);
+    connect(control_bar_, &PlaybackControlBar::fullscreen_requested, this, &MonitorWidget::toggle_fullscreen);
+    video_vbox->addWidget(control_bar_);
+
+    // 1.4 底部跑马灯动态通行胶囊卡片
     ticker_list_ = new QListWidget(this);
     ticker_list_->setFixedHeight(52);
     ticker_list_->setFlow(QListView::LeftToRight);
@@ -76,7 +86,7 @@ void MonitorWidget::setup_ui() {
     );
     video_vbox->addWidget(ticker_list_);
 
-    main_layout->addWidget(video_container, 4);
+    main_layout->addWidget(video_container_, 4);
 
     // 2. 右侧核心指标看板
     auto* right_panel = new QWidget(this);
@@ -151,22 +161,96 @@ void MonitorWidget::update_stats(const StatisticsSnapshot& stats) {
 
 void MonitorWidget::add_passage_event(const PassageEvent& ev) {
     if (!ticker_list_) return;
-    QString dir_tag = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入" : "🔴 离开";
-    QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("hh:mm:ss");
-    QString item_text = QString("%1  [%2]  ID:%3 (%4)")
-                            .arg(dir_tag)
-                            .arg(time_str)
-                            .arg(ev.track_id)
-                            .arg(QString::fromStdString(ev.gender));
 
-    ticker_list_->insertItem(0, item_text);
-    if (ticker_list_->count() > 10) {
-        delete ticker_list_->takeItem(10);
+    QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入" : "🔴 离开";
+    QString text = QString("[%1] %2 ID:%3 %4 %5")
+        .arg(QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("hh:mm:ss"))
+        .arg(dir_str)
+        .arg(ev.track_id)
+        .arg(QString::fromStdString(ev.gender))
+        .arg(QString::fromStdString(ev.age_group));
+
+    auto* item = new QListWidgetItem(text);
+    if (ev.direction == PassageDirection::ENTRY) {
+        item->setForeground(QColor("#2ed573"));
+    } else {
+        item->setForeground(QColor("#ff4757"));
+    }
+    ticker_list_->insertItem(0, item);
+
+    while (ticker_list_->count() > 20) {
+        delete ticker_list_->takeItem(ticker_list_->count() - 1);
     }
 }
 
 void MonitorWidget::update_active_roi(const RoiConfig& roi) {
     if (canvas_) {
         canvas_->set_roi(roi);
+    }
+}
+
+void MonitorWidget::set_media_info(bool is_live, qint64 duration_ms, double fps) {
+    if (control_bar_) {
+        control_bar_->set_media_mode(is_live);
+        if (!is_live) {
+            control_bar_->set_duration(duration_ms);
+        }
+    }
+    if (res_tag_) {
+        if (is_live) {
+            res_tag_->setText(QString("模式: RTSP/RTMP 实时直播  |  帧率: %1 FPS").arg(QString::number(fps, 'f', 1)));
+        } else {
+            res_tag_->setText(QString("模式: 本地视频点播  |  总长: %1 秒  |  声画同步: 在线")
+                .arg(QString::number(duration_ms / 1000.0, 'f', 1)));
+        }
+    }
+}
+
+void MonitorWidget::set_playback_position(qint64 pos_ms) {
+    if (control_bar_) {
+        control_bar_->set_position(pos_ms);
+    }
+}
+
+void MonitorWidget::set_playback_state(bool is_playing) {
+    if (control_bar_) {
+        control_bar_->set_playback_state(is_playing);
+    }
+}
+
+void MonitorWidget::take_snapshot() {
+    if (!canvas_) return;
+
+    QDir().mkpath("snapshots");
+    QString filename = QString("snapshots/monitor_%1.png")
+        .arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss_zzz"));
+
+    QPixmap pixmap = canvas_->grab();
+    if (pixmap.isNull()) {
+        QMessageBox::warning(this, "抓拍失败", "未能从视频画布抓取到图像");
+        return;
+    }
+
+    if (pixmap.save(filename, "PNG")) {
+        QToolTip::showText(mapToGlobal(QPoint(width() / 2, height() / 2)),
+                           QString("✅ 监控画面抓拍已保存:\n%1").arg(filename), this);
+    } else {
+        QMessageBox::warning(this, "保存失败", QString("无法保存抓拍图片至:\n%1").arg(filename));
+    }
+}
+
+void MonitorWidget::toggle_fullscreen() {
+    if (!canvas_) return;
+
+    if (!is_fullscreen_) {
+        canvas_->setParent(nullptr);
+        canvas_->setWindowFlags(Qt::Window);
+        canvas_->showFullScreen();
+        is_fullscreen_ = true;
+    } else {
+        canvas_->setWindowFlags(Qt::Widget);
+        static_cast<QVBoxLayout*>(video_container_->layout())->insertWidget(1, canvas_, 1);
+        canvas_->showNormal();
+        is_fullscreen_ = false;
     }
 }

@@ -51,7 +51,7 @@ file(GLOB_RECURSE SRC_ANALYTICS "src/analytics/*.cpp" "src/analytics/*.hpp")
 file(GLOB_RECURSE SRC_STORAGE "src/storage/*.cpp" "src/storage/*.hpp")
 file(GLOB_RECURSE SRC_VIDEO "src/video/*.cpp" "src/video/*.hpp")
 file(GLOB_RECURSE SRC_PIPELINE "src/pipeline/*.cpp" "src/pipeline/*.hpp")
-file(GLOB_RECURSE SRC_UI "src/ui/*.cpp" "src/ui/*.hpp" "src/ui/views/*.cpp" "src/ui/views/*.hpp")
+file(GLOB_RECURSE SRC_UI "src/ui/*.cpp" "src/ui/*.hpp" "src/ui/views/*.cpp" "src/ui/views/*.hpp" "src/ui/components/*.cpp" "src/ui/components/*.hpp")
 
 # 5. 生成可执行程序目标
 add_executable(FlowSight

@@ -17,7 +17,7 @@
 
 static std::string resolve_resource_path(const std::string& path_str) {
     if (path_str.empty()) return path_str;
-    if (path_str.find("://") != std::string::npos) return path_str; // RTSP/HTTP URL
+    if (path_str.find("://") != std::string::npos) return path_str;
 
     QFileInfo fi(QString::fromStdString(path_str));
     if (fi.isAbsolute() && fi.exists()) return path_str;
@@ -57,8 +57,7 @@ static bool open_video_capture(cv::VideoCapture& cap, const std::string& path_st
         if (cap.open(native_utf8, cv::CAP_ANY)) return true;
     }
 
-    // 若 OpenCV 使用 MSMF (Media Foundation) 后端，Windows MSMF 内部用 MultiByteToWideChar(CP_ACP)
-    // 此时需将 UTF-8 转为系统本地编码 (toLocal8Bit / GBK / CP936) 才能正确打开中文路径
+    // 若 OpenCV 使用 MSMF 后端，需本地 ANSI 编码
     std::string ansi_path = qpath.toLocal8Bit().toStdString();
     if (ansi_path != path_str) {
         if (cap.open(ansi_path, cv::CAP_MSMF)) return true;
@@ -79,8 +78,17 @@ class PipelineController::Worker : public QObject {
     Q_OBJECT
 public:
     std::atomic<bool> is_running_{false};
+    std::atomic<bool> is_paused_{false};
+    std::atomic<bool> seek_requested_{false};
+    std::atomic<int64_t> seek_target_ms_{0};
+    std::atomic<int> step_requested_{0};
+    std::atomic<double> playback_speed_{1.0};
+
     std::string model_path_;
     std::string video_source_;
+    std::mutex source_mtx_;
+    std::string pending_video_source_;
+    std::atomic<bool> source_changed_{false};
 
     std::unique_ptr<IDetector> detector_;
     std::unique_ptr<ITracker> tracker_;
@@ -106,6 +114,27 @@ public:
         return active_roi_;
     }
 
+    void change_video_source(const std::string& new_source) {
+        std::lock_guard<std::mutex> lock(source_mtx_);
+        pending_video_source_ = new_source;
+        source_changed_ = true;
+    }
+
+    void pause() { is_paused_ = true; }
+    void resume() { is_paused_ = false; }
+    void seek(qint64 pos_ms) {
+        seek_target_ms_ = pos_ms;
+        seek_requested_ = true;
+    }
+    void step(int delta_ms) {
+        step_requested_ = delta_ms;
+    }
+    void set_speed(double speed) {
+        if (speed > 0.05 && speed <= 5.0) {
+            playback_speed_ = speed;
+        }
+    }
+
 public slots:
     void process() {
         is_running_ = true;
@@ -120,28 +149,98 @@ public slots:
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
-        // 打开视频源 (支持中文路径与各后端自适应)
-        std::string resolved_video = resolve_resource_path(video_source_);
+        std::string cur_source = video_source_;
+        std::string resolved_video = resolve_resource_path(cur_source);
         cv::VideoCapture cap;
         bool has_real_video = false;
-        if (!resolved_video.empty()) {
+        double video_fps = 30.0;
+        double frame_count = 0.0;
+        bool is_live = false;
+        qint64 total_duration_ms = 0;
+
+        auto init_capture = [&](const std::string& source_path) {
+            if (cap.isOpened()) cap.release();
+            resolved_video = resolve_resource_path(source_path);
             has_real_video = open_video_capture(cap, resolved_video);
-            if (!has_real_video) {
-                qWarning() << "[PipelineController] Could not open video source:" << QString::fromStdString(resolved_video);
+
+            if (has_real_video) {
+                video_fps = cap.get(cv::CAP_PROP_FPS);
+                if (video_fps <= 0.0 || video_fps > 120.0) video_fps = 30.0;
+                frame_count = cap.get(cv::CAP_PROP_FRAME_COUNT);
+
+                is_live = (source_path.find("rtsp://") != std::string::npos ||
+                           source_path.find("rtmp://") != std::string::npos ||
+                           frame_count <= 0);
+
+                total_duration_ms = is_live ? 0 : static_cast<qint64>((frame_count / video_fps) * 1000.0);
+                emit media_info_ready(is_live, total_duration_ms, video_fps);
+            } else {
+                emit media_info_ready(false, 0, 30.0);
             }
+        };
+
+        if (!cur_source.empty()) {
+            init_capture(cur_source);
         }
 
         cv::Mat frame;
         QElapsedTimer fps_timer;
         fps_timer.start();
-        int frame_count = 0;
+        int frame_count_stat = 0;
         float current_fps = 30.0f;
 
         while (is_running_) {
+            // 1. 检查是否切换视频源
+            if (source_changed_) {
+                source_changed_ = false;
+                std::string next_source;
+                {
+                    std::lock_guard<std::mutex> lock(source_mtx_);
+                    next_source = pending_video_source_;
+                }
+                cur_source = next_source;
+                init_capture(cur_source);
+            }
+
+            // 2. 暂停与单帧步进处理
+            if (is_paused_) {
+                int step = step_requested_.exchange(0);
+                if (step != 0 && has_real_video) {
+                    double cur_frame = cap.get(cv::CAP_PROP_POS_FRAMES);
+                    double target_frame = cur_frame + (step > 0 ? 1 : -2);
+                    if (target_frame < 0) target_frame = 0;
+                    cap.set(cv::CAP_PROP_POS_FRAMES, target_frame);
+                    if (cap.read(frame) && !frame.empty()) {
+                        qint64 pos_ms = static_cast<qint64>(cap.get(cv::CAP_PROP_POS_MSEC));
+                        emit position_changed(pos_ms);
+
+                        // 运行单帧分析并投递
+                        std::vector<Detection> detections;
+                        if (model_loaded) detector_->detect(frame, detections);
+                        auto tracks = tracker_->update(detections);
+                        QImage qimg(frame.data, frame.cols, frame.rows, static_cast<int>(frame.step), QImage::Format_BGR888);
+                        emit frame_ready(qimg.copy(), tracks);
+                    }
+                }
+                QThread::msleep(40);
+                continue;
+            }
+
+            // 3. 拖拽快进 / 跳转 Seek
+            if (seek_requested_) {
+                seek_requested_ = false;
+                int64_t target_ms = seek_target_ms_.load();
+                if (has_real_video && !is_live) {
+                    double target_frame = (target_ms * video_fps) / 1000.0;
+                    if (target_frame < 0) target_frame = 0;
+                    if (frame_count > 0 && target_frame >= frame_count) target_frame = frame_count - 1;
+                    cap.set(cv::CAP_PROP_POS_FRAMES, target_frame);
+                }
+            }
+
             int64_t now_ms = QDateTime::currentMSecsSinceEpoch();
 
             if (!has_real_video) {
-                // 无视频输入源时，向 UI 投递空帧，触发 VideoCanvas 高保真矢量待机界面 (零像素撕裂、零 Hershey 点阵字体)
                 emit frame_ready(QImage(), {});
                 StatisticsSnapshot snap;
                 snap.fps = 0.0f;
@@ -155,20 +254,31 @@ public slots:
                 continue;
             }
 
+            // 4. 读取视频帧
             if (!cap.read(frame) || frame.empty()) {
-                // 循环读取本地视频文件
-                cap.set(cv::CAP_PROP_POS_FRAMES, 0);
-                if (!cap.read(frame) || frame.empty()) {
-                    qWarning() << "[PipelineController] Stream disconnected or EOF, retrying...";
+                if (!is_live) {
+                    // 本地视频循环播放
+                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                    emit loop_restarted();
+                    if (!cap.read(frame) || frame.empty()) {
+                        QThread::msleep(40);
+                        continue;
+                    }
+                } else {
+                    qWarning() << "[PipelineController] Stream disconnected, reconnecting...";
                     QThread::msleep(200);
-                    has_real_video = open_video_capture(cap, resolved_video);
+                    init_capture(cur_source);
                     continue;
                 }
             }
 
+            // 报告当前播放进度 (毫秒)
+            qint64 cur_pos_ms = static_cast<qint64>(cap.get(cv::CAP_PROP_POS_MSEC));
+            emit position_changed(cur_pos_ms);
+
             clip_recorder_->push_frame(frame);
 
-            // 1. 目标检测 (真实模型推理)
+            // 5. 目标检测 (真实模型推理)
             std::vector<Detection> detections;
             QElapsedTimer infer_timer;
             infer_timer.start();
@@ -178,33 +288,30 @@ public slots:
             }
             float infer_ms = static_cast<float>(infer_timer.nsecsElapsed()) / 1e6f;
 
-            // 2. 目标跟踪 (ByteTrack 跟踪真实检测框)
+            // 6. 目标跟踪 (ByteTrack)
             auto tracks = tracker_->update(detections);
 
-            // 3. 区域滞后防抖计数
+            // 7. 区域滞后防抖计数
             int current_occupancy = 0;
             std::vector<PassageEvent> events;
             roi_counter_->process_frame(tracks, now_ms, current_occupancy, events);
 
-            // 4. 事件触发与短视频切片异步保存
+            // 8. 通行事件与短切片异步保存
             for (auto& ev : events) {
                 if (ev.direction == PassageDirection::ENTRY) today_entry_++;
                 else if (ev.direction == PassageDirection::EXIT) today_exit_++;
 
-                // 异步截取保存前后 3 秒 MP4 切片
                 std::string clip = clip_recorder_->save_clip_async("clips", ev.track_id, ev.timestamp_ms);
                 ev.clip_path = clip;
-
-                // 持久化到 SQLite
                 DatabaseManager::instance().insert_events({ev});
                 emit event_occurred(ev);
             }
 
-            // 5. 帧率统计与信号回传
-            frame_count++;
+            // 9. 帧率统计与状态信号
+            frame_count_stat++;
             if (fps_timer.elapsed() >= 1000) {
-                current_fps = frame_count * 1000.0f / fps_timer.elapsed();
-                frame_count = 0;
+                current_fps = frame_count_stat * 1000.0f / fps_timer.elapsed();
+                frame_count_stat = 0;
                 fps_timer.restart();
 
                 StatisticsSnapshot snap;
@@ -217,11 +324,19 @@ public slots:
                 emit stats_updated(snap);
             }
 
-            // 将 Mat 转为 QImage
+            // 投递渲染帧到 VideoCanvas
             QImage qimg(frame.data, frame.cols, frame.rows, static_cast<int>(frame.step), QImage::Format_BGR888);
             emit frame_ready(qimg.copy(), tracks);
 
-            QThread::msleep(has_real_video ? 15 : 30);
+            // 10. 精准音画同步与帧率节奏控制
+            double nominal_frame_ms = 1000.0 / video_fps;
+            double speed = playback_speed_.load();
+            int target_sleep_ms = static_cast<int>((nominal_frame_ms - infer_ms) / speed);
+            if (target_sleep_ms > 0) {
+                QThread::msleep(std::min(target_sleep_ms, 100));
+            } else {
+                QThread::msleep(1);
+            }
         }
 
         if (has_real_video) cap.release();
@@ -231,12 +346,21 @@ signals:
     void frame_ready(const QImage& frame, const std::vector<TrackObject>& tracks);
     void stats_updated(const StatisticsSnapshot& stats);
     void event_occurred(const PassageEvent& event);
+    void media_info_ready(bool is_live, qint64 duration_ms, double fps);
+    void position_changed(qint64 position_ms);
+    void loop_restarted();
 };
 
 PipelineController::PipelineController(QObject* parent) : QObject(parent) {
     qRegisterMetaType<std::vector<TrackObject>>("std::vector<TrackObject>");
     qRegisterMetaType<StatisticsSnapshot>("StatisticsSnapshot");
     qRegisterMetaType<PassageEvent>("PassageEvent");
+
+    // 初始化硬件音频声道
+    audio_player_ = new QMediaPlayer(this);
+    audio_output_ = new QAudioOutput(this);
+    audio_output_->setVolume(0.8f);
+    audio_player_->setAudioOutput(audio_output_);
 }
 
 PipelineController::~PipelineController() {
@@ -244,8 +368,6 @@ PipelineController::~PipelineController() {
 }
 
 void PipelineController::start_pipeline(const std::string& model_path, const std::string& video_source) {
-    if (worker_thread_.isRunning()) return;
-
     worker_ = std::make_unique<Worker>();
     worker_->model_path_ = model_path;
     worker_->video_source_ = video_source;
@@ -255,47 +377,125 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::frame_ready, this, &PipelineController::frame_ready);
     connect(worker_.get(), &Worker::stats_updated, this, &PipelineController::stats_updated);
     connect(worker_.get(), &Worker::event_occurred, this, &PipelineController::event_occurred);
-
-    // 默认恢复最新保存的 ROI
-    auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
-    if (!saved_rois.empty()) {
-        worker_->set_roi(saved_rois.front());
-    }
+    connect(worker_.get(), &Worker::media_info_ready, this, [this](bool is_live, qint64 d, double fps) {
+        is_live_ = is_live;
+        duration_ms_ = d;
+        emit media_info_ready(is_live, d, fps);
+    });
+    connect(worker_.get(), &Worker::position_changed, this, &PipelineController::position_changed);
+    connect(worker_.get(), &Worker::loop_restarted, this, &PipelineController::on_worker_loop_restarted);
 
     worker_thread_.start();
+
+    // 启动初始媒体音频 (若为本地视频文件)
+    set_video_source(video_source);
 }
 
 void PipelineController::stop_pipeline() {
+    if (audio_player_) {
+        audio_player_->stop();
+    }
     if (worker_) {
         worker_->is_running_ = false;
-    }
-    if (worker_thread_.isRunning()) {
         worker_thread_.quit();
-        worker_thread_.wait(2000);
+        worker_thread_.wait(1000);
+        worker_.reset();
     }
 }
 
 void PipelineController::set_video_source(const std::string& video_source) {
-    std::string model = "models/yolov8n.onnx";
-    if (worker_ && !worker_->model_path_.empty()) {
-        model = worker_->model_path_;
+    if (worker_) {
+        worker_->change_video_source(video_source);
     }
-    stop_pipeline();
-    start_pipeline(model, video_source);
+
+    // 检查是否为包含音频轨道的本地媒体文件
+    std::string resolved = resolve_resource_path(video_source);
+    is_live_ = (video_source.find("rtsp://") != std::string::npos ||
+                video_source.find("rtmp://") != std::string::npos);
+
+    if (audio_player_) {
+        if (!is_live_ && !resolved.empty()) {
+            QUrl media_url = QUrl::fromLocalFile(QString::fromStdString(resolved));
+            audio_player_->setSource(media_url);
+            audio_player_->play();
+        } else {
+            audio_player_->stop();
+        }
+    }
 }
 
 void PipelineController::update_roi_config(const RoiConfig& config) {
     if (worker_) {
         worker_->set_roi(config);
     }
-    DatabaseManager::instance().save_roi_config(config);
 }
 
 RoiConfig PipelineController::get_current_roi() const {
     if (worker_) {
         return worker_->get_roi();
     }
-    return RoiConfig();
+    return {};
+}
+
+void PipelineController::play() {
+    if (worker_) worker_->resume();
+    if (audio_player_ && !is_live_) audio_player_->play();
+    emit playback_state_changed(true);
+}
+
+void PipelineController::pause() {
+    if (worker_) worker_->pause();
+    if (audio_player_) audio_player_->pause();
+    emit playback_state_changed(false);
+}
+
+void PipelineController::stop() {
+    if (worker_) {
+        worker_->pause();
+        worker_->seek(0);
+    }
+    if (audio_player_) {
+        audio_player_->stop();
+    }
+    emit playback_state_changed(false);
+    emit position_changed(0);
+}
+
+void PipelineController::seek(qint64 position_ms) {
+    if (worker_) worker_->seek(position_ms);
+    if (audio_player_ && !is_live_) audio_player_->setPosition(position_ms);
+}
+
+void PipelineController::step_forward(int ms) {
+    if (worker_) worker_->step(ms);
+}
+
+void PipelineController::step_backward(int ms) {
+    if (worker_) worker_->step(-ms);
+}
+
+void PipelineController::set_volume(int volume_0_100) {
+    if (audio_output_) {
+        audio_output_->setVolume(static_cast<float>(volume_0_100) / 100.0f);
+    }
+}
+
+void PipelineController::set_muted(bool muted) {
+    if (audio_output_) {
+        audio_output_->setMuted(muted);
+    }
+}
+
+void PipelineController::set_playback_rate(double rate) {
+    if (worker_) worker_->set_speed(rate);
+    if (audio_player_) audio_player_->setPlaybackRate(rate);
+}
+
+void PipelineController::on_worker_loop_restarted() {
+    if (audio_player_ && !is_live_) {
+        audio_player_->setPosition(0);
+        audio_player_->play();
+    }
 }
 
 #include "PipelineController.moc"

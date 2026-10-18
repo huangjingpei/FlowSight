@@ -34,6 +34,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
 
+    connect(pipeline_.get(), &PipelineController::media_info_ready, view_monitor_, &MonitorWidget::set_media_info);
+    connect(pipeline_.get(), &PipelineController::position_changed, view_monitor_, &MonitorWidget::set_playback_position);
+    connect(pipeline_.get(), &PipelineController::playback_state_changed, view_monitor_, &MonitorWidget::set_playback_state);
+
+    auto* ctrl = view_monitor_->control_bar();
+    if (ctrl) {
+        connect(ctrl, &PlaybackControlBar::play_requested, pipeline_.get(), &PipelineController::play);
+        connect(ctrl, &PlaybackControlBar::pause_requested, pipeline_.get(), &PipelineController::pause);
+        connect(ctrl, &PlaybackControlBar::stop_requested, pipeline_.get(), &PipelineController::stop);
+        connect(ctrl, &PlaybackControlBar::seek_requested, pipeline_.get(), &PipelineController::seek);
+        connect(ctrl, &PlaybackControlBar::step_forward_requested, pipeline_.get(), &PipelineController::step_forward);
+        connect(ctrl, &PlaybackControlBar::step_backward_requested, pipeline_.get(), &PipelineController::step_backward);
+        connect(ctrl, &PlaybackControlBar::volume_changed, pipeline_.get(), &PipelineController::set_volume);
+        connect(ctrl, &PlaybackControlBar::mute_toggled, pipeline_.get(), &PipelineController::set_muted);
+        connect(ctrl, &PlaybackControlBar::rate_changed, pipeline_.get(), &PipelineController::set_playback_rate);
+    }
+
     connect(view_monitor_, &MonitorWidget::request_change_video, this, [this](const QString& path) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());

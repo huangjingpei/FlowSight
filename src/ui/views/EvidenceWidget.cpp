@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <QMessageBox>
+#include <QFileDialog>
 
 EvidenceWidget::EvidenceWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -29,10 +30,24 @@ void EvidenceWidget::setup_ui() {
     btn_refresh_ = new QPushButton("🔄  刷新流水记录", this);
     btn_refresh_->setFixedHeight(34);
 
-    tip_label_ = new QLabel("💡 提示: 双击任意记录行，右侧播放器将秒级起播该行人穿行时的证据音视频", this);
+    btn_open_local_ = new QPushButton("📁  打开本地音视频文件...", this);
+    btn_open_local_->setFixedHeight(34);
+    btn_open_local_->setStyleSheet(
+        "QPushButton { background-color: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 4px; padding: 4px 12px; font-weight: 600; font-size: 12px; } "
+        "QPushButton:hover { background-color: #30363d; border-color: #58a6ff; color: #ffffff; }"
+    );
+    connect(btn_open_local_, &QPushButton::clicked, this, [this]() {
+        QString file = QFileDialog::getOpenFileName(this, "选择本地音视频进行专业审查回放", "", "Media Files (*.mp4 *.avi *.mkv *.mov *.mp3 *.wav)");
+        if (!file.isEmpty()) {
+            play_clip(file);
+        }
+    });
+
+    tip_label_ = new QLabel("💡 提示: 双击记录行或点击打开本地音视频，右侧播放器将声画同步起播", this);
     tip_label_->setStyleSheet("color: #8b949e; font-size: 12px; margin-left: 8px;");
 
     top_bar->addWidget(btn_refresh_);
+    top_bar->addWidget(btn_open_local_);
     top_bar->addWidget(tip_label_);
     top_bar->addStretch();
     left_vbox->addLayout(top_bar);

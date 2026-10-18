@@ -1,7 +1,10 @@
 #pragma once
+
 #include <QObject>
 #include <QThread>
 #include <QImage>
+#include <QMediaPlayer>
+#include <QAudioOutput>
 #include <memory>
 #include <string>
 #include "common/Types.hpp"
@@ -18,13 +21,38 @@ public:
     void update_roi_config(const RoiConfig& config);
     RoiConfig get_current_roi() const;
 
+    // 专业音视频播放控制 (支持音画同步与精确进度跳转)
+    void play();
+    void pause();
+    void stop();
+    void seek(qint64 position_ms);
+    void step_forward(int ms = 33);
+    void step_backward(int ms = 33);
+    void set_volume(int volume_0_100);
+    void set_muted(bool muted);
+    void set_playback_rate(double rate);
+
 signals:
     void frame_ready(const QImage& frame, const std::vector<TrackObject>& tracks);
     void stats_updated(const StatisticsSnapshot& stats);
     void event_occurred(const PassageEvent& event);
 
+    // 多媒体时钟与状态信号 (向 UI 广播首尾时间与模式自适应)
+    void media_info_ready(bool is_live, qint64 duration_ms, double fps);
+    void position_changed(qint64 position_ms);
+    void playback_state_changed(bool is_playing);
+
+private slots:
+    void on_worker_loop_restarted();
+
 private:
     class Worker;
     std::unique_ptr<Worker> worker_;
     QThread worker_thread_;
+
+    // MP4 音频输出与声画对齐驱动引擎
+    QMediaPlayer* audio_player_ = nullptr;
+    QAudioOutput* audio_output_ = nullptr;
+    bool is_live_ = false;
+    qint64 duration_ms_ = 0;
 };

@@ -24,6 +24,7 @@ private:
 
     QTableWidget* table_ = nullptr;
     QPushButton* btn_refresh_ = nullptr;
+    QPushButton* btn_open_local_ = nullptr;
     QLabel* tip_label_ = nullptr;
 
     MediaPlayerWidget* player_ = nullptr;
