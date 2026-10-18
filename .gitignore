@@ -24,3 +24,8 @@ qrc_*.cpp
 data/
 clips/
 exports/
+
+# Release distribution outputs
+dist/FlowSight_*
+dist/*.zip
+
