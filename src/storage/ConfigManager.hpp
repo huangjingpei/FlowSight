@@ -42,6 +42,19 @@ public:
     bool get_crowd_surge_beep() const { return crowd_surge_beep_; }
     void set_crowd_surge_beep(bool val) { crowd_surge_beep_ = val; }
 
+    // Webhook 云端推送配置
+    bool get_webhook_enabled() const { return webhook_enabled_; }
+    void set_webhook_enabled(bool val) { webhook_enabled_ = val; }
+
+    QString get_webhook_url() const { return webhook_url_; }
+    void set_webhook_url(const QString& val) { webhook_url_ = val; }
+
+    QString get_webhook_token() const { return webhook_token_; }
+    void set_webhook_token(const QString& val) { webhook_token_ = val; }
+
+    int get_webhook_timeout_ms() const { return webhook_timeout_ms_; }
+    void set_webhook_timeout_ms(int val) { webhook_timeout_ms_ = val; }
+
 signals:
     void config_changed();
 
@@ -61,4 +74,9 @@ private:
     bool crowd_surge_enabled_ = true;
     int crowd_surge_threshold_ = 10;
     bool crowd_surge_beep_ = false;
+
+    bool webhook_enabled_ = false;
+    QString webhook_url_ = "http://127.0.0.1:8088/api/v1/events";
+    QString webhook_token_ = "";
+    int webhook_timeout_ms_ = 3000;
 };

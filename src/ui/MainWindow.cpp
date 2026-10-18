@@ -7,6 +7,7 @@
 #include "storage/DatabaseManager.hpp"
 #include "storage/ConfigManager.hpp"
 #include "storage/StoragePruner.hpp"
+#include "network/WebhookPusher.hpp"
 #include <QTimer>
 
 #include <QHBoxLayout>
@@ -22,6 +23,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // 初始化 SQLite 数据库与 WAL 模式
     DatabaseManager::instance().init_database("data/flowsight.db");
+
+    // 初始化 Webhook 推送中心
+    WebhookPusher::instance().init(this);
 
     // 执行磁盘保护清理 (按配置天数清理过期短视频切片)
     StoragePruner::prune_expired_clips("clips", ConfigManager::instance().get_clip_retention_days());
@@ -39,14 +43,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // 启动后台分析管线
     pipeline_ = std::make_unique<PipelineController>(this);
 
-    // 绑定数据流到各个独立视图
+    // 绑定数据流到各个独立视图与网络推送
     connect(pipeline_.get(), &PipelineController::frame_ready, view_monitor_, &MonitorWidget::update_frame);
     connect(pipeline_.get(), &PipelineController::frame_ready, view_studio_, &StudioWidget::update_frame);
     connect(pipeline_.get(), &PipelineController::stats_updated, view_monitor_, &MonitorWidget::update_stats);
     connect(pipeline_.get(), &PipelineController::stats_updated, this, &MainWindow::on_stats_updated);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
+    connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
+        WebhookPusher::instance().push_event(ev);
+    });
     connect(pipeline_.get(), &PipelineController::crowd_surge_status_changed, view_monitor_, &MonitorWidget::set_crowd_surge_alert);
+    connect(pipeline_.get(), &PipelineController::crowd_surge_status_changed, this, [](bool is_surged, int occ, int thresh) {
+        WebhookPusher::instance().push_surge_alert(is_surged, occ, thresh);
+    });
     connect(pipeline_.get(), &PipelineController::roi_auto_initialized, this, [this](const RoiConfig& roi) {
         view_monitor_->update_active_roi(roi);
         view_studio_->set_roi(roi);

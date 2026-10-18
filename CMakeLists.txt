@@ -16,7 +16,7 @@ list(PREPEND CMAKE_PREFIX_PATH
 )
 
 # 1. 查找 Qt6 组件
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Multimedia MultimediaWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Sql Multimedia MultimediaWidgets Network)
 message(STATUS "Found Qt6: ${Qt6_VERSION} at ${Qt6_DIR}")
 
 # 2. 查找 OpenCV
@@ -49,6 +49,7 @@ file(GLOB_RECURSE SRC_AI "src/ai/*.cpp" "src/ai/*.hpp")
 file(GLOB_RECURSE SRC_TRACKING "src/tracking/*.cpp" "src/tracking/*.hpp")
 file(GLOB_RECURSE SRC_ANALYTICS "src/analytics/*.cpp" "src/analytics/*.hpp")
 file(GLOB_RECURSE SRC_STORAGE "src/storage/*.cpp" "src/storage/*.hpp")
+file(GLOB_RECURSE SRC_NETWORK "src/network/*.cpp" "src/network/*.hpp")
 file(GLOB_RECURSE SRC_VIDEO "src/video/*.cpp" "src/video/*.hpp")
 file(GLOB_RECURSE SRC_PIPELINE "src/pipeline/*.cpp" "src/pipeline/*.hpp")
 file(GLOB_RECURSE SRC_UI "src/ui/*.cpp" "src/ui/*.hpp" "src/ui/views/*.cpp" "src/ui/views/*.hpp" "src/ui/components/*.cpp" "src/ui/components/*.hpp")
@@ -60,6 +61,7 @@ add_executable(FlowSight
     ${SRC_TRACKING}
     ${SRC_ANALYTICS}
     ${SRC_STORAGE}
+    ${SRC_NETWORK}
     ${SRC_VIDEO}
     ${SRC_PIPELINE}
     ${SRC_UI}
@@ -73,6 +75,7 @@ target_link_libraries(FlowSight PRIVATE
     Qt6::Sql
     Qt6::Multimedia
     Qt6::MultimediaWidgets
+    Qt6::Network
     ${OpenCV_LIBS}
     onnxruntime
 )

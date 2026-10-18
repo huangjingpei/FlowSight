@@ -33,6 +33,11 @@ void ConfigManager::load(const QString& ini_path) {
     crowd_surge_enabled_ = settings.value("Alert/CrowdSurgeEnabled", true).toBool();
     crowd_surge_threshold_ = settings.value("Alert/CrowdSurgeThreshold", 10).toInt();
     crowd_surge_beep_ = settings.value("Alert/CrowdSurgeBeep", false).toBool();
+
+    webhook_enabled_ = settings.value("Webhook/Enabled", false).toBool();
+    webhook_url_ = settings.value("Webhook/Url", "http://127.0.0.1:8088/api/v1/events").toString();
+    webhook_token_ = settings.value("Webhook/Token", "").toString();
+    webhook_timeout_ms_ = settings.value("Webhook/TimeoutMs", 3000).toInt();
 }
 
 void ConfigManager::save() {
@@ -54,6 +59,11 @@ void ConfigManager::save() {
     settings.setValue("Alert/CrowdSurgeEnabled", crowd_surge_enabled_);
     settings.setValue("Alert/CrowdSurgeThreshold", crowd_surge_threshold_);
     settings.setValue("Alert/CrowdSurgeBeep", crowd_surge_beep_);
+
+    settings.setValue("Webhook/Enabled", webhook_enabled_);
+    settings.setValue("Webhook/Url", webhook_url_);
+    settings.setValue("Webhook/Token", webhook_token_);
+    settings.setValue("Webhook/TimeoutMs", webhook_timeout_ms_);
     settings.sync();
 
     emit config_changed();

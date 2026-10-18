@@ -29,6 +29,14 @@ private:
     QSpinBox* surge_threshold_spin_ = nullptr;
     QCheckBox* surge_beep_chk_ = nullptr;
 
+    // Webhook 云端推送 UI 控件
+    QCheckBox* webhook_enabled_chk_ = nullptr;
+    QLineEdit* webhook_url_edit_ = nullptr;
+    QLineEdit* webhook_token_edit_ = nullptr;
+    QSpinBox* webhook_timeout_spin_ = nullptr;
+    QPushButton* btn_test_ping_ = nullptr;
+    QLabel* webhook_status_label_ = nullptr;
+
     QLabel* hardware_info_label_ = nullptr;
     QPushButton* btn_save_ = nullptr;
 };
