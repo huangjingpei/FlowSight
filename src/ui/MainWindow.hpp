@@ -38,6 +38,7 @@ private:
 
     QLabel* status_infer_label_ = nullptr;
     QLabel* status_fps_label_ = nullptr;
+    QLabel* gpu_badge_label_ = nullptr;
 
     std::unique_ptr<PipelineController> pipeline_;
 };

@@ -79,11 +79,25 @@ target_link_libraries(FlowSight PRIVATE
 
 # 7. 自动拷贝运行时 DLL 到构建目录
 if(WIN32)
-    # 拷贝 ONNX Runtime DLL
+    # 拷贝 ONNX Runtime DLL 与 Provider 插件
     if(EXISTS "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime.dll")
         add_custom_command(TARGET FlowSight POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime.dll"
+            $<TARGET_FILE_DIR:FlowSight>
+        )
+    endif()
+    if(EXISTS "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime_providers_shared.dll")
+        add_custom_command(TARGET FlowSight POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime_providers_shared.dll"
+            $<TARGET_FILE_DIR:FlowSight>
+        )
+    endif()
+    if(EXISTS "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime_providers_cuda.dll")
+        add_custom_command(TARGET FlowSight POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime_providers_cuda.dll"
             $<TARGET_FILE_DIR:FlowSight>
         )
     endif()

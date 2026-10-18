@@ -249,6 +249,7 @@ public slots:
                 snap.today_entry = today_entry_;
                 snap.today_exit = today_exit_;
                 snap.today_total = today_entry_ + today_exit_;
+                if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
                 QThread::msleep(80);
                 continue;
@@ -321,6 +322,7 @@ public slots:
                 snap.today_total = today_entry_ + today_exit_;
                 snap.fps = current_fps;
                 snap.infer_ms = infer_ms;
+                if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
             }
 

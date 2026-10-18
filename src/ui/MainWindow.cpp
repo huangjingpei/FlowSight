@@ -116,9 +116,9 @@ void MainWindow::setup_ui() {
     gpu_badge->setStyleSheet("background-color: #21262d; border-radius: 6px; margin: 0 10px; padding: 6px;");
     auto* gpu_layout = new QVBoxLayout(gpu_badge);
     gpu_layout->setContentsMargins(6, 4, 6, 4);
-    auto* gpu_text = new QLabel("● GPU 加速在线", gpu_badge);
-    gpu_text->setStyleSheet("color: #3fb950; font-size: 11px; font-weight: bold;");
-    gpu_layout->addWidget(gpu_text);
+    gpu_badge_label_ = new QLabel("● 推理引擎探测中...", gpu_badge);
+    gpu_badge_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
+    gpu_layout->addWidget(gpu_badge_label_);
     sidebar_vbox->addWidget(gpu_badge);
 
     // 2. 右侧多页面堆栈容器
@@ -189,6 +189,19 @@ void MainWindow::on_roi_calibrated(const RoiConfig& new_roi) {
 }
 
 void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {
-    status_infer_label_->setText(QString("⚡ 推理: %1 ms").arg(QString::number(stats.infer_ms, 'f', 1)));
+    QString backend_str = QString::fromStdString(stats.backend_name);
+    status_infer_label_->setText(QString("⚡ 推理: %1 ms (%2)")
+        .arg(QString::number(stats.infer_ms, 'f', 1))
+        .arg(backend_str.contains("CUDA") ? "CUDA" : "CPU"));
     status_fps_label_->setText(QString("📺 帧率: %1 FPS").arg(QString::number(stats.fps, 'f', 1)));
+
+    if (gpu_badge_label_) {
+        if (backend_str.contains("CUDA") || backend_str.contains("GPU")) {
+            gpu_badge_label_->setText("● NVIDIA GPU (CUDA)");
+            gpu_badge_label_->setStyleSheet("color: #3fb950; font-size: 11px; font-weight: bold;");
+        } else {
+            gpu_badge_label_->setText("● CPU 多线程高性能模式");
+            gpu_badge_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
+        }
+    }
 }

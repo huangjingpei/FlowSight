@@ -6,10 +6,43 @@
 #include <array>
 #include <algorithm>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+#include <thread>
+
+static bool is_nvidia_driver_available() {
+#if defined(_WIN32)
+    HMODULE hMod = LoadLibraryA("nvcuda.dll");
+    if (hMod) {
+        FreeLibrary(hMod);
+        return true;
+    }
+    return false;
+#else
+    return false;
+#endif
+}
+
+static bool is_cuda_provider_available() {
+    try {
+        auto providers = Ort::GetAvailableProviders();
+        for (const auto& p : providers) {
+            if (p == "CUDAExecutionProvider") {
+                return true;
+            }
+        }
+    } catch (...) {}
+    return false;
+}
+
 class OnnxDetector::Impl {
 public:
-    Ort::Env env_{ORT_LOGGING_LEVEL_WARNING, "YOLOv8_FlowSight"};
-    Ort::SessionOptions session_options_;
+    Ort::Env env_{ORT_LOGGING_LEVEL_FATAL, "YOLOv8_FlowSight"};
     std::unique_ptr<Ort::Session> session_;
     Ort::MemoryInfo memory_info_ = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
@@ -17,7 +50,7 @@ public:
     int input_h_ = 640;
     float conf_thresh_ = 0.45f;
     float nms_thresh_ = 0.50f;
-    std::string backend_name_ = "CPU";
+    std::string backend_name_ = "CPU (多线程高性能优化)";
 
     std::vector<std::string> input_node_names_;
     std::vector<std::string> output_node_names_;
@@ -28,27 +61,49 @@ public:
         conf_thresh_ = conf_thresh;
         nms_thresh_ = nms_thresh;
 
-        session_options_.SetIntraOpNumThreads(2);
-        session_options_.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        std::wstring wide_path(model_path.begin(), model_path.end());
+        bool cuda_initialized = false;
 
-        // 优先尝试启用 CUDA Provider
-        try {
-            OrtCUDAProviderOptions cuda_options{};
-            cuda_options.device_id = 0;
-            session_options_.AppendExecutionProvider_CUDA(cuda_options);
-            backend_name_ = "CUDA (NVIDIA GPU)";
-            std::cout << "[OnnxDetector] Successfully enabled CUDA Execution Provider." << std::endl;
-        } catch (const std::exception& e) {
-            backend_name_ = "CPU (Multi-Threaded)";
-            std::cout << "[OnnxDetector] CUDA unavailable, falling back to CPU: " << e.what() << std::endl;
+        // 1. 默认优先尝试启用 NVIDIA GPU (CUDA)
+        bool has_nvidia_gpu = is_nvidia_driver_available();
+        bool has_cuda_provider = is_cuda_provider_available();
+
+        if (has_nvidia_gpu && has_cuda_provider) {
+            try {
+                Ort::SessionOptions cuda_options;
+                cuda_options.SetIntraOpNumThreads(2);
+                cuda_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+                OrtCUDAProviderOptions cuda_opts{};
+                cuda_opts.device_id = 0;
+                cuda_options.AppendExecutionProvider_CUDA(cuda_opts);
+
+                session_ = std::make_unique<Ort::Session>(env_, wide_path.c_str(), cuda_options);
+                backend_name_ = "NVIDIA GPU (CUDA)";
+                cuda_initialized = true;
+                std::cout << "[OnnxDetector] 成功启用 NVIDIA 独立显卡硬件加速 (CUDA 引擎)" << std::endl;
+            } catch (...) {
+                cuda_initialized = false;
+                session_.reset();
+            }
         }
 
-        std::wstring wide_path(model_path.begin(), model_path.end());
-        try {
-            session_ = std::make_unique<Ort::Session>(env_, wide_path.c_str(), session_options_);
-        } catch (const std::exception& e) {
-            std::cerr << "[OnnxDetector] Failed to load model file: " << e.what() << std::endl;
-            return false;
+        // 2. 若未检测到 NVIDIA 环境、驱动/CUDA 版本不满足或缺少组件，自动平滑推导为 CPU 模式
+        if (!cuda_initialized) {
+            try {
+                Ort::SessionOptions cpu_options;
+                unsigned int num_threads = std::max(2u, std::min(4u, std::thread::hardware_concurrency()));
+                cpu_options.SetIntraOpNumThreads(num_threads);
+                cpu_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+                session_ = std::make_unique<Ort::Session>(env_, wide_path.c_str(), cpu_options);
+                backend_name_ = "CPU (多线程高性能优化)";
+                std::cout << "[OnnxDetector] 未检测到匹配的 NVIDIA CUDA 运行库或显卡驱动版本不满足，系统已自动推导并平滑降级为 CPU 多线程模式 (线程数: "
+                          << num_threads << ")" << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "[OnnxDetector] Failed to load model file on CPU: " << e.what() << std::endl;
+                return false;
+            }
         }
 
         // 动态获取输入输出名称

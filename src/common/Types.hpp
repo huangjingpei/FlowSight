@@ -63,4 +63,5 @@ struct StatisticsSnapshot {
     int today_total = 0;
     float fps = 0.0f;
     float infer_ms = 0.0f;
+    std::string backend_name = "CPU";
 };
