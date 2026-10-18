@@ -194,6 +194,21 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
                 }
             }
         }
+    } else if (mode_ == EditMode::IDLE) {
+        // 未标定或清空防区时，呈现全域感知模式提示胶囊
+        painter.setFont(QFont("Segoe UI", 10, QFont::Bold));
+        QString hint = "💡 全域感知模式 (全画面人数实时统计) │ 前往【📐 空间标定】可绘制进出分流防区";
+        QFontMetrics fm(painter.font());
+        int hint_w = fm.horizontalAdvance(hint) + 24;
+        int hint_h = 28;
+        QRectF hint_rect(offset_x_ + (render_w - hint_w) * 0.5f, offset_y_ + 14, hint_w, hint_h);
+
+        painter.setPen(QPen(QColor(88, 166, 255, 140), 1));
+        painter.setBrush(QColor(13, 17, 23, 210));
+        painter.drawRoundedRect(hint_rect, 6, 6);
+
+        painter.setPen(QColor(88, 166, 255));
+        painter.drawText(hint_rect, Qt::AlignCenter, hint);
     }
 
     // 4. 绘制检测跟踪框与足底点 (高科技 HUD 视觉效果)
@@ -446,7 +461,16 @@ void VideoCanvas::cancel_changes() {
 }
 
 QPointF VideoCanvas::frame_to_canvas(const cv::Point2f& pt_f) const {
-    return QPointF(pt_f.x * scale_ + offset_x_, pt_f.y * scale_ + offset_y_);
+    float x = pt_f.x;
+    float y = pt_f.y;
+    const auto& roi = (mode_ == EditMode::IDLE) ? active_roi_ : editing_roi_;
+    if (roi.ref_width > 0 && video_w_ > 0 && roi.ref_width != static_cast<int>(video_w_)) {
+        x = x * video_w_ / static_cast<float>(roi.ref_width);
+    }
+    if (roi.ref_height > 0 && video_h_ > 0 && roi.ref_height != static_cast<int>(video_h_)) {
+        y = y * video_h_ / static_cast<float>(roi.ref_height);
+    }
+    return QPointF(x * scale_ + offset_x_, y * scale_ + offset_y_);
 }
 
 cv::Point2f VideoCanvas::canvas_to_frame(const QPointF& pt_c) const {

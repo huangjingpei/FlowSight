@@ -68,9 +68,9 @@ public:
         std::vector<Detection> det_second;
 
         for (const auto& det : detections) {
-            if (det.confidence >= 0.5f) {
+            if (det.confidence >= 0.40f) {
                 det_first.push_back(det);
-            } else if (det.confidence >= 0.2f) {
+            } else if (det.confidence >= 0.15f) {
                 det_second.push_back(det);
             }
         }

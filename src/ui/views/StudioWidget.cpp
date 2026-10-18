@@ -66,6 +66,14 @@ void StudioWidget::setup_ui() {
     );
     tool_vbox->addWidget(btn_invert_dir_);
 
+    btn_preset_default_ = new QPushButton("🎯  一键预置默认通道防区", this);
+    btn_preset_default_->setFixedHeight(32);
+    btn_preset_default_->setStyleSheet(
+        "QPushButton { background-color: #21262d; color: #7ee787; border: 1px solid #30363d; border-radius: 4px; font-weight: 600; font-size: 12px; } "
+        "QPushButton:hover { background-color: #30363d; border-color: #7ee787; color: #ffffff; }"
+    );
+    tool_vbox->addWidget(btn_preset_default_);
+
     status_label_ = new QLabel("● 状态: 空闲 / 等待标定", this);
     status_label_->setStyleSheet("color: #ffa502; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     tool_vbox->addWidget(status_label_);
@@ -127,6 +135,8 @@ void StudioWidget::setup_ui() {
         status_label_->setText(invert_direction_ ? "● 判定朝向: 已反转 (向外为进)" : "● 判定朝向: 默认方向 (向内为进)");
         status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     });
+
+    connect(btn_preset_default_, &QPushButton::clicked, this, &StudioWidget::on_btn_preset_default);
 
     connect(buffer_slider_, &QSlider::valueChanged, this, [this](int val) {
         buffer_val_label_->setText(QString("几何缓冲带半径: %1 px").arg(val));
@@ -195,6 +205,15 @@ void StudioWidget::on_btn_cancel() {
     canvas_->cancel_changes();
     status_label_->setText("● 状态: 已恢复上次配置");
     status_label_->setStyleSheet("color: #8b949e; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+}
+
+void StudioWidget::on_btn_preset_default() {
+    int w = canvas_->video_width() > 0 ? canvas_->video_width() : 1920;
+    int h = canvas_->video_height() > 0 ? canvas_->video_height() : 1080;
+    RoiConfig def_roi = make_default_corridor_roi(w, h);
+    set_roi(def_roi);
+    status_label_->setText("● 状态: 已加载默认通道防区，点击【立即应用生效】即可存盘");
+    status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_polygon_status(bool is_valid, int vertex_count) {

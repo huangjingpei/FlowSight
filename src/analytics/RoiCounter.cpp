@@ -29,6 +29,8 @@ public:
         out_events.clear();
 
         if (!roi_config_ || !roi_config_->is_valid || roi_config_->vertices.size() < 3) {
+            // 未标定特定防区时，全视口活跃目标均计入当前人数
+            current_occupancy = static_cast<int>(tracks.size());
             return;
         }
 

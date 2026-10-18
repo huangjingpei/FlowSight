@@ -47,6 +47,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
     connect(pipeline_.get(), &PipelineController::crowd_surge_status_changed, view_monitor_, &MonitorWidget::set_crowd_surge_alert);
+    connect(pipeline_.get(), &PipelineController::roi_auto_initialized, this, [this](const RoiConfig& roi) {
+        view_monitor_->update_active_roi(roi);
+        view_studio_->set_roi(roi);
+    });
 
     connect(pipeline_.get(), &PipelineController::media_info_ready, view_monitor_, &MonitorWidget::set_media_info);
     connect(pipeline_.get(), &PipelineController::position_changed, view_monitor_, &MonitorWidget::set_playback_position);

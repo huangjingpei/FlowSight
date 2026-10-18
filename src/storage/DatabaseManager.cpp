@@ -8,27 +8,44 @@
 #include <QJsonObject>
 #include <QDebug>
 
+#include <QThread>
+#include <QFileInfo>
+
 DatabaseManager& DatabaseManager::instance() {
     static DatabaseManager inst;
     return inst;
 }
 
+QSqlDatabase DatabaseManager::get_database() {
+    QString conn_name = QString("conn_%1").arg(reinterpret_cast<quintptr>(QThread::currentThreadId()));
+    if (QSqlDatabase::contains(conn_name)) {
+        return QSqlDatabase::database(conn_name);
+    }
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn_name);
+    db.setDatabaseName(db_path_);
+    if (db.open()) {
+        QSqlQuery q(db);
+        q.exec("PRAGMA journal_mode = WAL;");
+        q.exec("PRAGMA synchronous = NORMAL;");
+    }
+    return db;
+}
+
 bool DatabaseManager::init_database(const QString& db_path) {
+    db_path_ = db_path;
     QFileInfo fi(db_path);
     QDir dir = fi.dir();
     if (!dir.exists()) {
         dir.mkpath(".");
     }
 
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(db_path);
-
-    if (!db.open()) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) {
         qCritical() << "[DatabaseManager] Failed to open SQLite:" << db.lastError().text();
         return false;
     }
 
-    QSqlQuery q;
+    QSqlQuery q(db);
     // 强制开启 WAL 模式以支撑多线程高频无锁读写
     q.exec("PRAGMA journal_mode = WAL;");
     q.exec("PRAGMA synchronous = NORMAL;");
@@ -74,10 +91,11 @@ bool DatabaseManager::init_database(const QString& db_path) {
 bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
     if (events.empty()) return true;
 
-    QSqlDatabase db = QSqlDatabase::database();
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
     db.transaction();
 
-    QSqlQuery q;
+    QSqlQuery q(db);
     q.prepare("INSERT INTO passage_events ("
               "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group) "
               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -117,7 +135,8 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
     }
     sql += " ORDER BY timestamp_ms DESC LIMIT ?";
 
-    QSqlQuery q;
+    QSqlDatabase db = get_database();
+    QSqlQuery q(db);
     q.prepare(sql);
     if (direction_filter >= 0) {
         q.addBindValue(direction_filter);
@@ -161,7 +180,8 @@ std::vector<PassageEvent> DatabaseManager::query_recent_events(int limit) {
 
 std::vector<PassageEvent> DatabaseManager::query_events_by_timerange(int64_t start_ms, int64_t end_ms, int limit) {
     std::vector<PassageEvent> list;
-    QSqlQuery q;
+    QSqlDatabase db = get_database();
+    QSqlQuery q(db);
     q.prepare("SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group "
               "FROM passage_events WHERE timestamp_ms >= ? AND timestamp_ms <= ? "
               "ORDER BY timestamp_ms ASC LIMIT ?");
@@ -203,7 +223,8 @@ bool DatabaseManager::save_roi_config(const RoiConfig& config) {
     std::string src_id = config.source_id.empty() ? "default" : config.source_id;
     int ver = config.version > 0 ? config.version : 1;
 
-    QSqlQuery q;
+    QSqlDatabase db = get_database();
+    QSqlQuery q(db);
     q.prepare("INSERT INTO roi_configs (source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction) "
               "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
     q.addBindValue(QString::fromStdString(src_id));
@@ -219,8 +240,10 @@ bool DatabaseManager::save_roi_config(const RoiConfig& config) {
 
 std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
     std::vector<RoiConfig> list;
-    QSqlQuery q("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction "
-                "FROM roi_configs ORDER BY id DESC LIMIT 1");
+    QSqlDatabase db = get_database();
+    QSqlQuery q(db);
+    q.prepare("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction "
+              "FROM roi_configs ORDER BY id DESC LIMIT 1");
     if (q.exec() && q.next()) {
         RoiConfig cfg;
         cfg.source_id = q.value(0).toString().toStdString();
@@ -243,5 +266,37 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
         cfg.is_valid = (cfg.vertices.size() >= 3);
         list.push_back(cfg);
     }
+
+    // 若库中尚无任何标定记录，开箱即用自动生成并存入首选默认地面通道防区
+    if (list.empty()) {
+        RoiConfig default_roi = make_default_corridor_roi(1920, 1080);
+        save_roi_config(default_roi);
+        list.push_back(default_roi);
+    }
+
     return list;
 }
+
+void DatabaseManager::get_today_counts(int& out_entry, int& out_exit) {
+    out_entry = 0;
+    out_exit = 0;
+    QDateTime now = QDateTime::currentDateTime();
+    int64_t start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
+
+    QSqlDatabase db = get_database();
+    QSqlQuery q(db);
+    q.prepare("SELECT direction, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? GROUP BY direction");
+    q.addBindValue(static_cast<qint64>(start_ms));
+    if (q.exec()) {
+        while (q.next()) {
+            int dir = q.value(0).toInt();
+            int cnt = q.value(1).toInt();
+            if (dir == static_cast<int>(PassageDirection::ENTRY)) {
+                out_entry = cnt;
+            } else if (dir == static_cast<int>(PassageDirection::EXIT)) {
+                out_exit = cnt;
+            }
+        }
+    }
+}
+

@@ -37,6 +37,48 @@ struct RoiConfig {
     bool is_valid = false;
 };
 
+inline RoiConfig make_default_corridor_roi(int width = 1920, int height = 1080) {
+    RoiConfig cfg;
+    cfg.version = 1;
+    cfg.source_id = "default";
+    cfg.ref_width = width > 0 ? width : 1920;
+    cfg.ref_height = height > 0 ? height : 1080;
+    float w = static_cast<float>(cfg.ref_width);
+    float h = static_cast<float>(cfg.ref_height);
+    // 经典地面梯形通道防区 (覆盖主通道地面)
+    cfg.vertices = {
+        cv::Point2f(0.12f * w, 0.38f * h),
+        cv::Point2f(0.88f * w, 0.38f * h),
+        cv::Point2f(0.95f * w, 0.95f * h),
+        cv::Point2f(0.05f * w, 0.95f * h)
+    };
+    cfg.buffer_distance = 10.0f;
+    cfg.min_confirm_frames = 2;
+    cfg.invert_direction = false;
+    cfg.is_valid = true;
+    return cfg;
+}
+
+inline RoiConfig adapt_roi_to_resolution(const RoiConfig& src, int target_w, int target_h) {
+    if (src.vertices.empty() || target_w <= 0 || target_h <= 0) return src;
+    int src_w = src.ref_width > 0 ? src.ref_width : target_w;
+    int src_h = src.ref_height > 0 ? src.ref_height : target_h;
+    if (src_w == target_w && src_h == target_h) return src;
+    RoiConfig adapted = src;
+    float sx = static_cast<float>(target_w) / static_cast<float>(src_w);
+    float sy = static_cast<float>(target_h) / static_cast<float>(src_h);
+    for (auto& v : adapted.vertices) {
+        v.x *= sx;
+        v.y *= sy;
+    }
+    adapted.ref_width = target_w;
+    adapted.ref_height = target_h;
+    // 随分辨率动态缩放几何缓冲带半径，确保在 432p/720p/1080p/4K 均灵敏准确
+    float scale_avg = (sx + sy) * 0.5f;
+    adapted.buffer_distance = std::clamp(src.buffer_distance * scale_avg, 6.0f, 25.0f);
+    return adapted;
+}
+
 // 进出事件类型
 enum class PassageDirection {
     ENTRY = 1,

@@ -106,12 +106,19 @@ public:
     bool is_surged_ = false;
     int surge_confirm_count_ = 0;
     int last_surge_occupancy_ = 0;
+    int last_w_ = 0;
+    int last_h_ = 0;
 
     void set_roi(const RoiConfig& cfg) {
         std::lock_guard<std::mutex> lock(roi_mtx_);
         active_roi_ = cfg;
         if (roi_counter_) {
-            roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(cfg));
+            if (last_w_ > 0 && last_h_ > 0 && (cfg.ref_width != last_w_ || cfg.ref_height != last_h_)) {
+                RoiConfig adapted = adapt_roi_to_resolution(cfg, last_w_, last_h_);
+                roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
+            } else {
+                roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(cfg));
+            }
         }
     }
 
@@ -154,6 +161,9 @@ public slots:
         if (!model_loaded) {
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
+
+        // 开机恢复今日已入库的进出累计客流数
+        DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
 
         std::string cur_source = video_source_;
         std::string resolved_video = resolve_resource_path(cur_source);
@@ -285,6 +295,26 @@ public slots:
 
             clip_recorder_->push_frame(frame);
 
+            // 检查视频分辨率并自适应调整 ROI 防区 (若尚未标定则自适应开箱默认防区)
+            if (frame.cols != last_w_ || frame.rows != last_h_) {
+                last_w_ = frame.cols;
+                last_h_ = frame.rows;
+                RoiConfig adapted;
+                {
+                    std::lock_guard<std::mutex> lock(roi_mtx_);
+                    if (active_roi_.is_valid && !active_roi_.vertices.empty()) {
+                        adapted = adapt_roi_to_resolution(active_roi_, last_w_, last_h_);
+                        roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
+                    } else {
+                        active_roi_ = make_default_corridor_roi(last_w_, last_h_);
+                        DatabaseManager::instance().save_roi_config(active_roi_);
+                        adapted = active_roi_;
+                        roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
+                        emit roi_auto_initialized(adapted);
+                    }
+                }
+            }
+
             // 5. 目标检测 (真实模型推理)
             std::vector<Detection> detections;
             QElapsedTimer infer_timer;
@@ -338,6 +368,7 @@ public slots:
             }
 
             // 8. 通行事件与短切片异步保存
+            bool has_new_events = !events.empty();
             for (auto& ev : events) {
                 if (ev.direction == PassageDirection::ENTRY) today_entry_++;
                 else if (ev.direction == PassageDirection::EXIT) today_exit_++;
@@ -346,6 +377,18 @@ public slots:
                 ev.clip_path = clip;
                 DatabaseManager::instance().insert_events({ev});
                 emit event_occurred(ev);
+            }
+
+            if (has_new_events) {
+                StatisticsSnapshot snap;
+                snap.current_occupancy = current_occupancy;
+                snap.today_entry = today_entry_;
+                snap.today_exit = today_exit_;
+                snap.today_total = today_entry_ + today_exit_;
+                snap.fps = current_fps;
+                snap.infer_ms = infer_ms;
+                if (detector_) snap.backend_name = detector_->get_backend_name();
+                emit stats_updated(snap);
             }
 
             // 9. 帧率统计与状态信号
@@ -392,12 +435,14 @@ signals:
     void position_changed(qint64 position_ms);
     void loop_restarted();
     void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
+    void roi_auto_initialized(const RoiConfig& config);
 };
 
 PipelineController::PipelineController(QObject* parent) : QObject(parent) {
     qRegisterMetaType<std::vector<TrackObject>>("std::vector<TrackObject>");
     qRegisterMetaType<StatisticsSnapshot>("StatisticsSnapshot");
     qRegisterMetaType<PassageEvent>("PassageEvent");
+    qRegisterMetaType<RoiConfig>("RoiConfig");
 
     // 初始化硬件音频声道
     audio_player_ = new QMediaPlayer(this);
@@ -428,6 +473,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::position_changed, this, &PipelineController::position_changed);
     connect(worker_.get(), &Worker::loop_restarted, this, &PipelineController::on_worker_loop_restarted);
     connect(worker_.get(), &Worker::crowd_surge_status_changed, this, &PipelineController::crowd_surge_status_changed);
+    connect(worker_.get(), &Worker::roi_auto_initialized, this, &PipelineController::roi_auto_initialized);
 
     worker_thread_.start();
 

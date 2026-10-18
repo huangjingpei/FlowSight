@@ -23,6 +23,9 @@ public:
     void apply_changes();
     void cancel_changes();
 
+    int video_width() const { return static_cast<int>(video_w_); }
+    int video_height() const { return static_cast<int>(video_h_); }
+
     // 客流超载呼吸告警
     void set_crowd_surge_alert(bool active, int current_count = 0, int threshold = 0);
     bool is_crowd_surge_active() const { return crowd_surge_active_; }

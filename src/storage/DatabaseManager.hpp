@@ -1,6 +1,7 @@
 #pragma once
 #include "common/Types.hpp"
 #include <QString>
+#include <QSqlDatabase>
 #include <vector>
 
 class DatabaseManager {
@@ -14,8 +15,12 @@ public:
     std::vector<PassageEvent> query_filtered_events(int direction_filter = -1, int64_t start_ms = 0, int64_t end_ms = 0, const QString& keyword = "", int limit = 500);
     std::vector<RoiConfig> load_latest_roi_configs();
     bool save_roi_config(const RoiConfig& config);
+    void get_today_counts(int& out_entry, int& out_exit);
+    QSqlDatabase get_database();
 
 private:
     DatabaseManager() = default;
     ~DatabaseManager() = default;
+
+    QString db_path_ = "data/flowsight.db";
 };

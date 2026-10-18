@@ -45,6 +45,9 @@ signals:
     // 区域人员超载与拥挤度风控告警信号
     void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
 
+    // ROI 自动就绪通知 (用于开箱即用自动适配视频分辨率防区)
+    void roi_auto_initialized(const RoiConfig& config);
+
 private slots:
     void on_worker_loop_restarted();
 

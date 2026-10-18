@@ -23,6 +23,7 @@ private slots:
     void on_btn_reset();
     void on_btn_apply();
     void on_btn_cancel();
+    void on_btn_preset_default();
     void on_polygon_status(bool is_valid, int vertex_count);
 
 private:
@@ -34,6 +35,7 @@ private:
     QPushButton* btn_cancel_ = nullptr;
     QPushButton* btn_reset_ = nullptr;
     QPushButton* btn_invert_dir_ = nullptr;
+    QPushButton* btn_preset_default_ = nullptr;
 
     bool invert_direction_ = false;
 
