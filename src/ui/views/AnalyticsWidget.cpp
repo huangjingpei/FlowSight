@@ -115,26 +115,22 @@ void AnalyticsWidget::refresh_report() {
         start_ms = now.addDays(-7).toMSecsSinceEpoch();
     }
 
-    auto events = DatabaseManager::instance().query_events_by_timerange(start_ms, end_ms, 5000);
+    // 优先直查 stats_hourly 预聚合加速表 (毫秒级响应，避免明细表全表扫描与数据反序列化)
+    auto hourly_data = DatabaseManager::instance().query_hourly_distribution(start_ms, end_ms);
     int total_entry = 0;
     int total_exit = 0;
-    std::map<int, std::pair<int, int>> hourly_data;
-    int male_cnt = 0, female_cnt = 0;
 
-    for (const auto& ev : events) {
-        QDateTime dt = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms);
-        int h = dt.time().hour();
+    int peak_h = -1;
+    int max_cnt = 0;
 
-        if (ev.direction == PassageDirection::ENTRY) {
-            total_entry++;
-            hourly_data[h].first++;
-        } else if (ev.direction == PassageDirection::EXIT) {
-            total_exit++;
-            hourly_data[h].second++;
+    for (const auto& [h, p] : hourly_data) {
+        total_entry += p.first;
+        total_exit += p.second;
+        int sum = p.first + p.second;
+        if (sum > max_cnt) {
+            max_cnt = sum;
+            peak_h = h;
         }
-
-        if (ev.gender == "男") male_cnt++;
-        else if (ev.gender == "女") female_cnt++;
     }
 
     int total_flow = total_entry + total_exit;
@@ -153,20 +149,17 @@ void AnalyticsWidget::refresh_report() {
     }
 
     // 计算小时峰值
-    int peak_h = -1;
-    int max_cnt = -1;
-    for (auto const& [h, p] : hourly_data) {
-        int sum = p.first + p.second;
-        if (sum > max_cnt) {
-            max_cnt = sum;
-            peak_h = h;
-        }
-    }
-
-    if (peak_h >= 0) {
+    if (peak_h >= 0 && max_cnt > 0) {
         peak_hour_val_->setText(QString("%1:00 ~ %2:00").arg(peak_h, 2, 10, QChar('0')).arg((peak_h + 1) % 24, 2, 10, QChar('0')));
         peak_hour_sub_->setText(QString("小时峰值: %1 人次").arg(max_cnt));
+    } else {
+        peak_hour_val_->setText("-- : --");
+        peak_hour_sub_->setText("客流平缓");
     }
+
+    // 仅在存在客流时进行轻量级性别画像统计
+    int male_cnt = 0, female_cnt = 0;
+    DatabaseManager::instance().get_demographics(start_ms, end_ms, male_cnt, female_cnt);
 
     int valid_gender = male_cnt + female_cnt;
     if (valid_gender > 0) {

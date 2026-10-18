@@ -90,6 +90,25 @@ bool DatabaseManager::init_database(const QString& db_path) {
     q.exec("ALTER TABLE passage_events ADD COLUMN roi_name TEXT DEFAULT 'A门主通道';");
     q.exec("CREATE INDEX IF NOT EXISTS idx_events_ts ON passage_events(timestamp_ms);");
 
+    // 3. 小时级后台预聚合加速表 (P1-6)
+    q.exec(
+        "CREATE TABLE IF NOT EXISTS stats_hourly ("
+        "  date_hour TEXT PRIMARY KEY,"
+        "  date TEXT NOT NULL,"
+        "  hour INTEGER NOT NULL,"
+        "  entry_count INTEGER DEFAULT 0,"
+        "  exit_count INTEGER DEFAULT 0,"
+        "  total_count INTEGER DEFAULT 0,"
+        "  peak_occupancy INTEGER DEFAULT 0,"
+        "  updated_at INTEGER NOT NULL"
+        ");"
+    );
+    q.exec("CREATE INDEX IF NOT EXISTS idx_stats_hourly_date ON stats_hourly(date);");
+    q.exec("CREATE INDEX IF NOT EXISTS idx_stats_hourly_hour ON stats_hourly(hour);");
+
+    // 启动时自动历史自检与极速回填
+    sync_hourly_aggregation();
+
     return true;
 }
 
@@ -105,6 +124,15 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
               "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group, roi_id, roi_name) "
               "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
+    struct HourlyDelta {
+        QString date_str;
+        int hour = 0;
+        int entry = 0;
+        int exit = 0;
+        int total = 0;
+    };
+    std::map<QString, HourlyDelta> hourly_deltas;
+
     for (const auto& ev : events) {
         q.addBindValue(QString::fromStdString(ev.source_id));
         q.addBindValue(static_cast<qint64>(ev.timestamp_ms));
@@ -118,6 +146,42 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
         q.addBindValue(ev.roi_id > 0 ? ev.roi_id : 1);
         q.addBindValue(QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name));
         q.exec();
+
+        // 累计本批次对应小时段的增量
+        QDateTime dt = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms);
+        QString dh = dt.toString("yyyy-MM-dd hh:00");
+        auto& d = hourly_deltas[dh];
+        d.date_str = dt.toString("yyyy-MM-dd");
+        d.hour = dt.time().hour();
+        if (ev.direction == PassageDirection::ENTRY) {
+            d.entry++;
+        } else if (ev.direction == PassageDirection::EXIT) {
+            d.exit++;
+        }
+        d.total++;
+    }
+
+    // 增量 Upsert 写入 stats_hourly
+    qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+    for (const auto& [dh, d] : hourly_deltas) {
+        QSqlQuery q_agg(db);
+        q_agg.prepare(
+            "INSERT INTO stats_hourly (date_hour, date, hour, entry_count, exit_count, total_count, peak_occupancy, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, 0, ?) "
+            "ON CONFLICT(date_hour) DO UPDATE SET "
+            "  entry_count = entry_count + excluded.entry_count, "
+            "  exit_count = exit_count + excluded.exit_count, "
+            "  total_count = total_count + excluded.total_count, "
+            "  updated_at = excluded.updated_at;"
+        );
+        q_agg.addBindValue(dh);
+        q_agg.addBindValue(d.date_str);
+        q_agg.addBindValue(d.hour);
+        q_agg.addBindValue(d.entry);
+        q_agg.addBindValue(d.exit);
+        q_agg.addBindValue(d.total);
+        q_agg.addBindValue(now_ms);
+        q_agg.exec();
     }
 
     return db.commit();
@@ -337,17 +401,33 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
 void DatabaseManager::get_today_counts(int& out_entry, int& out_exit) {
     out_entry = 0;
     out_exit = 0;
-    QDateTime now = QDateTime::currentDateTime();
-    int64_t start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
+    QString today_str = QDateTime::currentDateTime().toString("yyyy-MM-dd");
 
     QSqlDatabase db = get_database();
+    if (!db.isOpen()) return;
+
+    // 优先直接查询 stats_hourly 小时预聚合加速表 (至多扫描 24 行，< 0.1ms)
     QSqlQuery q(db);
-    q.prepare("SELECT direction, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? GROUP BY direction");
-    q.addBindValue(static_cast<qint64>(start_ms));
-    if (q.exec()) {
-        while (q.next()) {
-            int dir = q.value(0).toInt();
-            int cnt = q.value(1).toInt();
+    q.prepare("SELECT SUM(entry_count), SUM(exit_count) FROM stats_hourly WHERE date = ?");
+    q.addBindValue(today_str);
+    if (q.exec() && q.next()) {
+        if (!q.value(0).isNull() || !q.value(1).isNull()) {
+            out_entry = q.value(0).toInt();
+            out_exit = q.value(1).toInt();
+            return;
+        }
+    }
+
+    // 兜底回退：若 stats_hourly 无数据则查询原始明细
+    QDateTime now = QDateTime::currentDateTime();
+    int64_t start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
+    QSqlQuery q_fallback(db);
+    q_fallback.prepare("SELECT direction, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? GROUP BY direction");
+    q_fallback.addBindValue(static_cast<qint64>(start_ms));
+    if (q_fallback.exec()) {
+        while (q_fallback.next()) {
+            int dir = q_fallback.value(0).toInt();
+            int cnt = q_fallback.value(1).toInt();
             if (dir == static_cast<int>(PassageDirection::ENTRY)) {
                 out_entry = cnt;
             } else if (dir == static_cast<int>(PassageDirection::EXIT)) {
@@ -356,4 +436,178 @@ void DatabaseManager::get_today_counts(int& out_entry, int& out_exit) {
         }
     }
 }
+
+bool DatabaseManager::sync_hourly_aggregation() {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    int agg_count = 0;
+    int event_count = 0;
+
+    QSqlQuery q(db);
+    if (q.exec("SELECT COUNT(*) FROM stats_hourly") && q.next()) {
+        agg_count = q.value(0).toInt();
+    }
+    if (q.exec("SELECT COUNT(*) FROM passage_events") && q.next()) {
+        event_count = q.value(0).toInt();
+    }
+
+    // 若已有预聚合数据，或流水表为空，则无须全量重算
+    if (agg_count > 0 || event_count == 0) {
+        return true;
+    }
+
+    qInfo() << "[DatabaseManager] stats_hourly is empty but passage_events has" << event_count << "records. Starting auto-backfill...";
+
+    db.transaction();
+    QSqlQuery q_all(db);
+    if (q_all.exec("SELECT timestamp_ms, direction FROM passage_events")) {
+        struct HourlyBucket {
+            QString date_str;
+            int hour = 0;
+            int entry = 0;
+            int exit = 0;
+            int total = 0;
+        };
+        std::map<QString, HourlyBucket> buckets;
+
+        while (q_all.next()) {
+            qint64 ts = q_all.value(0).toLongLong();
+            int dir = q_all.value(1).toInt();
+            QDateTime dt = QDateTime::fromMSecsSinceEpoch(ts);
+            QString dh = dt.toString("yyyy-MM-dd hh:00");
+            auto& b = buckets[dh];
+            b.date_str = dt.toString("yyyy-MM-dd");
+            b.hour = dt.time().hour();
+            if (dir == static_cast<int>(PassageDirection::ENTRY)) {
+                b.entry++;
+            } else if (dir == static_cast<int>(PassageDirection::EXIT)) {
+                b.exit++;
+            }
+            b.total++;
+        }
+
+        qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+        for (const auto& [dh, b] : buckets) {
+            QSqlQuery q_ins(db);
+            q_ins.prepare(
+                "INSERT INTO stats_hourly (date_hour, date, hour, entry_count, exit_count, total_count, peak_occupancy, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 0, ?) "
+                "ON CONFLICT(date_hour) DO UPDATE SET "
+                "  entry_count = excluded.entry_count, "
+                "  exit_count = excluded.exit_count, "
+                "  total_count = excluded.total_count, "
+                "  updated_at = excluded.updated_at;"
+            );
+            q_ins.addBindValue(dh);
+            q_ins.addBindValue(b.date_str);
+            q_ins.addBindValue(b.hour);
+            q_ins.addBindValue(b.entry);
+            q_ins.addBindValue(b.exit);
+            q_ins.addBindValue(b.total);
+            q_ins.addBindValue(now_ms);
+            q_ins.exec();
+        }
+        db.commit();
+        qInfo() << "[DatabaseManager] Successfully backfilled" << buckets.size() << "hourly buckets into stats_hourly.";
+        return true;
+    }
+
+    db.rollback();
+    return false;
+}
+
+std::vector<HourlyStat> DatabaseManager::query_hourly_stats(int64_t start_ms, int64_t end_ms) {
+    std::vector<HourlyStat> list;
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return list;
+
+    QString start_dh = QDateTime::fromMSecsSinceEpoch(start_ms).toString("yyyy-MM-dd hh:00");
+    QString end_dh = QDateTime::fromMSecsSinceEpoch(end_ms).toString("yyyy-MM-dd hh:59");
+
+    QSqlQuery q(db);
+    q.prepare(
+        "SELECT date_hour, date, hour, entry_count, exit_count, total_count, peak_occupancy, updated_at "
+        "FROM stats_hourly "
+        "WHERE date_hour >= ? AND date_hour <= ? "
+        "ORDER BY date_hour ASC;"
+    );
+    q.addBindValue(start_dh);
+    q.addBindValue(end_dh);
+
+    if (q.exec()) {
+        while (q.next()) {
+            HourlyStat s;
+            s.date_hour = q.value(0).toString().toStdString();
+            s.date = q.value(1).toString().toStdString();
+            s.hour = q.value(2).toInt();
+            s.entry_count = q.value(3).toInt();
+            s.exit_count = q.value(4).toInt();
+            s.total_count = q.value(5).toInt();
+            s.peak_occupancy = q.value(6).toInt();
+            s.updated_at = q.value(7).toLongLong();
+            list.push_back(s);
+        }
+    }
+    return list;
+}
+
+std::map<int, std::pair<int, int>> DatabaseManager::query_hourly_distribution(int64_t start_ms, int64_t end_ms) {
+    std::map<int, std::pair<int, int>> result;
+    for (int h = 0; h < 24; ++h) {
+        result[h] = {0, 0};
+    }
+
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return result;
+
+    QString start_dh = QDateTime::fromMSecsSinceEpoch(start_ms).toString("yyyy-MM-dd hh:00");
+    QString end_dh = QDateTime::fromMSecsSinceEpoch(end_ms).toString("yyyy-MM-dd hh:59");
+
+    QSqlQuery q(db);
+    q.prepare(
+        "SELECT hour, SUM(entry_count), SUM(exit_count) "
+        "FROM stats_hourly "
+        "WHERE date_hour >= ? AND date_hour <= ? "
+        "GROUP BY hour ORDER BY hour ASC;"
+    );
+    q.addBindValue(start_dh);
+    q.addBindValue(end_dh);
+
+    if (q.exec()) {
+        while (q.next()) {
+            int h = q.value(0).toInt();
+            int entry = q.value(1).toInt();
+            int exit = q.value(2).toInt();
+            if (h >= 0 && h < 24) {
+                result[h] = {entry, exit};
+            }
+        }
+    }
+    return result;
+}
+
+void DatabaseManager::get_demographics(int64_t start_ms, int64_t end_ms, int& out_male, int& out_female) {
+    out_male = 0;
+    out_female = 0;
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT gender, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? AND timestamp_ms <= ? GROUP BY gender");
+    q.addBindValue(static_cast<qint64>(start_ms));
+    q.addBindValue(static_cast<qint64>(end_ms));
+    if (q.exec()) {
+        while (q.next()) {
+            QString g = q.value(0).toString();
+            int cnt = q.value(1).toInt();
+            if (g == "男") {
+                out_male = cnt;
+            } else if (g == "女") {
+                out_female = cnt;
+            }
+        }
+    }
+}
+
 

@@ -125,3 +125,16 @@ struct StatisticsSnapshot {
     float infer_ms = 0.0f;
     std::string backend_name = "CPU";
 };
+
+// 小时级预聚合统计结构
+struct HourlyStat {
+    std::string date_hour; // 小时唯一键 (如 "2026-10-18 20:00")
+    std::string date;      // 日期 (如 "2026-10-18")
+    int hour = 0;          // 0 ~ 23
+    int entry_count = 0;   // 该小时进入总人次
+    int exit_count = 0;    // 该小时离开总人次
+    int total_count = 0;   // 该小时总客流
+    int peak_occupancy = 0;// 该小时场内瞬时峰值
+    int64_t updated_at = 0;// 更新时间戳 (ms)
+};
+
