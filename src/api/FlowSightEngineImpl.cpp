@@ -256,7 +256,7 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
                 dto.direction = (ev.direction == PassageDirection::ENTRY) ? Direction::ENTRY : Direction::EXIT;
                 dto.region_id = ev.roi_name;
                 dto.confidence = ev.confidence;
-                dto.foot_location = Point2D{0.0f, 0.0f};
+                dto.foot_location = Point2D{ev.foot_x, ev.foot_y};
                 dto.clip_file_path = ev.clip_path;
                 cpp_event_cb_(dto, cpp_event_user_);
             }
@@ -272,8 +272,8 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
                 cev.roi_id = ev.roi_id;
                 cev.roi_name = ev.roi_name.c_str();
                 cev.confidence = ev.confidence;
-                cev.foot_x = 0.0f;
-                cev.foot_y = 0.0f;
+                cev.foot_x = ev.foot_x;
+                cev.foot_y = ev.foot_y;
                 cev.clip_file_path = ev.clip_path.c_str();
                 cev.gender = ev.gender.c_str();
                 cev.age_group = ev.age_group.c_str();

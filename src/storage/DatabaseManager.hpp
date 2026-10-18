@@ -18,6 +18,7 @@ public:
     bool save_roi_config(const RoiConfig& config);
     bool save_roi_configs(const std::vector<RoiConfig>& configs);
     void get_today_counts(int& out_entry, int& out_exit);
+    void prune_expired_event_clips(int64_t threshold_ms);
     QSqlDatabase get_database();
 
     // P1-6: 小时预聚合加速 (stats_hourly)

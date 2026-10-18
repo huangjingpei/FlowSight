@@ -69,7 +69,7 @@ def py_event_callback(event_ptr, user_data):
     age = ev.age_group.decode('utf-8', errors='ignore') if ev.age_group else ""
     
     msg = (f"[Python SDK 截获通行事件] ID:#{ev.track_id} | 防区: {roi_name} | "
-           f"方向: {direction_str} | 置信度: {ev.confidence*100:.1f}% | 属性: {gender} {age}")
+           f"方向: {direction_str} | 置信度: {ev.confidence*100:.1f}% | 足底坐标: ({ev.foot_x:.1f}, {ev.foot_y:.1f}) | 属性: {gender} {age}")
     print(msg)
     received_events.append(ev.track_id)
 

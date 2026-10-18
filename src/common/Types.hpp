@@ -109,6 +109,8 @@ struct PassageEvent {
     int roi_id = 1;                     // 所属防区编号
     std::string roi_name = "A门主通道"; // 所属防区名称
     float confidence = 0.0f;
+    float foot_x = 0.0f;                // 穿行确认时刻足底接触点 X
+    float foot_y = 0.0f;                // 穿行时刻足底接触点 Y
     std::string source_id;
     std::string clip_path;   // 关联的短视频切片路径 (如 "clips/clip_12.mp4")
     std::string gender = "未知";

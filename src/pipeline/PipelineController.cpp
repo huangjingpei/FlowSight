@@ -39,8 +39,13 @@ static std::string resolve_resource_path(const std::string& path_str) {
 static bool open_video_capture(cv::VideoCapture& cap, const std::string& path_str) {
     if (path_str.empty()) return false;
 
-    // 1. 网络流 (RTSP / RTMP / HTTP)
+    // 1. 网络流 (RTSP / RTMP / HTTP) - 配置 TCP 传输与 5 秒读超时熔断
     if (path_str.find("://") != std::string::npos) {
+#if defined(_WIN32)
+        _putenv("OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp|stimeout;5000000|max_delay;500000");
+#else
+        setenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;5000000|max_delay;500000", 1);
+#endif
         if (cap.open(path_str, cv::CAP_FFMPEG)) return true;
         if (cap.open(path_str, cv::CAP_ANY)) return true;
         return false;
@@ -110,6 +115,27 @@ public:
     int last_surge_occupancy_ = 0;
     int last_w_ = 0;
     int last_h_ = 0;
+
+    // RTSP 实时流异步拉流抓帧线程 (解耦拉流与推理，杜绝网络延迟累积)
+    std::thread grabber_thread_;
+    std::atomic<bool> grabber_running_{false};
+    std::mutex live_frame_mtx_;
+    cv::Mat live_latest_frame_;
+    std::atomic<int64_t> live_frame_seq_{0};
+    int64_t last_consumed_seq_{0};
+
+    ~Worker() override {
+        stop_grabber();
+    }
+
+    void stop_grabber() {
+        if (grabber_running_.load()) {
+            grabber_running_.store(false);
+            if (grabber_thread_.joinable()) {
+                grabber_thread_.join();
+            }
+        }
+    }
 
     void set_rois(const std::vector<RoiConfig>& rois) {
         std::lock_guard<std::mutex> lock(roi_mtx_);
@@ -191,6 +217,7 @@ public slots:
         qint64 total_duration_ms = 0;
 
         auto init_capture = [&](const std::string& source_path) {
+            stop_grabber();
             if (cap.isOpened()) cap.release();
             resolved_video = resolve_resource_path(source_path);
             has_real_video = open_video_capture(cap, resolved_video);
@@ -206,6 +233,28 @@ public slots:
 
                 total_duration_ms = is_live ? 0 : static_cast<qint64>((frame_count / video_fps) * 1000.0);
                 emit media_info_ready(is_live, total_duration_ms, video_fps);
+
+                // 针对网络实时流启动异步专用抓帧线程，始终抓取最新帧丢弃旧帧，杜绝延迟积压
+                if (is_live) {
+                    live_frame_seq_ = 0;
+                    last_consumed_seq_ = 0;
+                    grabber_running_ = true;
+                    grabber_thread_ = std::thread([this, &cap]() {
+                        cv::Mat tmp_frame;
+                        while (grabber_running_.load() && is_running_.load()) {
+                            if (!cap.read(tmp_frame) || tmp_frame.empty()) {
+                                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                                continue;
+                            }
+                            {
+                                std::lock_guard<std::mutex> lk(live_frame_mtx_);
+                                live_latest_frame_ = tmp_frame;
+                                live_frame_seq_++;
+                            }
+                            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                        }
+                    });
+                }
             } else {
                 emit media_info_ready(false, 0, 30.0);
             }
@@ -287,9 +336,24 @@ public slots:
                 continue;
             }
 
-            // 4. 读取视频帧
-            if (!cap.read(frame) || frame.empty()) {
-                if (!is_live) {
+            // 4. 读取视频帧 (实时流通过异步抓帧解耦消费，本地流精确步调直读)
+            if (is_live) {
+                int64_t cur_seq = live_frame_seq_.load();
+                if (cur_seq == last_consumed_seq_) {
+                    QThread::msleep(5);
+                    continue;
+                }
+                {
+                    std::lock_guard<std::mutex> lk(live_frame_mtx_);
+                    if (live_latest_frame_.empty()) {
+                        QThread::msleep(10);
+                        continue;
+                    }
+                    frame = live_latest_frame_.clone();
+                    last_consumed_seq_ = cur_seq;
+                }
+            } else {
+                if (!cap.read(frame) || frame.empty()) {
                     // 本地视频循环播放
                     cap.set(cv::CAP_PROP_POS_FRAMES, 0);
                     emit loop_restarted();
@@ -297,11 +361,6 @@ public slots:
                         QThread::msleep(40);
                         continue;
                     }
-                } else {
-                    qWarning() << "[PipelineController] Stream disconnected, reconnecting...";
-                    QThread::msleep(200);
-                    init_capture(cur_source);
-                    continue;
                 }
             }
 
@@ -455,6 +514,7 @@ public slots:
             }
         }
 
+        stop_grabber();
         if (has_real_video) cap.release();
     }
 

@@ -18,6 +18,7 @@ struct STrack {
     int tracklet_len = 0;
     int lost_frame_count = 0;
     cv::Point2f velocity{0.0f, 0.0f};
+    bool is_activated = false;
 
     void predict() {
         // 简单匀速运动学预测
@@ -28,13 +29,18 @@ struct STrack {
     void update(const Detection& det) {
         cv::Point2f old_center(bbox.x + bbox.width * 0.5f, bbox.y + bbox.height * 0.5f);
         cv::Point2f new_center(det.bbox.x + det.bbox.width * 0.5f, det.bbox.y + det.bbox.height * 0.5f);
-        velocity = (new_center - old_center) * 0.4f + velocity * 0.6f;
+        velocity = (new_center - old_center) * 0.5f + velocity * 0.5f;
 
         bbox = det.bbox;
         score = det.confidence;
         state = STrackState::Tracked;
         tracklet_len++;
         lost_frame_count = 0;
+
+        // 状态确认门限：连续跟踪 2 帧以上，或置信度高于 0.60 激活
+        if (tracklet_len >= 2 || score >= 0.60f) {
+            is_activated = true;
+        }
     }
 
     void mark_lost() {
@@ -75,6 +81,11 @@ public:
                 det_second.push_back(det);
             }
         }
+
+        // 优先级排序：高置信度检测框优先占据匹配槽位，大幅降低密集人群交汇 ID 互换
+        std::sort(det_first.begin(), det_first.end(), [](const Detection& a, const Detection& b) {
+            return a.confidence > b.confidence;
+        });
 
         // 2. 预测当前跟踪目标位置
         for (auto& st : tracked_stracks_) st.predict();
@@ -144,6 +155,7 @@ public:
                 new_track.state = STrackState::Tracked;
                 new_track.tracklet_len = 1;
                 new_track.lost_frame_count = 0;
+                new_track.is_activated = (new_track.score >= 0.70f); // 暂定(Tentative)状态，次帧确认后激活
                 updated_tracks.push_back(new_track);
             }
         }
@@ -166,6 +178,11 @@ public:
         // 7. 构筑输出 TrackObject 列表并计算自适应足底代表点
         std::vector<TrackObject> output_tracks;
         for (const auto& st : tracked_stracks_) {
+            // 状态确认门限：仅向业务层输出已激活或至少连续匹配 2 帧的稳定轨迹，杜绝单帧假阳性噪音
+            if (!st.is_activated && st.tracklet_len < 2) {
+                continue;
+            }
+
             TrackObject obj;
             obj.track_id = st.track_id;
             obj.bbox = st.bbox;

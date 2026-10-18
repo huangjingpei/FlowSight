@@ -88,6 +88,8 @@ bool DatabaseManager::init_database(const QString& db_path) {
     );
     q.exec("ALTER TABLE passage_events ADD COLUMN roi_id INTEGER DEFAULT 1;");
     q.exec("ALTER TABLE passage_events ADD COLUMN roi_name TEXT DEFAULT 'A门主通道';");
+    q.exec("ALTER TABLE passage_events ADD COLUMN foot_x REAL DEFAULT 0.0;");
+    q.exec("ALTER TABLE passage_events ADD COLUMN foot_y REAL DEFAULT 0.0;");
     q.exec("CREATE INDEX IF NOT EXISTS idx_events_ts ON passage_events(timestamp_ms);");
 
     // 3. 小时级后台预聚合加速表 (P1-6)
@@ -121,8 +123,8 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
 
     QSqlQuery q(db);
     q.prepare("INSERT INTO passage_events ("
-              "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group, roi_id, roi_name) "
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+              "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group, roi_id, roi_name, foot_x, foot_y) "
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     struct HourlyDelta {
         QString date_str;
@@ -134,17 +136,19 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
     std::map<QString, HourlyDelta> hourly_deltas;
 
     for (const auto& ev : events) {
-        q.addBindValue(QString::fromStdString(ev.source_id));
-        q.addBindValue(static_cast<qint64>(ev.timestamp_ms));
-        q.addBindValue(ev.track_id);
-        q.addBindValue(static_cast<int>(ev.direction));
-        q.addBindValue(ev.roi_version);
-        q.addBindValue(ev.confidence);
-        q.addBindValue(QString::fromStdString(ev.clip_path));
-        q.addBindValue(QString::fromStdString(ev.gender));
-        q.addBindValue(QString::fromStdString(ev.age_group));
-        q.addBindValue(ev.roi_id > 0 ? ev.roi_id : 1);
-        q.addBindValue(QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name));
+        q.bindValue(0, QString::fromStdString(ev.source_id));
+        q.bindValue(1, static_cast<qint64>(ev.timestamp_ms));
+        q.bindValue(2, ev.track_id);
+        q.bindValue(3, static_cast<int>(ev.direction));
+        q.bindValue(4, ev.roi_version);
+        q.bindValue(5, ev.confidence);
+        q.bindValue(6, QString::fromStdString(ev.clip_path));
+        q.bindValue(7, QString::fromStdString(ev.gender));
+        q.bindValue(8, QString::fromStdString(ev.age_group));
+        q.bindValue(9, ev.roi_id > 0 ? ev.roi_id : 1);
+        q.bindValue(10, QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name));
+        q.bindValue(11, static_cast<double>(ev.foot_x));
+        q.bindValue(12, static_cast<double>(ev.foot_y));
         q.exec();
 
         // 累计本批次对应小时段的增量
@@ -434,6 +438,18 @@ void DatabaseManager::get_today_counts(int& out_entry, int& out_exit) {
                 out_exit = cnt;
             }
         }
+    }
+}
+
+void DatabaseManager::prune_expired_event_clips(int64_t threshold_ms) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return;
+
+    QSqlQuery q(db);
+    q.prepare("UPDATE passage_events SET clip_path = '' WHERE timestamp_ms < ? AND clip_path != '';");
+    q.addBindValue(static_cast<qint64>(threshold_ms));
+    if (q.exec()) {
+        qInfo() << "[DatabaseManager] 成功同步清理早于" << threshold_ms << "的数据库过期切片引用记录";
     }
 }
 

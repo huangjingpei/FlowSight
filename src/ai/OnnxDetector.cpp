@@ -57,9 +57,17 @@ public:
     std::vector<const char*> input_names_ptrs_;
     std::vector<const char*> output_names_ptrs_;
 
+    // 预分配常驻热路径内存池 (消除每一帧 15MB 堆内存分配与垃圾回收停顿)
+    cv::Mat canvas_mat_;
+    cv::Mat resized_mat_;
+    cv::Mat blob_mat_;
+    std::array<int64_t, 4> input_shape_{1, 3, 640, 640};
+
     bool init(const std::string& model_path, float conf_thresh, float nms_thresh) {
         conf_thresh_ = conf_thresh;
         nms_thresh_ = nms_thresh;
+        input_shape_ = {1, 3, input_h_, input_w_};
+        canvas_mat_ = cv::Mat(input_h_, input_w_, CV_8UC3, cv::Scalar(114, 114, 114));
 
         std::wstring wide_path(model_path.begin(), model_path.end());
         bool cuda_initialized = false;
@@ -131,38 +139,27 @@ public:
         detections.clear();
         if (bgr_frame.empty() || !session_) return false;
 
-        // 1. 等比 Letterbox 预处理至 640x640
+        // 1. 等比 Letterbox 预处理至 640x640 (复用 canvas_mat_ 与 resized_mat_)
         float r = std::min((float)input_w_ / bgr_frame.cols, (float)input_h_ / bgr_frame.rows);
         int unpad_w = std::round(bgr_frame.cols * r);
         int unpad_h = std::round(bgr_frame.rows * r);
         int pad_w = (input_w_ - unpad_w) / 2;
         int pad_h = (input_h_ - unpad_h) / 2;
 
-        cv::Mat resized;
-        cv::resize(bgr_frame, resized, cv::Size(unpad_w, unpad_h));
-        cv::Mat input_img(input_h_, input_w_, CV_8UC3, cv::Scalar(114, 114, 114));
-        resized.copyTo(input_img(cv::Rect(pad_w, pad_h, unpad_w, unpad_h)));
+        canvas_mat_.setTo(cv::Scalar(114, 114, 114));
+        cv::resize(bgr_frame, resized_mat_, cv::Size(unpad_w, unpad_h));
+        resized_mat_.copyTo(canvas_mat_(cv::Rect(pad_w, pad_h, unpad_w, unpad_h)));
 
-        // 转换 RGB，归一化并打平成 NCHW 连续内存
-        cv::Mat rgb;
-        cv::cvtColor(input_img, rgb, cv::COLOR_BGR2RGB);
-        rgb.convertTo(rgb, CV_32FC3, 1.0f / 255.0f);
+        // 2. 利用 OpenCV 原生 SIMD 加速的 blobFromImage 完成 BGR->RGB 转换、归一化(1/255)与通道重排(NCHW)
+        // blob_mat_ 内部内存复用，彻底杜绝每帧 15MB 堆内存反复申请与释放
+        cv::dnn::blobFromImage(canvas_mat_, blob_mat_, 1.0 / 255.0, cv::Size(input_w_, input_h_), cv::Scalar(), true, false, CV_32F);
 
-        std::vector<float> input_tensor_values(1 * 3 * input_h_ * input_w_);
-        int channel_size = input_h_ * input_w_;
-        std::vector<cv::Mat> channels(3);
-        for (int i = 0; i < 3; ++i) {
-            channels[i] = cv::Mat(input_h_, input_w_, CV_32FC1, input_tensor_values.data() + i * channel_size);
-        }
-        cv::split(rgb, channels);
-
-        std::array<int64_t, 4> input_shape = {1, 3, input_h_, input_w_};
         Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-            memory_info_, input_tensor_values.data(), input_tensor_values.size(),
-            input_shape.data(), input_shape.size()
+            memory_info_, reinterpret_cast<float*>(blob_mat_.data), 3 * input_h_ * input_w_,
+            input_shape_.data(), input_shape_.size()
         );
 
-        // 2. 执行模型推理
+        // 3. 执行模型推理
         auto output_tensors = session_->Run(
             Ort::RunOptions{nullptr},
             input_names_ptrs_.data(), &input_tensor, 1,
@@ -171,7 +168,7 @@ public:
 
         if (output_tensors.empty()) return false;
 
-        // 3. 解析输出张量 (YOLOv8 形状: [1, 84, 8400])
+        // 4. 解析输出张量 (YOLOv8 形状: [1, 84, 8400])
         float* raw_output = output_tensors[0].GetTensorMutableData<float>();
         auto output_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
         if (output_shape.size() < 3) return false;
@@ -181,6 +178,8 @@ public:
 
         std::vector<cv::Rect> boxes;
         std::vector<float> confidences;
+        boxes.reserve(256);
+        confidences.reserve(256);
 
         for (int i = 0; i < num_proposals; ++i) {
             // YOLOv8 class 0 is person
@@ -202,10 +201,11 @@ public:
             }
         }
 
-        // 4. OpenCV NMS 消除冗余重叠框
+        // 5. OpenCV NMS 消除冗余重叠框
         std::vector<int> indices;
         cv::dnn::NMSBoxes(boxes, confidences, conf_thresh_, nms_thresh_, indices);
 
+        detections.reserve(indices.size());
         for (int idx : indices) {
             Detection det;
             det.bbox = cv::Rect2f(boxes[idx]);

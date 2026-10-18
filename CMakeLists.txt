@@ -147,4 +147,20 @@ if(WIN32)
             $<TARGET_FILE_DIR:FlowSight>
         )
     endif()
+
+    # 针对 FlowSightEngine 独立动态库目标同步拷贝运行时依赖
+    if(EXISTS "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime.dll")
+        add_custom_command(TARGET FlowSightEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${ONNXRUNTIME_ROOT_DIR}/lib/onnxruntime.dll"
+            $<TARGET_FILE_DIR:FlowSightEngine>
+        )
+    endif()
+    if(EXISTS "D:/opencv/build/x64/vc16/bin/opencv_world480.dll")
+        add_custom_command(TARGET FlowSightEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "D:/opencv/build/x64/vc16/bin/opencv_world480.dll"
+            $<TARGET_FILE_DIR:FlowSightEngine>
+        )
+    endif()
 endif()

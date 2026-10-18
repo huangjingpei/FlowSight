@@ -1,4 +1,5 @@
 #include "StoragePruner.hpp"
+#include "DatabaseManager.hpp"
 #include <QDir>
 #include <QFileInfoList>
 #include <QDateTime>
@@ -34,6 +35,9 @@ int StoragePruner::prune_expired_clips(const QString& clips_dir, int retention_d
                    .arg(deleted_count)
                    .arg(retention_days)
                    .arg(QString::number(freed_mb, 'f', 2));
+
+        // 同步清理 SQLite 数据库中已失效的切片文件路径，杜绝孤儿死链
+        DatabaseManager::instance().prune_expired_event_clips(threshold.toMSecsSinceEpoch());
     }
 
     return deleted_count;
