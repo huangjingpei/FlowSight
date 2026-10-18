@@ -3,6 +3,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QScrollArea>
 
 StudioWidget::StudioWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -19,11 +20,17 @@ void StudioWidget::setup_ui() {
     canvas_->setStyleSheet("border: 1px solid #30363d; border-radius: 8px;");
     main_layout->addWidget(canvas_, 4);
 
-    // 2. 右侧标定控制面板
-    auto* right_panel = new QWidget(this);
-    right_panel->setFixedWidth(310);
+    // 2. 右侧标定控制面板 (支持垂直自适应滚动)
+    auto* right_scroll = new QScrollArea(this);
+    right_scroll->setFixedWidth(330);
+    right_scroll->setWidgetResizable(true);
+    right_scroll->setFrameShape(QFrame::NoFrame);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    auto* right_panel = new QWidget(right_scroll);
     auto* right_vbox = new QVBoxLayout(right_panel);
-    right_vbox->setContentsMargins(0, 0, 0, 0);
+    right_vbox->setContentsMargins(0, 0, 6, 0);
     right_vbox->setSpacing(12);
 
     auto* tool_group = new QGroupBox("空间几何标定工具", this);
@@ -152,7 +159,8 @@ void StudioWidget::setup_ui() {
     tool_vbox->addLayout(btn_box);
 
     right_vbox->addWidget(tool_group);
-    main_layout->addWidget(right_panel, 1);
+    right_scroll->setWidget(right_panel);
+    main_layout->addWidget(right_scroll, 0);
 
     // 连接信号槽
     connect(btn_draw_, &QPushButton::clicked, this, &StudioWidget::on_btn_start_draw);

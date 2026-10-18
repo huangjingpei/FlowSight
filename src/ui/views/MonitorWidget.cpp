@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QMessageBox>
 #include <QToolTip>
+#include <QScrollArea>
 
 MonitorWidget::MonitorWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -88,11 +89,17 @@ void MonitorWidget::setup_ui() {
 
     main_layout->addWidget(video_container_, 4);
 
-    // 2. 右侧核心指标看板
-    auto* right_panel = new QWidget(this);
-    right_panel->setFixedWidth(290);
+    // 2. 右侧核心指标看板 (支持垂直自适应滚动)
+    auto* right_scroll = new QScrollArea(this);
+    right_scroll->setFixedWidth(300);
+    right_scroll->setWidgetResizable(true);
+    right_scroll->setFrameShape(QFrame::NoFrame);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    auto* right_panel = new QWidget(right_scroll);
     auto* right_vbox = new QVBoxLayout(right_panel);
-    right_vbox->setContentsMargins(0, 0, 0, 0);
+    right_vbox->setContentsMargins(0, 0, 6, 0);
     right_vbox->setSpacing(12);
 
     auto create_kpi_card = [](const QString& title, const QString& init_val, const QString& unit, const QString& accent_color, const QString& sub_info) -> std::pair<QWidget*, QLabel*> {
@@ -143,7 +150,8 @@ void MonitorWidget::setup_ui() {
     right_vbox->addWidget(c4);
 
     right_vbox->addStretch();
-    main_layout->addWidget(right_panel, 1);
+    right_scroll->setWidget(right_panel);
+    main_layout->addWidget(right_scroll, 0);
 }
 
 void MonitorWidget::update_frame(const QImage& frame, const std::vector<TrackObject>& tracks) {

@@ -9,13 +9,26 @@
 #include <QTextStream>
 #include <QDir>
 #include <QMessageBox>
+#include <QScrollArea>
 
 AnalyticsWidget::AnalyticsWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
 }
 
 void AnalyticsWidget::setup_ui() {
-    auto* main_layout = new QVBoxLayout(this);
+    auto* root_layout = new QVBoxLayout(this);
+    root_layout->setContentsMargins(0, 0, 0, 0);
+    root_layout->setSpacing(0);
+
+    auto* scroll_area = new QScrollArea(this);
+    scroll_area->setWidgetResizable(true);
+    scroll_area->setFrameShape(QFrame::NoFrame);
+    scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    auto* container = new QWidget(scroll_area);
+    container->setObjectName("analytics_container");
+    auto* main_layout = new QVBoxLayout(container);
     main_layout->setContentsMargins(14, 14, 14, 14);
     main_layout->setSpacing(14);
 
@@ -71,9 +84,13 @@ void AnalyticsWidget::setup_ui() {
 
     main_layout->addLayout(kpi_layout);
 
-    // 3. 24小时时段分布趋势 (真实矢量图表驱动)
-    chart_widget_ = new AnalyticsChartWidget(this);
+    // 3. 24小时时段分布趋势 (真实矢量图表驱动，保证充足最小高度)
+    chart_widget_ = new AnalyticsChartWidget(container);
+    chart_widget_->setMinimumHeight(380);
     main_layout->addWidget(chart_widget_, 1);
+
+    scroll_area->setWidget(container);
+    root_layout->addWidget(scroll_area);
 
     connect(btn_export_, &QPushButton::clicked, this, &AnalyticsWidget::on_btn_export_csv);
     connect(combo_range_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AnalyticsWidget::refresh_report);

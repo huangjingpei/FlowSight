@@ -180,21 +180,38 @@ inline QString get_global_stylesheet() {
             transform: scale(1.2);
         }
 
-        /* 极细现代滚动条 (QScrollBar) */
+        /* 滚动区域容器 (QScrollArea) */
+        QScrollArea {
+            background: transparent;
+            border: none;
+        }
+        QScrollArea > QWidget > QWidget {
+            background: transparent;
+        }
+
+        /* 极细现代科技感滚动条 (QScrollBar) */
         QScrollBar:vertical {
             background: transparent;
             width: 8px;
-            margin: 0;
+            margin: 0px;
+            border: none;
         }
         QScrollBar::handle:vertical {
             background: #30363d;
-            min-height: 24px;
+            min-height: 28px;
             border-radius: 4px;
         }
         QScrollBar::handle:vertical:hover {
-            background: #484f58;
+            background: #58a6ff;
         }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+            height: 0px;
+            background: none;
+        }
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+            background: none;
+        }
+        QScrollBar:horizontal {
             height: 0px;
         }
 

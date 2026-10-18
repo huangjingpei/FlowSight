@@ -10,6 +10,7 @@
 #include <QUrl>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QScrollArea>
 
 EvidenceWidget::EvidenceWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -128,11 +129,17 @@ void EvidenceWidget::setup_ui() {
 
     main_layout->addWidget(left_panel, 3);
 
-    // 2. 右侧专业音视频回放与元数据检查器
-    player_container_ = new QWidget(this);
-    player_container_->setFixedWidth(460);
+    // 2. 右侧专业音视频回放与元数据检查器 (支持垂直自适应滚动)
+    auto* right_scroll = new QScrollArea(this);
+    right_scroll->setFixedWidth(470);
+    right_scroll->setWidgetResizable(true);
+    right_scroll->setFrameShape(QFrame::NoFrame);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    player_container_ = new QWidget(right_scroll);
     auto* player_vbox = new QVBoxLayout(player_container_);
-    player_vbox->setContentsMargins(0, 0, 0, 0);
+    player_vbox->setContentsMargins(0, 0, 6, 0);
     player_vbox->setSpacing(10);
 
     // 播放器卡片
@@ -148,7 +155,7 @@ void EvidenceWidget::setup_ui() {
 
     player_ = new MediaPlayerWidget(p_card);
     card_layout->addWidget(player_, 1);
-    player_vbox->addWidget(p_card, 2);
+    player_vbox->addWidget(p_card);
 
     // 元数据检查器卡片
     auto* meta_card = new QWidget(this);
@@ -198,9 +205,11 @@ void EvidenceWidget::setup_ui() {
     });
     meta_vbox->addWidget(btn_inspect_play_);
 
-    player_vbox->addWidget(meta_card, 1);
+    player_vbox->addWidget(meta_card);
+    player_vbox->addStretch();
 
-    main_layout->addWidget(player_container_, 2);
+    right_scroll->setWidget(player_container_);
+    main_layout->addWidget(right_scroll, 0);
 
     // 连接信号槽
     connect(btn_refresh_, &QPushButton::clicked, this, &EvidenceWidget::refresh_events);

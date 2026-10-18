@@ -6,15 +6,28 @@
 #include <QGroupBox>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QScrollArea>
 
 SettingsWidget::SettingsWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
 }
 
 void SettingsWidget::setup_ui() {
-    auto* main_layout = new QVBoxLayout(this);
-    main_layout->setContentsMargins(12, 12, 12, 12);
-    main_layout->setSpacing(12);
+    auto* root_layout = new QVBoxLayout(this);
+    root_layout->setContentsMargins(0, 0, 0, 0);
+    root_layout->setSpacing(0);
+
+    auto* scroll_area = new QScrollArea(this);
+    scroll_area->setWidgetResizable(true);
+    scroll_area->setFrameShape(QFrame::NoFrame);
+    scroll_area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll_area->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    auto* container = new QWidget(scroll_area);
+    container->setObjectName("settings_container");
+    auto* main_layout = new QVBoxLayout(container);
+    main_layout->setContentsMargins(16, 16, 16, 16);
+    main_layout->setSpacing(14);
 
     auto& cfg = ConfigManager::instance();
 
@@ -151,11 +164,14 @@ void SettingsWidget::setup_ui() {
     hw_layout->addWidget(hardware_info_label_);
     main_layout->addWidget(hw_group);
 
-    main_layout->addStretch();
+    main_layout->addSpacing(8);
 
-    btn_save_ = new QPushButton("保存并应用设置", this);
-    btn_save_->setStyleSheet("padding: 8px 16px; background: #0984e3; color: white; font-weight: bold; border-radius: 4px;");
+    btn_save_ = new QPushButton("保存并应用设置", container);
+    btn_save_->setStyleSheet("padding: 8px 20px; background: #0984e3; color: white; font-weight: bold; border-radius: 4px;");
     main_layout->addWidget(btn_save_, 0, Qt::AlignRight);
+
+    scroll_area->setWidget(container);
+    root_layout->addWidget(scroll_area);
 
     connect(btn_browse_, &QPushButton::clicked, this, &SettingsWidget::on_btn_browse);
     connect(btn_save_, &QPushButton::clicked, this, &SettingsWidget::on_btn_save);
