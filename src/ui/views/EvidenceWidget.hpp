@@ -3,9 +3,9 @@
 #include <QTableWidget>
 #include <QPushButton>
 #include <QLabel>
-#include <QMediaPlayer>
-#include <QVideoWidget>
 #include "common/Types.hpp"
+
+class MediaPlayerWidget;
 
 class EvidenceWidget : public QWidget {
     Q_OBJECT
@@ -26,7 +26,6 @@ private:
     QPushButton* btn_refresh_ = nullptr;
     QLabel* tip_label_ = nullptr;
 
-    QMediaPlayer* player_ = nullptr;
-    QVideoWidget* video_widget_ = nullptr;
+    MediaPlayerWidget* player_ = nullptr;
     QWidget* player_container_ = nullptr;
 };

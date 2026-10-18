@@ -1,4 +1,5 @@
 #include "EvidenceWidget.hpp"
+#include "ui/components/MediaPlayerWidget.hpp"
 #include "storage/DatabaseManager.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -28,7 +29,7 @@ void EvidenceWidget::setup_ui() {
     btn_refresh_ = new QPushButton("🔄  刷新流水记录", this);
     btn_refresh_->setFixedHeight(34);
 
-    tip_label_ = new QLabel("💡 提示: 双击任意记录行，右侧播放器将秒级起播该行人穿行时的 3 秒短视频切片", this);
+    tip_label_ = new QLabel("💡 提示: 双击任意记录行，右侧播放器将秒级起播该行人穿行时的证据音视频", this);
     tip_label_->setStyleSheet("color: #8b949e; font-size: 12px; margin-left: 8px;");
 
     top_bar->addWidget(btn_refresh_);
@@ -47,9 +48,9 @@ void EvidenceWidget::setup_ui() {
 
     main_layout->addWidget(left_panel, 3);
 
-    // 2. 右侧内置微型证据播放器
+    // 2. 右侧专业音视频回放与证据溯源组件
     player_container_ = new QWidget(this);
-    player_container_->setFixedWidth(380);
+    player_container_->setFixedWidth(460);
     auto* player_vbox = new QVBoxLayout(player_container_);
     player_vbox->setContentsMargins(0, 0, 0, 0);
     player_vbox->setSpacing(8);
@@ -58,23 +59,14 @@ void EvidenceWidget::setup_ui() {
     p_card->setStyleSheet("background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;");
     auto* card_layout = new QVBoxLayout(p_card);
     card_layout->setContentsMargins(4, 4, 4, 4);
-    card_layout->setSpacing(10);
+    card_layout->setSpacing(8);
 
-    auto* p_title = new QLabel("🎬  通行事件证据视频回放", p_card);
+    auto* p_title = new QLabel("🎬  通行事件证据视频与声音溯源回放", p_card);
     p_title->setStyleSheet("font-weight: bold; color: #58a6ff; font-size: 14px;");
     card_layout->addWidget(p_title);
 
-    player_ = new QMediaPlayer(this);
-    video_widget_ = new QVideoWidget(p_card);
-    video_widget_->setStyleSheet("background-color: #000; border: 1px solid #21262d; border-radius: 6px;");
-    video_widget_->setMinimumHeight(240);
-    player_->setVideoOutput(video_widget_);
-    card_layout->addWidget(video_widget_, 1);
-
-    auto* btn_replay = new QPushButton("▶  重新播放", p_card);
-    btn_replay->setObjectName("btn_accent");
-    btn_replay->setFixedHeight(36);
-    card_layout->addWidget(btn_replay);
+    player_ = new MediaPlayerWidget(p_card);
+    card_layout->addWidget(player_, 1);
 
     player_vbox->addWidget(p_card);
     main_layout->addWidget(player_container_, 2);
@@ -82,10 +74,6 @@ void EvidenceWidget::setup_ui() {
     // 连接信号槽
     connect(btn_refresh_, &QPushButton::clicked, this, &EvidenceWidget::refresh_events);
     connect(table_, &QTableWidget::cellDoubleClicked, this, &EvidenceWidget::on_cell_double_clicked);
-    connect(btn_replay, &QPushButton::clicked, this, [this]() {
-        player_->setPosition(0);
-        player_->play();
-    });
 }
 
 void EvidenceWidget::refresh_events() {
@@ -137,6 +125,6 @@ void EvidenceWidget::play_clip(const QString& file_path) {
         QMessageBox::information(this, "提示", QString("切片文件不存在或正在异步落盘写入中:\n%1").arg(file_path));
         return;
     }
-    player_->setSource(QUrl::fromLocalFile(file_path));
+    player_->load_media(file_path);
     player_->play();
 }
