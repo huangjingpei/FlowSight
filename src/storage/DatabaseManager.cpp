@@ -610,4 +610,24 @@ void DatabaseManager::get_demographics(int64_t start_ms, int64_t end_ms, int& ou
     }
 }
 
+void DatabaseManager::get_top_age_group(int64_t start_ms, int64_t end_ms, std::string& out_top_age, int& out_count) {
+    out_top_age = "暂无数据";
+    out_count = 0;
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return;
+
+    QSqlQuery q(db);
+    q.prepare(
+        "SELECT age_group, COUNT(*) as cnt FROM passage_events "
+        "WHERE timestamp_ms >= ? AND timestamp_ms <= ? AND age_group != '未知' "
+        "GROUP BY age_group ORDER BY cnt DESC LIMIT 1"
+    );
+    q.addBindValue(static_cast<qint64>(start_ms));
+    q.addBindValue(static_cast<qint64>(end_ms));
+    if (q.exec() && q.next()) {
+        out_top_age = q.value(0).toString().toStdString();
+        out_count = q.value(1).toInt();
+    }
+}
+
 

@@ -172,8 +172,18 @@ void AnalyticsWidget::refresh_report() {
         gender_ratio_sub_->setText(QString("真实样本: %1 人次").arg(total_flow));
     }
 
-    age_group_val_->setText("真实样本归集");
-    age_group_sub_->setText(QString("有效识别样本: %1 人次").arg(total_flow));
+    // 主力年龄区间统计
+    std::string top_age = "暂无数据";
+    int top_age_cnt = 0;
+    DatabaseManager::instance().get_top_age_group(start_ms, end_ms, top_age, top_age_cnt);
+    if (top_age_cnt > 0 && total_flow > 0) {
+        int age_pct = (top_age_cnt * 100) / total_flow;
+        age_group_val_->setText(QString("%1 (%2%)").arg(QString::fromStdString(top_age)).arg(age_pct));
+        age_group_sub_->setText(QString("主力客群: %1/%2 人次").arg(top_age_cnt).arg(total_flow));
+    } else {
+        age_group_val_->setText("统计归集中");
+        age_group_sub_->setText(QString("有效识别样本: %1 人次").arg(total_flow));
+    }
 
     if (chart_widget_) {
         chart_widget_->set_data(hourly_data);

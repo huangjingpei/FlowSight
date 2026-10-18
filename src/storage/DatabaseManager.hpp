@@ -25,6 +25,7 @@ public:
     std::vector<HourlyStat> query_hourly_stats(int64_t start_ms, int64_t end_ms);
     std::map<int, std::pair<int, int>> query_hourly_distribution(int64_t start_ms, int64_t end_ms);
     void get_demographics(int64_t start_ms, int64_t end_ms, int& out_male, int& out_female);
+    void get_top_age_group(int64_t start_ms, int64_t end_ms, std::string& out_top_age, int& out_count);
 
 private:
     DatabaseManager() = default;

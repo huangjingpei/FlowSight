@@ -1,5 +1,6 @@
 #include "PipelineController.hpp"
 #include "ai/OnnxDetector.hpp"
+#include "ai/AttributeClassifier.hpp"
 #include "tracking/ByteTrackWrapper.hpp"
 #include "analytics/RoiCounter.hpp"
 #include "storage/DatabaseManager.hpp"
@@ -173,6 +174,10 @@ public slots:
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
+        // 初始化二级属性识别轻量级模型 (P1-5)
+        std::string resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+        AttributeClassifier::instance().init(resolved_attr_model);
+
         // 开机恢复今日已入库的进出累计客流数
         DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
 
@@ -339,6 +344,20 @@ public slots:
 
             // 6. 目标跟踪 (ByteTrack)
             auto tracks = tracker_->update(detections);
+
+            // 6.1 针对活跃目标框触发二级异步属性分类识别 (MobileNetV3 P1-5)
+            for (auto& trk : tracks) {
+                int x = std::clamp(static_cast<int>(trk.bbox.x), 0, frame.cols - 1);
+                int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
+                int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
+                int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
+                if (w >= 16 && h >= 32) {
+                    cv::Rect crop_rect(x, y, w, h);
+                    cv::Mat crop = frame(crop_rect);
+                    AttributeClassifier::instance().classify_async(trk.track_id, crop);
+                }
+                AttributeClassifier::instance().get_attributes(trk.track_id, trk.gender, trk.age_group);
+            }
 
             // 7. 区域滞后防抖计数
             int current_occupancy = 0;
