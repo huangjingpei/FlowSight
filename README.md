@@ -101,6 +101,10 @@ cmake --build build --config Release -j
 - [**00-FlowSight MVP 技术原型与规格说明书**](docs/00-FlowSight_MVP_技术原型.md)：业务定义、统计口径、数学逆映射模型与 DDL。
 - [**01-FlowSight MVP 落地实施指南与代码骨架**](docs/01-FlowSight_MVP_落地实施指南与代码骨架.md)：核心类设计、现代 CMake 配置与 7 天实施路线图。
 - [**02-FlowSight MVP 全景操作与部署手册 (SOP)**](docs/02-FlowSight_MVP_全景操作与部署手册.md)：分页面操作 SOP、机位调优指南与 5 分钟客户演示剧本。
+- [**03-FlowSight 系统核心技术架构与跨平台移植规范**](docs/03-FlowSight_系统核心技术架构_时序流程与跨平台移植规范.md)：线程拓扑时序、零拷贝渲染与 C-ABI 导出规划。
+- [**04-FlowSight 核心疑虑与技术决议剖析**](docs/04-FlowSight_核心疑虑与技术决议剖析.md)：级联属性分类、卡尔曼调优与多路流矩阵论证。
+- [**05-FlowSight 硬件推理智能探测与 CPU 平滑 Fallback**](docs/05-FlowSight_硬件推理环境智能探测与CPU平滑Fallback容灾方案.md)：CUDA/CPU 双模智能自适应与容灾策略。
+- [**06-FlowSight 商业化核心功能缺口分析与分期演进路线图**](docs/06-FlowSight_商业化核心功能缺口分析与分期演进路线图.md)：商业化 6 大功能缺口深度审计、P0/P1/P2 分期实施与状态跟踪矩阵。
 
 ---
 
