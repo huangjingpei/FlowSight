@@ -113,6 +113,78 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
             painter.setPen(QPen(QColor(255, 215, 0, 220), 2, Qt::SolidLine));
             painter.drawPolygon(poly);
 
+            // 3.1 绘制多边形重心与通行方向矢量基准指示箭头 (Direction Indicator Arrow)
+            QPointF centroid(0, 0);
+            for (const auto& pt : poly) {
+                centroid += pt;
+            }
+            centroid /= poly.size();
+
+            // 计算多边形的主流动方向矢量 (上半部分与下半部分加权)
+            QPointF upper_half(0, 0); int upper_cnt = 0;
+            QPointF lower_half(0, 0); int lower_cnt = 0;
+            for (const auto& pt : poly) {
+                if (pt.y() < centroid.y()) { upper_half += pt; upper_cnt++; }
+                else { lower_half += pt; lower_cnt++; }
+            }
+            QPointF base_dir(0, 1);
+            if (upper_cnt > 0 && lower_cnt > 0) {
+                base_dir = (lower_half / lower_cnt) - (upper_half / upper_cnt);
+            }
+            float dir_len = std::hypot(base_dir.x(), base_dir.y());
+            if (dir_len > 1e-3f) {
+                base_dir /= dir_len;
+            } else {
+                base_dir = QPointF(0, 1);
+            }
+            if (roi.invert_direction) {
+                base_dir = -base_dir;
+            }
+
+            float arrow_len = 38.0f;
+            QPointF p_start = centroid - base_dir * (arrow_len * 0.45f);
+            QPointF p_end = centroid + base_dir * (arrow_len * 0.55f);
+
+            // 绘制箭头主轴线
+            painter.setPen(QPen(QColor(88, 166, 255, 230), 3, Qt::SolidLine, Qt::RoundCap));
+            painter.drawLine(p_start, p_end);
+
+            // 绘制起点圆点 (带微光)
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(88, 166, 255, 120));
+            painter.drawEllipse(p_start, 6, 6);
+            painter.setBrush(QColor(88, 166, 255, 255));
+            painter.drawEllipse(p_start, 3, 3);
+
+            // 绘制箭头头部两侧斜翼
+            QPointF perp(-base_dir.y(), base_dir.x());
+            float wing_len = 11.0f;
+            float wing_w = 6.0f;
+            QPointF wing1 = p_end - base_dir * wing_len + perp * wing_w;
+            QPointF wing2 = p_end - base_dir * wing_len - perp * wing_w;
+            QPolygonF head_poly;
+            head_poly << p_end << wing1 << (p_end - base_dir * (wing_len * 0.7f)) << wing2;
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(88, 166, 255, 255));
+            painter.drawPolygon(head_poly);
+
+            // 绘制 "进 ➔" 悬浮小气泡
+            QString dir_tag = "进 ➔";
+            QFont dir_font("Segoe UI", 9, QFont::Bold);
+            QFontMetrics dfm(dir_font);
+            int tag_w = dfm.horizontalAdvance(dir_tag) + 10;
+            int tag_h = 18;
+            QPointF tag_pos = centroid + perp * 16.0f - QPointF(tag_w / 2.0f, tag_h / 2.0f);
+            QRectF tag_rect(tag_pos.x(), tag_pos.y(), tag_w, tag_h);
+
+            painter.setPen(QPen(QColor(88, 166, 255, 180), 1));
+            painter.setBrush(QColor(13, 17, 23, 220));
+            painter.drawRoundedRect(tag_rect, 3, 3);
+
+            painter.setFont(dir_font);
+            painter.setPen(QColor(88, 166, 255));
+            painter.drawText(tag_rect, Qt::AlignCenter, dir_tag);
+
             // 标定编辑模式下呈现可拖拽控制点
             if (mode_ == EditMode::EDITING && !read_only_) {
                 painter.setBrush(Qt::white);

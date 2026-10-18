@@ -43,9 +43,13 @@ bool DatabaseManager::init_database(const QString& db_path) {
         "  ref_height INTEGER NOT NULL,"
         "  vertices_json TEXT NOT NULL,"
         "  buffer_distance REAL DEFAULT 20.0,"
+        "  min_confirm_frames INTEGER DEFAULT 4,"
+        "  invert_direction INTEGER DEFAULT 0,"
         "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         ");"
     );
+    q.exec("ALTER TABLE roi_configs ADD COLUMN min_confirm_frames INTEGER DEFAULT 4;");
+    q.exec("ALTER TABLE roi_configs ADD COLUMN invert_direction INTEGER DEFAULT 0;");
 
     // 2. 通行明细表 (含短视频切片与属性)
     q.exec(
@@ -148,6 +152,8 @@ std::vector<PassageEvent> DatabaseManager::query_events_by_timerange(int64_t sta
 }
 
 bool DatabaseManager::save_roi_config(const RoiConfig& config) {
+    if (config.vertices.size() < 3) return false;
+
     QJsonArray arr;
     for (const auto& pt : config.vertices) {
         QJsonObject obj;
@@ -158,21 +164,26 @@ bool DatabaseManager::save_roi_config(const RoiConfig& config) {
     QJsonDocument doc(arr);
     QString json_str = doc.toJson(QJsonDocument::Compact);
 
+    std::string src_id = config.source_id.empty() ? "default" : config.source_id;
+    int ver = config.version > 0 ? config.version : 1;
+
     QSqlQuery q;
-    q.prepare("INSERT INTO roi_configs (source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance) "
-              "VALUES (?, ?, ?, ?, ?, ?)");
-    q.addBindValue(QString::fromStdString(config.source_id));
-    q.addBindValue(config.version);
-    q.addBindValue(config.ref_width);
-    q.addBindValue(config.ref_height);
+    q.prepare("INSERT INTO roi_configs (source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction) "
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    q.addBindValue(QString::fromStdString(src_id));
+    q.addBindValue(ver);
+    q.addBindValue(config.ref_width > 0 ? config.ref_width : 1920);
+    q.addBindValue(config.ref_height > 0 ? config.ref_height : 1080);
     q.addBindValue(json_str);
     q.addBindValue(config.buffer_distance);
+    q.addBindValue(config.min_confirm_frames);
+    q.addBindValue(config.invert_direction ? 1 : 0);
     return q.exec();
 }
 
 std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
     std::vector<RoiConfig> list;
-    QSqlQuery q("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance "
+    QSqlQuery q("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction "
                 "FROM roi_configs ORDER BY id DESC LIMIT 1");
     if (q.exec() && q.next()) {
         RoiConfig cfg;
@@ -191,6 +202,8 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
             }
         }
         cfg.buffer_distance = q.value(5).toFloat();
+        cfg.min_confirm_frames = q.value(6).toInt() > 0 ? q.value(6).toInt() : 4;
+        cfg.invert_direction = (q.value(7).toInt() != 0);
         cfg.is_valid = (cfg.vertices.size() >= 3);
         list.push_back(cfg);
     }

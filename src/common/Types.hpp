@@ -33,6 +33,7 @@ struct RoiConfig {
     std::vector<cv::Point2f> vertices; // 任意 N 边形原始像素顶点 (N >= 3)
     float buffer_distance = 20.0f;     // 几何缓冲带距离 (px)
     int min_confirm_frames = 4;        // 状态确认帧数
+    bool invert_direction = false;     // 是否反转进出判定朝向
     bool is_valid = false;
 };
 

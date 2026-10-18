@@ -78,6 +78,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     std::string init_video = ConfigManager::instance().get_video_source().toStdString();
     pipeline_->start_pipeline("models/yolov8n.onnx", init_video);
+
+    // 冷启动持久化恢复: 将 SQLite 中最新标定的 ROI 注入分析管线、监控面板与工作室
+    auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
+    if (!saved_rois.empty()) {
+        const auto& latest_roi = saved_rois.front();
+        view_monitor_->update_active_roi(latest_roi);
+        view_studio_->set_roi(latest_roi);
+        pipeline_->update_roi_config(latest_roi);
+    }
 }
 
 MainWindow::~MainWindow() = default;
@@ -197,6 +206,7 @@ void MainWindow::on_nav_item_changed(int row) {
 }
 
 void MainWindow::on_roi_calibrated(const RoiConfig& new_roi) {
+    DatabaseManager::instance().save_roi_config(new_roi);
     if (pipeline_) {
         pipeline_->update_roi_config(new_roi);
     }

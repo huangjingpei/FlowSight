@@ -58,6 +58,14 @@ void StudioWidget::setup_ui() {
     btn_reset_->setFixedHeight(32);
     tool_vbox->addWidget(btn_reset_);
 
+    btn_invert_dir_ = new QPushButton("🔄  反转进出判定朝向", this);
+    btn_invert_dir_->setFixedHeight(32);
+    btn_invert_dir_->setStyleSheet(
+        "QPushButton { background-color: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 4px; font-weight: 600; font-size: 12px; } "
+        "QPushButton:hover { background-color: #30363d; border-color: #58a6ff; color: #ffffff; }"
+    );
+    tool_vbox->addWidget(btn_invert_dir_);
+
     status_label_ = new QLabel("● 状态: 空闲 / 等待标定", this);
     status_label_->setStyleSheet("color: #ffa502; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     tool_vbox->addWidget(status_label_);
@@ -111,6 +119,15 @@ void StudioWidget::setup_ui() {
     connect(btn_cancel_, &QPushButton::clicked, this, &StudioWidget::on_btn_cancel);
     connect(canvas_, &VideoCanvas::polygon_status_changed, this, &StudioWidget::on_polygon_status);
 
+    connect(btn_invert_dir_, &QPushButton::clicked, this, [this]() {
+        RoiConfig cfg = canvas_->get_roi();
+        invert_direction_ = !invert_direction_;
+        cfg.invert_direction = invert_direction_;
+        canvas_->set_roi(cfg);
+        status_label_->setText(invert_direction_ ? "● 判定朝向: 已反转 (向外为进)" : "● 判定朝向: 默认方向 (向内为进)");
+        status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
     connect(buffer_slider_, &QSlider::valueChanged, this, [this](int val) {
         buffer_val_label_->setText(QString("几何缓冲带半径: %1 px").arg(val));
     });
@@ -134,6 +151,21 @@ void StudioWidget::set_roi(const RoiConfig& roi) {
     if (canvas_) {
         canvas_->set_roi(roi);
     }
+    invert_direction_ = roi.invert_direction;
+    if (buffer_slider_) {
+        buffer_slider_->setValue(static_cast<int>(roi.buffer_distance));
+    }
+    if (confirm_slider_) {
+        confirm_slider_->setValue(roi.min_confirm_frames);
+    }
+    if (status_label_) {
+        if (roi.is_valid && roi.vertices.size() >= 3) {
+            status_label_->setText(QString("● 当前已载入历史标定: %1 个顶点 (朝向: %2)")
+                .arg(roi.vertices.size())
+                .arg(roi.invert_direction ? "反转" : "常规"));
+            status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+        }
+    }
 }
 
 void StudioWidget::on_btn_start_draw() {
@@ -152,9 +184,10 @@ void StudioWidget::on_btn_apply() {
     RoiConfig cfg = canvas_->get_roi();
     cfg.buffer_distance = static_cast<float>(buffer_slider_->value());
     cfg.min_confirm_frames = confirm_slider_->value();
+    cfg.invert_direction = invert_direction_;
     canvas_->set_roi(cfg);
     canvas_->apply_changes();
-    status_label_->setText("● 状态: 配置已成功应用");
+    status_label_->setText("● 状态: 配置已成功应用并存盘");
     status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 

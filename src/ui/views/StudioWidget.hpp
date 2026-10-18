@@ -33,6 +33,9 @@ private:
     QPushButton* btn_apply_ = nullptr;
     QPushButton* btn_cancel_ = nullptr;
     QPushButton* btn_reset_ = nullptr;
+    QPushButton* btn_invert_dir_ = nullptr;
+
+    bool invert_direction_ = false;
 
     QLabel* status_label_ = nullptr;
     QSlider* buffer_slider_ = nullptr;

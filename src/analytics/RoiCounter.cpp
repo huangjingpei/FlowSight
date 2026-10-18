@@ -68,7 +68,7 @@ public:
                         PassageEvent ev;
                         ev.timestamp_ms = timestamp_ms;
                         ev.track_id = trk.track_id;
-                        ev.direction = PassageDirection::ENTRY;
+                        ev.direction = roi_config_->invert_direction ? PassageDirection::EXIT : PassageDirection::ENTRY;
                         ev.roi_version = roi_config_->version;
                         ev.confidence = trk.score;
                         ev.source_id = roi_config_->source_id;
@@ -92,7 +92,7 @@ public:
                         PassageEvent ev;
                         ev.timestamp_ms = timestamp_ms;
                         ev.track_id = trk.track_id;
-                        ev.direction = PassageDirection::EXIT;
+                        ev.direction = roi_config_->invert_direction ? PassageDirection::ENTRY : PassageDirection::EXIT;
                         ev.roi_version = roi_config_->version;
                         ev.confidence = trk.score;
                         ev.source_id = roi_config_->source_id;
