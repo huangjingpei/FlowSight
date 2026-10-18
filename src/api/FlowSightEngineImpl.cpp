@@ -35,12 +35,12 @@ void FlowSightEngineImpl::register_stats_callback(SystemStatsCallback callback, 
     cpp_stats_user_ = user_context;
 }
 
-void FlowSightEngineImpl::register_c_event_callback(C_FlowEventCallback callback, void* user_data) {
+void FlowSightEngineImpl::register_c_event_callback(FS_FlowEventCallback callback, void* user_data) {
     c_event_cb_ = callback;
     c_event_user_ = user_data;
 }
 
-void FlowSightEngineImpl::register_c_stats_callback(C_SystemStatsCallback callback, void* user_data) {
+void FlowSightEngineImpl::register_c_stats_callback(FS_SystemStatsCallback callback, void* user_data) {
     c_stats_cb_ = callback;
     c_stats_user_ = user_data;
 }
@@ -68,7 +68,7 @@ bool FlowSightEngineImpl::set_detection_region(const PolygonRegion& region) {
     return true;
 }
 
-bool FlowSightEngineImpl::set_detection_region_c(int32_t roi_id, const char* roi_name, const C_Point2D* points, int num_points) {
+bool FlowSightEngineImpl::set_detection_region_c(int32_t roi_id, const char* roi_name, const FS_Point2D* points, int num_points) {
     std::lock_guard<std::mutex> lock(config_mutex_);
 
     RoiConfig cfg;
@@ -152,7 +152,7 @@ std::vector<ChannelStatus> FlowSightEngineImpl::get_all_channels_status() const 
     return {status};
 }
 
-bool FlowSightEngineImpl::get_current_stats_c(C_SystemStats* out_stats) {
+bool FlowSightEngineImpl::get_current_stats_c(FS_SystemStats* out_stats) {
     if (!out_stats) return false;
     std::lock_guard<std::mutex> lock(stats_mutex_);
     out_stats->current_occupancy = current_occupancy_;
@@ -246,7 +246,7 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
 
             // 扁平纯 C 函数指针回调
             if (c_event_cb_) {
-                C_FlowEvent cev;
+                FS_FlowEvent cev;
                 cev.channel_id = 0;
                 cev.event_id = eid;
                 cev.timestamp_ms = ev.timestamp_ms;
@@ -293,7 +293,7 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
             }
 
             if (c_stats_cb_) {
-                C_SystemStats cs;
+                FS_SystemStats cs;
                 get_current_stats_c(&cs);
                 c_stats_cb_(&cs, c_stats_user_);
             }
@@ -357,27 +357,27 @@ FLOWSIGHT_API void FlowSight_StopStream(void* handle) {
     }
 }
 
-FLOWSIGHT_API int FlowSight_SetDetectionRegion(void* handle, int32_t roi_id, const char* roi_name, const C_Point2D* points, int num_points) {
+FLOWSIGHT_API int FlowSight_SetDetectionRegion(void* handle, int32_t roi_id, const char* roi_name, const FS_Point2D* points, int num_points) {
     if (!handle || !points || num_points < 3) return -1;
     auto* engine = static_cast<flowsight::FlowSightEngineImpl*>(handle);
     return engine->set_detection_region_c(roi_id, roi_name, points, num_points) ? 0 : -2;
 }
 
-FLOWSIGHT_API void FlowSight_RegisterEventCallback(void* handle, C_FlowEventCallback callback, void* user_data) {
+FLOWSIGHT_API void FlowSight_RegisterEventCallback(void* handle, FS_FlowEventCallback callback, void* user_data) {
     if (handle) {
         auto* engine = static_cast<flowsight::FlowSightEngineImpl*>(handle);
         engine->register_c_event_callback(callback, user_data);
     }
 }
 
-FLOWSIGHT_API void FlowSight_RegisterStatsCallback(void* handle, C_SystemStatsCallback callback, void* user_data) {
+FLOWSIGHT_API void FlowSight_RegisterStatsCallback(void* handle, FS_SystemStatsCallback callback, void* user_data) {
     if (handle) {
         auto* engine = static_cast<flowsight::FlowSightEngineImpl*>(handle);
         engine->register_c_stats_callback(callback, user_data);
     }
 }
 
-FLOWSIGHT_API int FlowSight_GetStats(void* handle, C_SystemStats* out_stats) {
+FLOWSIGHT_API int FlowSight_GetStats(void* handle, FS_SystemStats* out_stats) {
     if (!handle || !out_stats) return -1;
     auto* engine = static_cast<flowsight::FlowSightEngineImpl*>(handle);
     return engine->get_current_stats_c(out_stats) ? 0 : -2;

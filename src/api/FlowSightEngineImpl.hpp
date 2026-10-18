@@ -37,10 +37,10 @@ public:
     std::vector<ChannelStatus> get_all_channels_status() const override;
 
     // 纯 C 兼容导出辅助方法
-    void register_c_event_callback(C_FlowEventCallback callback, void* user_data);
-    void register_c_stats_callback(C_SystemStatsCallback callback, void* user_data);
-    bool set_detection_region_c(int32_t roi_id, const char* roi_name, const C_Point2D* points, int num_points);
-    bool get_current_stats_c(C_SystemStats* out_stats);
+    void register_c_event_callback(FS_FlowEventCallback callback, void* user_data);
+    void register_c_stats_callback(FS_SystemStatsCallback callback, void* user_data);
+    bool set_detection_region_c(int32_t roi_id, const char* roi_name, const FS_Point2D* points, int num_points);
+    bool get_current_stats_c(FS_SystemStats* out_stats);
 
 private:
     void worker_loop(const std::string video_uri);
@@ -58,9 +58,9 @@ private:
     SystemStatsCallback cpp_stats_cb_{nullptr};
     void* cpp_stats_user_{nullptr};
 
-    C_FlowEventCallback c_event_cb_{nullptr};
+    FS_FlowEventCallback c_event_cb_{nullptr};
     void* c_event_user_{nullptr};
-    C_SystemStatsCallback c_stats_cb_{nullptr};
+    FS_SystemStatsCallback c_stats_cb_{nullptr};
     void* c_stats_user_{nullptr};
 
     std::atomic<bool> initialized_{false};

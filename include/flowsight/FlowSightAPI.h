@@ -227,15 +227,15 @@ public:
 
 #pragma pack(push, 8)
 /**
- * @brief 纯 C 标准 2D 坐标点
+ * @brief FlowSight C-ABI 2D 坐标点
  */
 typedef struct {
     float x;
     float y;
-} C_Point2D;
+} FS_Point2D;
 
 /**
- * @brief 纯 C 标准内存对齐的通行事件结构体
+ * @brief FlowSight C-ABI 内存对齐的通行事件结构体
  */
 typedef struct {
     int32_t     channel_id;          ///< 通道编号 (默认 0)
@@ -251,10 +251,10 @@ typedef struct {
     const char* clip_file_path;      ///< 关联短视频切片路径
     const char* gender;              ///< 性别 ("男"/"女"/"未知")
     const char* age_group;           ///< 年龄段 ("20-30"等)
-} C_FlowEvent;
+} FS_FlowEvent;
 
 /**
- * @brief 纯 C 标准系统指标快照
+ * @brief FlowSight C-ABI 系统指标快照
  */
 typedef struct {
     int32_t current_occupancy;       ///< 当前区域内活跃/滞留人数
@@ -263,11 +263,18 @@ typedef struct {
     int32_t today_total;             ///< 今日累计总人次
     float   infer_ms;                ///< 推理耗时 (ms)
     float   fps;                     ///< 算法实时帧率
-} C_SystemStats;
+} FS_SystemStats;
 #pragma pack(pop)
 
-typedef void (*C_FlowEventCallback)(const C_FlowEvent* event, void* user_data);
-typedef void (*C_SystemStatsCallback)(const C_SystemStats* stats, void* user_data);
+typedef void (*FS_FlowEventCallback)(const FS_FlowEvent* event, void* user_data);
+typedef void (*FS_SystemStatsCallback)(const FS_SystemStats* stats, void* user_data);
+
+// 兼容别名
+typedef FS_Point2D C_Point2D;
+typedef FS_FlowEvent C_FlowEvent;
+typedef FS_SystemStats C_SystemStats;
+typedef FS_FlowEventCallback C_FlowEventCallback;
+typedef FS_SystemStatsCallback C_SystemStatsCallback;
 
 extern "C" {
     // 1. C++ 抽象类实例导出工厂
@@ -280,8 +287,8 @@ extern "C" {
     FLOWSIGHT_API int   FlowSight_Initialize(void* handle, const char* model_path, float conf_thresh, int device_id);
     FLOWSIGHT_API int   FlowSight_StartStream(void* handle, const char* video_uri);
     FLOWSIGHT_API void  FlowSight_StopStream(void* handle);
-    FLOWSIGHT_API int   FlowSight_SetDetectionRegion(void* handle, int32_t roi_id, const char* roi_name, const C_Point2D* points, int num_points);
-    FLOWSIGHT_API void  FlowSight_RegisterEventCallback(void* handle, C_FlowEventCallback callback, void* user_data);
-    FLOWSIGHT_API void  FlowSight_RegisterStatsCallback(void* handle, C_SystemStatsCallback callback, void* user_data);
-    FLOWSIGHT_API int   FlowSight_GetStats(void* handle, C_SystemStats* out_stats);
+    FLOWSIGHT_API int   FlowSight_SetDetectionRegion(void* handle, int32_t roi_id, const char* roi_name, const FS_Point2D* points, int num_points);
+    FLOWSIGHT_API void  FlowSight_RegisterEventCallback(void* handle, FS_FlowEventCallback callback, void* user_data);
+    FLOWSIGHT_API void  FlowSight_RegisterStatsCallback(void* handle, FS_SystemStatsCallback callback, void* user_data);
+    FLOWSIGHT_API int   FlowSight_GetStats(void* handle, FS_SystemStats* out_stats);
 }

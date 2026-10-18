@@ -16,13 +16,13 @@ from ctypes import (
 
 # 1. 定义与 include/flowsight/FlowSightAPI.h 严格二进制对齐的 C 结构体
 
-class C_Point2D(Structure):
+class FS_Point2D(Structure):
     _fields_ = [
         ("x", c_float),
         ("y", c_float),
     ]
 
-class C_FlowEvent(Structure):
+class FS_FlowEvent(Structure):
     _pack_ = 8
     _fields_ = [
         ("channel_id", c_int32),
@@ -40,7 +40,7 @@ class C_FlowEvent(Structure):
         ("age_group", c_char_p),
     ]
 
-class C_SystemStats(Structure):
+class FS_SystemStats(Structure):
     _pack_ = 8
     _fields_ = [
         ("current_occupancy", c_int32),
@@ -52,8 +52,8 @@ class C_SystemStats(Structure):
     ]
 
 # 2. 回调函数签名定义
-C_FlowEventCallback = CFUNCTYPE(None, POINTER(C_FlowEvent), c_void_p)
-C_SystemStatsCallback = CFUNCTYPE(None, POINTER(C_SystemStats), c_void_p)
+FS_FlowEventCallback = CFUNCTYPE(None, POINTER(FS_FlowEvent), c_void_p)
+FS_SystemStatsCallback = CFUNCTYPE(None, POINTER(FS_SystemStats), c_void_p)
 
 # 全局收集统计与事件
 received_events = []
@@ -123,16 +123,16 @@ def main():
     engine_dll.FlowSight_StopStream.argtypes = [c_void_p]
 
     engine_dll.FlowSight_SetDetectionRegion.restype = c_int
-    engine_dll.FlowSight_SetDetectionRegion.argtypes = [c_void_p, c_int32, c_char_p, POINTER(C_Point2D), c_int]
+    engine_dll.FlowSight_SetDetectionRegion.argtypes = [c_void_p, c_int32, c_char_p, POINTER(FS_Point2D), c_int]
 
     engine_dll.FlowSight_RegisterEventCallback.restype = None
-    engine_dll.FlowSight_RegisterEventCallback.argtypes = [c_void_p, C_FlowEventCallback, c_void_p]
+    engine_dll.FlowSight_RegisterEventCallback.argtypes = [c_void_p, FS_FlowEventCallback, c_void_p]
 
     engine_dll.FlowSight_RegisterStatsCallback.restype = None
-    engine_dll.FlowSight_RegisterStatsCallback.argtypes = [c_void_p, C_SystemStatsCallback, c_void_p]
+    engine_dll.FlowSight_RegisterStatsCallback.argtypes = [c_void_p, FS_SystemStatsCallback, c_void_p]
 
     engine_dll.FlowSight_GetStats.restype = c_int
-    engine_dll.FlowSight_GetStats.argtypes = [c_void_p, POINTER(C_SystemStats)]
+    engine_dll.FlowSight_GetStats.argtypes = [c_void_p, POINTER(FS_SystemStats)]
 
     # 4. 创建引擎实例
     handle = engine_dll.FlowSight_Create()
@@ -152,18 +152,18 @@ def main():
 
     # 6. 设置过道多边形标定防区
     # 设置一个横跨过道中央的四边形
-    pts = (C_Point2D * 4)(
-        C_Point2D(100.0, 180.0),
-        C_Point2D(540.0, 180.0),
-        C_Point2D(540.0, 420.0),
-        C_Point2D(100.0, 420.0),
+    pts = (FS_Point2D * 4)(
+        FS_Point2D(100.0, 180.0),
+        FS_Point2D(540.0, 180.0),
+        FS_Point2D(540.0, 420.0),
+        FS_Point2D(100.0, 420.0),
     )
     ret = engine_dll.FlowSight_SetDetectionRegion(handle, 1, "A门主通道".encode('utf-8'), pts, 4)
     print(f"[+] 防区标定成功: ret={ret}")
 
     # 7. 注册纯 C 回调函数
-    c_event_cb = C_FlowEventCallback(py_event_callback)
-    c_stats_cb = C_SystemStatsCallback(py_stats_callback)
+    c_event_cb = FS_FlowEventCallback(py_event_callback)
+    c_stats_cb = FS_SystemStatsCallback(py_stats_callback)
     engine_dll.FlowSight_RegisterEventCallback(handle, c_event_cb, None)
     engine_dll.FlowSight_RegisterStatsCallback(handle, c_stats_cb, None)
     print("[+] C-ABI 事件与指标回调函数注册成功!")
@@ -180,7 +180,7 @@ def main():
     time.sleep(12)
 
     # 9. 主动查询实时统计
-    current_stats = C_SystemStats()
+    current_stats = FS_SystemStats()
     ret = engine_dll.FlowSight_GetStats(handle, ctypes.byref(current_stats))
     print("-" * 70)
     print(f"[+] FlowSight_GetStats 结果: 活跃人数={current_stats.current_occupancy}, 累计进={current_stats.today_entry}, 累计出={current_stats.today_exit}, FPS={current_stats.fps:.1f}")
