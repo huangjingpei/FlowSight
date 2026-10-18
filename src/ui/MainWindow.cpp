@@ -5,6 +5,9 @@
 #include "views/AnalyticsWidget.hpp"
 #include "views/SettingsWidget.hpp"
 #include "storage/DatabaseManager.hpp"
+#include "storage/ConfigManager.hpp"
+#include "storage/StoragePruner.hpp"
+#include <QTimer>
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -19,6 +22,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // 初始化 SQLite 数据库与 WAL 模式
     DatabaseManager::instance().init_database("data/flowsight.db");
+
+    // 执行磁盘保护清理 (按配置天数清理过期短视频切片)
+    StoragePruner::prune_expired_clips("clips", ConfigManager::instance().get_clip_retention_days());
+
+    // 启动后台定时器: 每 6 小时自动巡检一次磁盘切片
+    auto* prune_timer = new QTimer(this);
+    connect(prune_timer, &QTimer::timeout, this, []() {
+        StoragePruner::prune_expired_clips("clips", ConfigManager::instance().get_clip_retention_days());
+    });
+    prune_timer->start(6 * 3600 * 1000);
 
     setup_ui();
     setup_connections();
@@ -62,7 +75,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         }
     });
 
-    pipeline_->start_pipeline("models/yolov8n.onnx", "configs/test_corridor.mp4");
+    std::string init_video = ConfigManager::instance().get_video_source().toStdString();
+    pipeline_->start_pipeline("models/yolov8n.onnx", init_video);
 }
 
 MainWindow::~MainWindow() = default;

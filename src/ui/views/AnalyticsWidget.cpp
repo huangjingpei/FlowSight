@@ -1,4 +1,5 @@
 #include "AnalyticsWidget.hpp"
+#include "ui/components/AnalyticsChartWidget.hpp"
 #include "storage/DatabaseManager.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -70,17 +71,9 @@ void AnalyticsWidget::setup_ui() {
 
     main_layout->addLayout(kpi_layout);
 
-    // 3. 24小时时段分布趋势 (真实直方图驱动)
-    auto* chart_group = new QGroupBox("24小时各时段进出流量分布趋势 (真实时段直方图)", this);
-    auto* chart_vbox = new QVBoxLayout(chart_group);
-
-    chart_label_ = new QLabel(this);
-    chart_label_->setStyleSheet(
-        "background-color: #0d1117; color: #58a6ff; font-family: 'Consolas', 'Courier New', monospace; "
-        "font-size: 13px; padding: 20px; border-radius: 6px; border: 1px solid #21262d; line-height: 180%;"
-    );
-    chart_vbox->addWidget(chart_label_);
-    main_layout->addWidget(chart_group, 1);
+    // 3. 24小时时段分布趋势 (真实矢量图表驱动)
+    chart_widget_ = new AnalyticsChartWidget(this);
+    main_layout->addWidget(chart_widget_, 1);
 
     connect(btn_export_, &QPushButton::clicked, this, &AnalyticsWidget::on_btn_export_csv);
     connect(combo_range_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AnalyticsWidget::refresh_report);
@@ -89,19 +82,39 @@ void AnalyticsWidget::setup_ui() {
 }
 
 void AnalyticsWidget::refresh_report() {
-    auto events = DatabaseManager::instance().query_recent_events(1000);
+    int range_idx = combo_range_ ? combo_range_->currentIndex() : 0;
+    QDateTime now = QDateTime::currentDateTime();
+    int64_t start_ms = 0;
+    int64_t end_ms = now.toMSecsSinceEpoch();
+
+    if (range_idx == 0) {
+        // 今日客流汇总 (今日 00:00:00 至今)
+        start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
+    } else if (range_idx == 1) {
+        // 最近 3 天趋势
+        start_ms = now.addDays(-3).toMSecsSinceEpoch();
+    } else {
+        // 最近 7 天报表
+        start_ms = now.addDays(-7).toMSecsSinceEpoch();
+    }
+
+    auto events = DatabaseManager::instance().query_events_by_timerange(start_ms, end_ms, 5000);
     int total_entry = 0;
     int total_exit = 0;
-    std::map<int, int> hour_counts;
+    std::map<int, std::pair<int, int>> hourly_data;
     int male_cnt = 0, female_cnt = 0;
 
     for (const auto& ev : events) {
-        if (ev.direction == PassageDirection::ENTRY) total_entry++;
-        else if (ev.direction == PassageDirection::EXIT) total_exit++;
-
         QDateTime dt = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms);
         int h = dt.time().hour();
-        hour_counts[h]++;
+
+        if (ev.direction == PassageDirection::ENTRY) {
+            total_entry++;
+            hourly_data[h].first++;
+        } else if (ev.direction == PassageDirection::EXIT) {
+            total_exit++;
+            hourly_data[h].second++;
+        }
 
         if (ev.gender == "男") male_cnt++;
         else if (ev.gender == "女") female_cnt++;
@@ -113,26 +126,22 @@ void AnalyticsWidget::refresh_report() {
 
     if (total_flow == 0) {
         peak_hour_val_->setText("-- : --");
-        peak_hour_sub_->setText("暂无通行事件");
+        peak_hour_sub_->setText("所选范围无记录");
         gender_ratio_val_->setText("暂无数据");
         gender_ratio_sub_->setText("统计样本: 0 人次");
         age_group_val_->setText("暂无数据");
         age_group_sub_->setText("等待目标穿行");
-
-        chart_label_->setText(
-            "【数据库状态】当前 SQLite 数据库中暂无客流通行记录。\n\n"
-            "• 当您载入 MP4 视频或连接 RTSP 视频流时，行人在标定多边形内穿行将被实时检测并记录。\n"
-            "• 本页面将实时根据真实数据库记录，计算并呈现 24 小时真实客流分布直方图与画像分析。"
-        );
+        if (chart_widget_) chart_widget_->clear_data();
         return;
     }
 
     // 计算小时峰值
     int peak_h = -1;
     int max_cnt = -1;
-    for (auto const& [h, cnt] : hour_counts) {
-        if (cnt > max_cnt) {
-            max_cnt = cnt;
+    for (auto const& [h, p] : hourly_data) {
+        int sum = p.first + p.second;
+        if (sum > max_cnt) {
+            max_cnt = sum;
             peak_h = h;
         }
     }
@@ -156,26 +165,9 @@ void AnalyticsWidget::refresh_report() {
     age_group_val_->setText("真实样本归集");
     age_group_sub_->setText(QString("有效识别样本: %1 人次").arg(total_flow));
 
-    // 生成真实时段直方图
-    QString chart_text = QString("【真实时段客流分布直方图】 累计统计样本: %1 人次\n").arg(total_flow);
-    chart_text += "--------------------------------------------------------------------------------\n";
-    chart_text += "时段         客流频次直方图 (每块 █ 对应人次)                             数值\n";
-    chart_text += "--------------------------------------------------------------------------------\n";
-    for (int h = 0; h < 24; ++h) {
-        int cnt = hour_counts[h];
-        if (cnt > 0) {
-            QString bar = "";
-            int bar_len = std::min(cnt * 2, 42);
-            for (int b = 0; b < bar_len; ++b) bar += "█";
-            chart_text += QString("%1:00 ~ %2:00  %-44s %3 人次\n")
-                            .arg(h, 2, 10, QChar('0'))
-                            .arg((h + 1) % 24, 2, 10, QChar('0'))
-                            .arg(bar)
-                            .arg(cnt);
-        }
+    if (chart_widget_) {
+        chart_widget_->set_data(hourly_data);
     }
-    chart_text += "--------------------------------------------------------------------------------\n";
-    chart_label_->setText(chart_text);
 }
 
 void AnalyticsWidget::on_btn_export_csv() {
@@ -192,7 +184,16 @@ void AnalyticsWidget::on_btn_export_csv() {
     QTextStream out(&file);
     out << "EventID,Timestamp,TrackID,Direction,Confidence,Gender,AgeGroup,ClipPath\n";
 
-    auto events = DatabaseManager::instance().query_recent_events(500);
+    int range_idx = combo_range_ ? combo_range_->currentIndex() : 0;
+    QDateTime now = QDateTime::currentDateTime();
+    int64_t start_ms = 0;
+    int64_t end_ms = now.toMSecsSinceEpoch();
+
+    if (range_idx == 0) start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
+    else if (range_idx == 1) start_ms = now.addDays(-3).toMSecsSinceEpoch();
+    else start_ms = now.addDays(-7).toMSecsSinceEpoch();
+
+    auto events = DatabaseManager::instance().query_events_by_timerange(start_ms, end_ms, 50000);
     int id = 1;
     for (const auto& ev : events) {
         QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd hh:mm:ss");
@@ -203,5 +204,5 @@ void AnalyticsWidget::on_btn_export_csv() {
     }
 
     file.close();
-    QMessageBox::information(this, "导出成功", QString("客流事实明细与切片报表已导出至:\n%1").arg(filename));
+    QMessageBox::information(this, "导出成功", QString("所选时段客流报表 (共 %1 条) 已导出至:\n%2").arg(events.size()).arg(filename));
 }

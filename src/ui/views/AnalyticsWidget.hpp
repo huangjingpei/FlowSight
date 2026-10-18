@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QComboBox>
 
+class AnalyticsChartWidget;
+
 class AnalyticsWidget : public QWidget {
     Q_OBJECT
 public:
@@ -27,5 +29,5 @@ private:
     QLabel* gender_ratio_sub_ = nullptr;
     QLabel* age_group_val_ = nullptr;
     QLabel* age_group_sub_ = nullptr;
-    QLabel* chart_label_ = nullptr;
+    AnalyticsChartWidget* chart_widget_ = nullptr;
 };

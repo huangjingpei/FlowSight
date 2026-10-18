@@ -119,6 +119,34 @@ std::vector<PassageEvent> DatabaseManager::query_recent_events(int limit) {
     return list;
 }
 
+std::vector<PassageEvent> DatabaseManager::query_events_by_timerange(int64_t start_ms, int64_t end_ms, int limit) {
+    std::vector<PassageEvent> list;
+    QSqlQuery q;
+    q.prepare("SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group "
+              "FROM passage_events WHERE timestamp_ms >= ? AND timestamp_ms <= ? "
+              "ORDER BY timestamp_ms ASC LIMIT ?");
+    q.addBindValue(static_cast<qint64>(start_ms));
+    q.addBindValue(static_cast<qint64>(end_ms));
+    q.addBindValue(limit);
+
+    if (q.exec()) {
+        while (q.next()) {
+            PassageEvent ev;
+            ev.timestamp_ms = q.value(0).toLongLong();
+            ev.track_id = q.value(1).toInt();
+            ev.direction = static_cast<PassageDirection>(q.value(2).toInt());
+            ev.roi_version = q.value(3).toInt();
+            ev.confidence = q.value(4).toFloat();
+            ev.source_id = q.value(5).toString().toStdString();
+            ev.clip_path = q.value(6).toString().toStdString();
+            ev.gender = q.value(7).toString().toStdString();
+            ev.age_group = q.value(8).toString().toStdString();
+            list.push_back(ev);
+        }
+    }
+    return list;
+}
+
 bool DatabaseManager::save_roi_config(const RoiConfig& config) {
     QJsonArray arr;
     for (const auto& pt : config.vertices) {

@@ -11,6 +11,7 @@ struct TrackContext {
     int inside_counter = 0;
     int outside_counter = 0;
     int cooldown_ticks = 0;
+    int64_t last_seen_ms = 0;
 };
 } // namespace
 
@@ -18,6 +19,7 @@ class RoiCounter::Impl {
 public:
     std::shared_ptr<const RoiConfig> roi_config_;
     std::unordered_map<int, TrackContext> track_states_;
+    int clean_counter_ = 0;
 
     void process_frame(const std::vector<TrackObject>& tracks,
                        int64_t timestamp_ms,
@@ -44,6 +46,7 @@ public:
             }
 
             auto& ctx = track_states_[trk.track_id];
+            ctx.last_seen_ms = timestamp_ms;
             if (ctx.cooldown_ticks > 0) ctx.cooldown_ticks--;
 
             // 初始状态判定
@@ -99,6 +102,18 @@ public:
                     }
                 } else {
                     ctx.outside_counter = 0;
+                }
+            }
+        }
+
+        // 定期清理长时间未出现的轨迹状态，防止内存持续膨胀 (>10s)
+        if (++clean_counter_ >= 100) {
+            clean_counter_ = 0;
+            for (auto it = track_states_.begin(); it != track_states_.end(); ) {
+                if (timestamp_ms - it->second.last_seen_ms > 10000 || timestamp_ms < it->second.last_seen_ms) {
+                    it = track_states_.erase(it);
+                } else {
+                    ++it;
                 }
             }
         }
