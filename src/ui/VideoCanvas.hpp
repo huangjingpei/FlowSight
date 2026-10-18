@@ -23,6 +23,10 @@ public:
     void apply_changes();
     void cancel_changes();
 
+    // 客流超载呼吸告警
+    void set_crowd_surge_alert(bool active, int current_count = 0, int threshold = 0);
+    bool is_crowd_surge_active() const { return crowd_surge_active_; }
+
 signals:
     void roi_applied(const RoiConfig& roi);
     void polygon_status_changed(bool is_valid, int vertex_count);
@@ -54,6 +58,13 @@ private:
     bool is_dragging_whole_ = false;
     QPointF last_mouse_pos_;
     QPointF current_mouse_hover_;
+
+    // 客流超载赛博呼吸告警状态
+    bool crowd_surge_active_ = false;
+    int surge_occupancy_ = 0;
+    int surge_threshold_ = 0;
+    class QTimer* surge_anim_timer_ = nullptr;
+    float surge_anim_phase_ = 0.0f;
 
     // Letterbox 缩放与偏移
     float scale_ = 1.0f;

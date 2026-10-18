@@ -153,10 +153,35 @@ void MonitorWidget::update_frame(const QImage& frame, const std::vector<TrackObj
 }
 
 void MonitorWidget::update_stats(const StatisticsSnapshot& stats) {
-    if (occupancy_label_) occupancy_label_->setText(QString::number(stats.current_occupancy));
+    if (occupancy_label_) {
+        occupancy_label_->setText(QString::number(stats.current_occupancy));
+    }
     if (entry_label_) entry_label_->setText(QString::number(stats.today_entry));
     if (exit_label_) exit_label_->setText(QString::number(stats.today_exit));
     if (total_label_) total_label_->setText(QString::number(stats.today_total));
+}
+
+void MonitorWidget::set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold) {
+    if (canvas_) {
+        canvas_->set_crowd_surge_alert(is_surged, current_occupancy, threshold);
+    }
+    if (occupancy_label_) {
+        occupancy_label_->setText(QString::number(current_occupancy));
+        if (is_surged) {
+            occupancy_label_->setStyleSheet("color: #f85149; font-size: 32px; font-weight: 800; font-family: 'Segoe UI', sans-serif;");
+        } else {
+            occupancy_label_->setStyleSheet("color: #f0f6fc; font-size: 32px; font-weight: 800; font-family: 'Segoe UI', sans-serif;");
+        }
+    }
+    if (is_surged && ticker_list_) {
+        QString warn_text = QString("⚠️ [%1] 区域人员超载告警！当前场内: %2 人 (上限: %3 人)")
+            .arg(QDateTime::currentDateTime().toString("hh:mm:ss"))
+            .arg(current_occupancy).arg(threshold);
+        auto* item = new QListWidgetItem(warn_text);
+        item->setForeground(QColor("#f85149"));
+        item->setBackground(QColor(50, 15, 20));
+        ticker_list_->insertItem(0, item);
+    }
 }
 
 void MonitorWidget::add_passage_event(const PassageEvent& ev) {

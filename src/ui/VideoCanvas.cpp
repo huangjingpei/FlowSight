@@ -1,12 +1,40 @@
 #include "VideoCanvas.hpp"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QTimer>
+#include <cmath>
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
 
 VideoCanvas::VideoCanvas(QWidget* parent) : QWidget(parent) {
     setMouseTracking(true);
     setMinimumSize(480, 270);
+
+    surge_anim_timer_ = new QTimer(this);
+    surge_anim_timer_->setInterval(30);
+    connect(surge_anim_timer_, &QTimer::timeout, this, [this]() {
+        if (crowd_surge_active_) {
+            surge_anim_phase_ += 0.12f;
+            if (surge_anim_phase_ > 6.2831853f) surge_anim_phase_ -= 6.2831853f;
+            update();
+        }
+    });
+}
+
+void VideoCanvas::set_crowd_surge_alert(bool active, int current_count, int threshold) {
+    crowd_surge_active_ = active;
+    surge_occupancy_ = current_count;
+    surge_threshold_ = threshold;
+    if (active) {
+        if (!surge_anim_timer_->isActive()) {
+            surge_anim_timer_->start();
+        }
+    } else {
+        if (surge_anim_timer_->isActive()) {
+            surge_anim_timer_->stop();
+        }
+    }
+    update();
 }
 
 void VideoCanvas::set_read_only(bool read_only) {
@@ -140,6 +168,74 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
 
         painter.setPen(QColor(240, 246, 252));
         painter.drawText(tag_rect, Qt::AlignCenter, tag);
+    }
+
+    // 5. 绘制客流超载赛博红光呼吸律动边框与醒目警报胶囊 (Crowd Surge Warning)
+    if (crowd_surge_active_) {
+        float norm = 0.5f + 0.5f * std::sin(surge_anim_phase_); // 0.0 ~ 1.0 平滑呼吸正弦
+        int border_alpha = static_cast<int>(90 + 150 * norm);   // 90 ~ 240
+        int glow_alpha = static_cast<int>(20 + 65 * norm);      // 20 ~ 85
+
+        QRectF video_box(offset_x_, offset_y_, render_w, render_h);
+
+        // 5.1 绘制四边柔和内发光暗红光晕
+        QLinearGradient top_glow(QPointF(0, offset_y_), QPointF(0, offset_y_ + 24));
+        top_glow.setColorAt(0.0, QColor(248, 81, 73, glow_alpha));
+        top_glow.setColorAt(1.0, QColor(248, 81, 73, 0));
+        painter.fillRect(QRectF(offset_x_, offset_y_, render_w, 24), top_glow);
+
+        QLinearGradient btm_glow(QPointF(0, offset_y_ + render_h), QPointF(0, offset_y_ + render_h - 24));
+        btm_glow.setColorAt(0.0, QColor(248, 81, 73, glow_alpha));
+        btm_glow.setColorAt(1.0, QColor(248, 81, 73, 0));
+        painter.fillRect(QRectF(offset_x_, offset_y_ + render_h - 24, render_w, 24), btm_glow);
+
+        QLinearGradient left_glow(QPointF(offset_x_, 0), QPointF(offset_x_ + 24, 0));
+        left_glow.setColorAt(0.0, QColor(248, 81, 73, glow_alpha));
+        left_glow.setColorAt(1.0, QColor(248, 81, 73, 0));
+        painter.fillRect(QRectF(offset_x_, offset_y_, 24, render_h), left_glow);
+
+        QLinearGradient right_glow(QPointF(offset_x_ + render_w, 0), QPointF(offset_x_ + render_w - 24, 0));
+        right_glow.setColorAt(0.0, QColor(248, 81, 73, glow_alpha));
+        right_glow.setColorAt(1.0, QColor(248, 81, 73, 0));
+        painter.fillRect(QRectF(offset_x_ + render_w - 24, offset_y_, 24, render_h), right_glow);
+
+        // 5.2 绘制全视口外边框
+        painter.setPen(QPen(QColor(248, 81, 73, border_alpha), 3));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(video_box);
+
+        // 5.3 四角高科技警报支架
+        float corner_sz = 32.0f;
+        painter.setPen(QPen(QColor(255, 71, 87, 255), 4));
+        // 左上角
+        painter.drawLine(QPointF(offset_x_, offset_y_), QPointF(offset_x_ + corner_sz, offset_y_));
+        painter.drawLine(QPointF(offset_x_, offset_y_), QPointF(offset_x_, offset_y_ + corner_sz));
+        // 右上角
+        painter.drawLine(QPointF(offset_x_ + render_w, offset_y_), QPointF(offset_x_ + render_w - corner_sz, offset_y_));
+        painter.drawLine(QPointF(offset_x_ + render_w, offset_y_), QPointF(offset_x_ + render_w, offset_y_ + corner_sz));
+        // 左下角
+        painter.drawLine(QPointF(offset_x_, offset_y_ + render_h), QPointF(offset_x_ + corner_sz, offset_y_ + render_h));
+        painter.drawLine(QPointF(offset_x_, offset_y_ + render_h), QPointF(offset_x_, offset_y_ + render_h - corner_sz));
+        // 右下角
+        painter.drawLine(QPointF(offset_x_ + render_w, offset_y_ + render_h), QPointF(offset_x_ + render_w - corner_sz, offset_y_ + render_h));
+        painter.drawLine(QPointF(offset_x_ + render_w, offset_y_ + render_h), QPointF(offset_x_ + render_w, offset_y_ + render_h - corner_sz));
+
+        // 5.4 顶部悬浮警报胶囊徽章
+        QString alert_text = QString("⚠️  区域人员超载告警 (当前: %1 人 / 预警上限: %2 人)")
+                                 .arg(surge_occupancy_).arg(surge_threshold_);
+        QFont alert_font("Segoe UI", 11, QFont::Bold);
+        painter.setFont(alert_font);
+        QFontMetrics fm(alert_font);
+        int text_w = fm.horizontalAdvance(alert_text) + 32;
+        int text_h = 32;
+        QRectF badge_rect(offset_x_ + (render_w - text_w) / 2.0f, offset_y_ + 12, text_w, text_h);
+
+        painter.setPen(QPen(QColor(248, 81, 73, border_alpha), 2));
+        painter.setBrush(QColor(33, 10, 14, 230));
+        painter.drawRoundedRect(badge_rect, 6, 6);
+
+        painter.setPen(QColor(255, 120, 120));
+        painter.drawText(badge_rect, Qt::AlignCenter, alert_text);
     }
 }
 

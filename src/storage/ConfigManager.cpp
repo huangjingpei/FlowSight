@@ -29,6 +29,10 @@ void ConfigManager::load(const QString& ini_path) {
     buffer_dist_ = settings.value("ROI/BufferDistance", 20.0f).toFloat();
     confirm_frames_ = settings.value("ROI/ConfirmFrames", 4).toInt();
     audio_volume_ = settings.value("Media/Volume", 80).toInt();
+
+    crowd_surge_enabled_ = settings.value("Alert/CrowdSurgeEnabled", true).toBool();
+    crowd_surge_threshold_ = settings.value("Alert/CrowdSurgeThreshold", 10).toInt();
+    crowd_surge_beep_ = settings.value("Alert/CrowdSurgeBeep", false).toBool();
 }
 
 void ConfigManager::save() {
@@ -46,6 +50,10 @@ void ConfigManager::save() {
     settings.setValue("ROI/BufferDistance", buffer_dist_);
     settings.setValue("ROI/ConfirmFrames", confirm_frames_);
     settings.setValue("Media/Volume", audio_volume_);
+
+    settings.setValue("Alert/CrowdSurgeEnabled", crowd_surge_enabled_);
+    settings.setValue("Alert/CrowdSurgeThreshold", crowd_surge_threshold_);
+    settings.setValue("Alert/CrowdSurgeBeep", crowd_surge_beep_);
     settings.sync();
 
     emit config_changed();

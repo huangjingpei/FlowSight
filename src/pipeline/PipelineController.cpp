@@ -3,6 +3,7 @@
 #include "tracking/ByteTrackWrapper.hpp"
 #include "analytics/RoiCounter.hpp"
 #include "storage/DatabaseManager.hpp"
+#include "storage/ConfigManager.hpp"
 #include "video/ClipRecorder.hpp"
 
 #include <opencv2/opencv.hpp>
@@ -10,6 +11,7 @@
 #include <QElapsedTimer>
 #include <QDebug>
 #include <QCoreApplication>
+#include <QApplication>
 #include <QFileInfo>
 #include <QDir>
 #include <atomic>
@@ -100,6 +102,10 @@ public:
 
     int today_entry_ = 0;
     int today_exit_ = 0;
+
+    bool is_surged_ = false;
+    int surge_confirm_count_ = 0;
+    int last_surge_occupancy_ = 0;
 
     void set_roi(const RoiConfig& cfg) {
         std::lock_guard<std::mutex> lock(roi_mtx_);
@@ -297,6 +303,40 @@ public slots:
             std::vector<PassageEvent> events;
             roi_counter_->process_frame(tracks, now_ms, current_occupancy, events);
 
+            // 7.1 区域客流超载与拥挤度实时风控研判
+            auto& cfg = ConfigManager::instance();
+            bool surge_enabled = cfg.get_crowd_surge_enabled();
+            int surge_limit = cfg.get_crowd_surge_threshold();
+
+            if (surge_enabled && surge_limit > 0) {
+                if (current_occupancy >= surge_limit) {
+                    if (!is_surged_ || last_surge_occupancy_ != current_occupancy) {
+                        is_surged_ = true;
+                        last_surge_occupancy_ = current_occupancy;
+                        if (cfg.get_crowd_surge_beep()) {
+                            QApplication::beep();
+                        }
+                        emit crowd_surge_status_changed(true, current_occupancy, surge_limit);
+                    }
+                    surge_confirm_count_ = 0;
+                } else {
+                    if (is_surged_) {
+                        // 防抖：连续 15 帧（约 0.5 秒）低于阈值才平滑解除
+                        if (++surge_confirm_count_ >= 15) {
+                            is_surged_ = false;
+                            surge_confirm_count_ = 0;
+                            last_surge_occupancy_ = current_occupancy;
+                            emit crowd_surge_status_changed(false, current_occupancy, surge_limit);
+                        }
+                    }
+                }
+            } else if (is_surged_) {
+                is_surged_ = false;
+                surge_confirm_count_ = 0;
+                last_surge_occupancy_ = 0;
+                emit crowd_surge_status_changed(false, current_occupancy, surge_limit);
+            }
+
             // 8. 通行事件与短切片异步保存
             for (auto& ev : events) {
                 if (ev.direction == PassageDirection::ENTRY) today_entry_++;
@@ -351,6 +391,7 @@ signals:
     void media_info_ready(bool is_live, qint64 duration_ms, double fps);
     void position_changed(qint64 position_ms);
     void loop_restarted();
+    void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
 };
 
 PipelineController::PipelineController(QObject* parent) : QObject(parent) {
@@ -386,6 +427,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     });
     connect(worker_.get(), &Worker::position_changed, this, &PipelineController::position_changed);
     connect(worker_.get(), &Worker::loop_restarted, this, &PipelineController::on_worker_loop_restarted);
+    connect(worker_.get(), &Worker::crowd_surge_status_changed, this, &PipelineController::crowd_surge_status_changed);
 
     worker_thread_.start();
 

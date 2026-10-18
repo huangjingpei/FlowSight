@@ -16,6 +16,7 @@ public:
     void update_stats(const StatisticsSnapshot& stats);
     void add_passage_event(const PassageEvent& ev);
     void update_active_roi(const RoiConfig& roi);
+    void set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold);
 
     // 播放控制条状态同步
     void set_media_info(bool is_live, qint64 duration_ms, double fps);

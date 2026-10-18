@@ -42,6 +42,9 @@ signals:
     void position_changed(qint64 position_ms);
     void playback_state_changed(bool is_playing);
 
+    // 区域人员超载与拥挤度风控告警信号
+    void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
+
 private slots:
     void on_worker_loop_restarted();
 

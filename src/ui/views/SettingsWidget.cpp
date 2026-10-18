@@ -40,7 +40,42 @@ void SettingsWidget::setup_ui() {
     storage_layout->addStretch();
     main_layout->addWidget(storage_group);
 
-    // 3. AI 硬件信息
+    // 3. 客流拥挤度超载告警设置 (Crowd Surge Alert)
+    auto* surge_group = new QGroupBox("客流拥挤度超载告警设置 (Crowd Surge Alert)", this);
+    auto* surge_layout = new QVBoxLayout(surge_group);
+
+    auto* surge_row1 = new QHBoxLayout();
+    surge_enabled_chk_ = new QCheckBox("启用区域人员超载预警 (防踩踏/负荷风控)", this);
+    surge_enabled_chk_->setChecked(cfg.get_crowd_surge_enabled());
+    surge_enabled_chk_->setStyleSheet("color: #f85149; font-weight: bold;");
+    surge_row1->addWidget(surge_enabled_chk_);
+
+    surge_row1->addSpacing(20);
+    surge_row1->addWidget(new QLabel("人员超载报警阈值:", this));
+    surge_threshold_spin_ = new QSpinBox(this);
+    surge_threshold_spin_->setRange(1, 200);
+    surge_threshold_spin_->setValue(cfg.get_crowd_surge_threshold());
+    surge_threshold_spin_->setSuffix(" 人");
+    surge_row1->addWidget(surge_threshold_spin_);
+
+    surge_row1->addSpacing(20);
+    surge_beep_chk_ = new QCheckBox("触发系统声音提示 (Beep)", this);
+    surge_beep_chk_->setChecked(cfg.get_crowd_surge_beep());
+    surge_row1->addWidget(surge_beep_chk_);
+    surge_row1->addStretch();
+
+    surge_layout->addLayout(surge_row1);
+
+    auto* surge_hint = new QLabel(
+        "• 告警机制: 当监控区域内活跃人数达到或超过设定阈值时，视频画布将触发「红色赛博呼吸律动边框」与「悬浮发光警标」；\n"
+        "• 解除机制: 人数连续多帧低于预警线后平滑恢复常态冷色调监控，杜绝边界临界值抖动。",
+        this
+    );
+    surge_hint->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 4px;");
+    surge_layout->addWidget(surge_hint);
+    main_layout->addWidget(surge_group);
+
+    // 4. AI 硬件信息
     auto* hw_group = new QGroupBox("AI 推理硬件环境", this);
     auto* hw_layout = new QVBoxLayout(hw_group);
 
@@ -78,6 +113,11 @@ void SettingsWidget::on_btn_save() {
     auto& cfg = ConfigManager::instance();
     cfg.set_video_source(video_input_edit_->text());
     cfg.set_clip_retention_days(retention_spin_->value());
+
+    cfg.set_crowd_surge_enabled(surge_enabled_chk_->isChecked());
+    cfg.set_crowd_surge_threshold(surge_threshold_spin_->value());
+    cfg.set_crowd_surge_beep(surge_beep_chk_->isChecked());
+
     cfg.save();
 
     emit video_source_changed(video_input_edit_->text());
