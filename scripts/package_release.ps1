@@ -101,6 +101,11 @@ if (Test-Path (Join-Path $rootDir "configs\test_corridor.mp4")) {
     Copy-Item (Join-Path $rootDir "configs\test_corridor.mp4") $destConfigs -Force
 }
 
+# Copy icon and visual resources
+$destResources = Join-Path $portableDir "resources"
+New-Item -ItemType Directory -Force $destResources | Out-Null
+Copy-Item (Join-Path $rootDir "resources\*") $destResources -Force
+
 # Create runtime directories
 New-Item -ItemType Directory -Force (Join-Path $portableDir "data") | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $portableDir "clips") | Out-Null

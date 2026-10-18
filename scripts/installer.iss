@@ -28,6 +28,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 PrivilegesRequired=lowest
 DisableWelcomePage=no
+SetupIconFile=..\resources\icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"

@@ -76,6 +76,9 @@ target_link_libraries(FlowSightEngine PRIVATE
 )
 
 # 5.2 生成可执行程序目标 (GUI 客户端完整套件)
+set(APP_ICON_RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
+set(APP_QRC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.qrc")
+
 add_executable(FlowSight
     ${SRC_COMMON}
     ${SRC_AI}
@@ -87,6 +90,8 @@ add_executable(FlowSight
     ${SRC_PIPELINE}
     ${SRC_UI}
     ${SRC_API}
+    ${APP_ICON_RESOURCE}
+    ${APP_QRC}
 )
 
 # 6. 链接库

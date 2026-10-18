@@ -1,12 +1,16 @@
 #include <QApplication>
 #include <QDir>
 #include <QFont>
+#include <QIcon>
 #include "MainWindow.hpp"
 #include "Theme.hpp"
 
 int main(int argc, char* argv[]) {
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     QApplication app(argc, argv);
+
+    // 设置应用程序高科技全局窗口与任务栏图标
+    app.setWindowIcon(QIcon(":/icon.png"));
 
     // 设置默认高质量全局字体
     QFont default_font("Segoe UI", 10);
