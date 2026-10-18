@@ -51,13 +51,114 @@ void VideoCanvas::update_frame(const QImage& frame, const std::vector<TrackObjec
     update();
 }
 
+void VideoCanvas::set_rois(const std::vector<RoiConfig>& rois) {
+    rois_ = rois;
+    if (rois_.empty()) {
+        int w = video_w_ > 0 ? static_cast<int>(video_w_) : 1920;
+        int h = video_h_ > 0 ? static_cast<int>(video_h_) : 1080;
+        rois_.push_back(make_default_corridor_roi(w, h, 1, "A门主通道", "#58a6ff"));
+    }
+    if (active_roi_idx_ >= static_cast<int>(rois_.size()) || active_roi_idx_ < 0) {
+        active_roi_idx_ = 0;
+    }
+    active_roi_ = rois_[active_roi_idx_];
+    editing_roi_ = active_roi_;
+    update();
+}
+
+std::vector<RoiConfig> VideoCanvas::get_rois() const {
+    return rois_;
+}
+
+void VideoCanvas::set_active_roi_index(int idx) {
+    if (idx >= 0 && idx < static_cast<int>(rois_.size())) {
+        active_roi_idx_ = idx;
+        active_roi_ = rois_[active_roi_idx_];
+        editing_roi_ = active_roi_;
+        update();
+        emit active_roi_changed(active_roi_idx_, active_roi_);
+        emit polygon_status_changed(editing_roi_.is_valid, static_cast<int>(editing_roi_.vertices.size()));
+    }
+}
+
+void VideoCanvas::add_roi(const RoiConfig& roi) {
+    rois_.push_back(roi);
+    active_roi_idx_ = static_cast<int>(rois_.size()) - 1;
+    active_roi_ = rois_[active_roi_idx_];
+    editing_roi_ = active_roi_;
+    update();
+    emit active_roi_changed(active_roi_idx_, active_roi_);
+    emit rois_applied(rois_);
+}
+
+void VideoCanvas::remove_active_roi() {
+    if (rois_.size() <= 1) {
+        reset_roi();
+        return;
+    }
+    rois_.erase(rois_.begin() + active_roi_idx_);
+    if (active_roi_idx_ >= static_cast<int>(rois_.size())) {
+        active_roi_idx_ = static_cast<int>(rois_.size()) - 1;
+    }
+    active_roi_ = rois_[active_roi_idx_];
+    editing_roi_ = active_roi_;
+    update();
+    emit active_roi_changed(active_roi_idx_, active_roi_);
+    emit rois_applied(rois_);
+}
+
+void VideoCanvas::set_active_roi_name(const std::string& name) {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].name = name;
+        editing_roi_.name = name;
+        active_roi_.name = name;
+        update();
+    }
+}
+
+void VideoCanvas::set_active_roi_invert_direction(bool invert) {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].invert_direction = invert;
+        editing_roi_.invert_direction = invert;
+        active_roi_.invert_direction = invert;
+        update();
+    }
+}
+
+void VideoCanvas::set_active_roi_buffer_dist(float dist) {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].buffer_distance = dist;
+        editing_roi_.buffer_distance = dist;
+        active_roi_.buffer_distance = dist;
+        update();
+    }
+}
+
+void VideoCanvas::set_active_roi_confirm_frames(int frames) {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].min_confirm_frames = frames;
+        editing_roi_.min_confirm_frames = frames;
+        active_roi_.min_confirm_frames = frames;
+        update();
+    }
+}
+
 void VideoCanvas::set_roi(const RoiConfig& roi) {
+    if (rois_.empty()) {
+        rois_.push_back(roi);
+        active_roi_idx_ = 0;
+    } else if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_] = roi;
+    }
     active_roi_ = roi;
     editing_roi_ = roi;
     update();
 }
 
 RoiConfig VideoCanvas::get_roi() const {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        return rois_[active_roi_idx_];
+    }
     return active_roi_;
 }
 
@@ -89,38 +190,65 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
     QRectF target_rect(offset_x_, offset_y_, render_w, render_h);
     painter.drawImage(target_rect, current_frame_);
 
-    // 3. 绘制 ROI 多边形
-    const auto& roi = (mode_ == EditMode::IDLE) ? active_roi_ : editing_roi_;
-    if (!roi.vertices.empty()) {
+    // 3. 绘制多区域 (Multi-ROI) 几何防区与指示
+    int total_rois = static_cast<int>(rois_.size());
+    bool has_any_valid_roi = false;
+
+    for (int r_idx = 0; r_idx < total_rois; ++r_idx) {
+        bool is_active_editing = (mode_ != EditMode::IDLE && r_idx == active_roi_idx_);
+        const auto& roi = is_active_editing ? editing_roi_ : rois_[r_idx];
+        if (roi.vertices.empty()) continue;
+
         QPolygonF poly;
         for (const auto& v : roi.vertices) {
-            poly << frame_to_canvas(v);
+            float vx = v.x;
+            float vy = v.y;
+            if (roi.ref_width > 0 && video_w_ > 0 && roi.ref_width != static_cast<int>(video_w_)) {
+                vx = vx * video_w_ / static_cast<float>(roi.ref_width);
+            }
+            if (roi.ref_height > 0 && video_h_ > 0 && roi.ref_height != static_cast<int>(video_h_)) {
+                vy = vy * video_h_ / static_cast<float>(roi.ref_height);
+            }
+            poly << QPointF(vx * scale_ + offset_x_, vy * scale_ + offset_y_);
         }
 
-        if (mode_ == EditMode::DRAWING) {
-            painter.setPen(QPen(Qt::yellow, 2, Qt::DashLine));
+        if (poly.isEmpty()) continue;
+
+        QColor base_color(QString::fromStdString(roi.color_hex.empty() ? "#58a6ff" : roi.color_hex));
+        if (!base_color.isValid()) base_color = QColor("#58a6ff");
+
+        if (is_active_editing && mode_ == EditMode::DRAWING) {
+            painter.setPen(QPen(base_color, 2, Qt::DashLine));
             painter.drawPolyline(poly);
             if (!poly.isEmpty()) {
                 painter.drawLine(poly.last(), current_mouse_hover_);
             }
-            painter.setBrush(Qt::cyan);
+            painter.setBrush(base_color);
             for (const auto& pt : poly) {
                 painter.drawEllipse(pt, 5, 5);
             }
-        } else if (poly.size() >= 3) {
-            // 半透明黄色填充
-            painter.setBrush(QColor(255, 215, 0, 50));
-            painter.setPen(QPen(QColor(255, 215, 0, 220), 2, Qt::SolidLine));
+            has_any_valid_roi = true;
+            continue;
+        }
+
+        if (poly.size() >= 3) {
+            has_any_valid_roi = true;
+            // 填充色：非编辑状态或激活状态柔和半透明
+            int alpha_fill = is_active_editing ? 70 : 40;
+            QColor fill_col = base_color;
+            fill_col.setAlpha(alpha_fill);
+            painter.setBrush(fill_col);
+
+            QPen border_pen(base_color, is_active_editing ? 2.5f : 1.8f, is_active_editing ? Qt::SolidLine : Qt::DashLine);
+            painter.setPen(border_pen);
             painter.drawPolygon(poly);
 
-            // 3.1 绘制多边形重心与通行方向矢量基准指示箭头 (Direction Indicator Arrow)
+            // 绘制防区重心、方向箭头与标识徽标
             QPointF centroid(0, 0);
-            for (const auto& pt : poly) {
-                centroid += pt;
-            }
+            for (const auto& pt : poly) centroid += pt;
             centroid /= poly.size();
 
-            // 计算多边形的主流动方向矢量 (上半部分与下半部分加权)
+            // 计算法向方向矢量
             QPointF upper_half(0, 0); int upper_cnt = 0;
             QPointF lower_half(0, 0); int lower_cnt = 0;
             for (const auto& pt : poly) {
@@ -132,61 +260,54 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
                 base_dir = (lower_half / lower_cnt) - (upper_half / upper_cnt);
             }
             float dir_len = std::hypot(base_dir.x(), base_dir.y());
-            if (dir_len > 1e-3f) {
-                base_dir /= dir_len;
-            } else {
-                base_dir = QPointF(0, 1);
-            }
-            if (roi.invert_direction) {
-                base_dir = -base_dir;
-            }
+            if (dir_len > 1e-3f) base_dir /= dir_len;
+            else base_dir = QPointF(0, 1);
 
-            float arrow_len = 38.0f;
+            if (roi.invert_direction) base_dir = -base_dir;
+
+            float arrow_len = 34.0f;
             QPointF p_start = centroid - base_dir * (arrow_len * 0.45f);
             QPointF p_end = centroid + base_dir * (arrow_len * 0.55f);
 
-            // 绘制箭头主轴线
-            painter.setPen(QPen(QColor(88, 166, 255, 230), 3, Qt::SolidLine, Qt::RoundCap));
+            painter.setPen(QPen(base_color, 2.5f, Qt::SolidLine, Qt::RoundCap));
             painter.drawLine(p_start, p_end);
 
-            // 绘制起点圆点 (带微光)
             painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(88, 166, 255, 120));
-            painter.drawEllipse(p_start, 6, 6);
-            painter.setBrush(QColor(88, 166, 255, 255));
-            painter.drawEllipse(p_start, 3, 3);
+            QColor halo = base_color; halo.setAlpha(120);
+            painter.setBrush(halo);
+            painter.drawEllipse(p_start, 5, 5);
+            painter.setBrush(base_color);
+            painter.drawEllipse(p_start, 2.5, 2.5);
 
-            // 绘制箭头头部两侧斜翼
             QPointF perp(-base_dir.y(), base_dir.x());
-            float wing_len = 11.0f;
-            float wing_w = 6.0f;
+            float wing_len = 10.0f; float wing_w = 5.5f;
             QPointF wing1 = p_end - base_dir * wing_len + perp * wing_w;
             QPointF wing2 = p_end - base_dir * wing_len - perp * wing_w;
             QPolygonF head_poly;
             head_poly << p_end << wing1 << (p_end - base_dir * (wing_len * 0.7f)) << wing2;
-            painter.setPen(Qt::NoPen);
-            painter.setBrush(QColor(88, 166, 255, 255));
+            painter.setBrush(base_color);
             painter.drawPolygon(head_poly);
 
-            // 绘制 "进 ➔" 悬浮小气泡
-            QString dir_tag = "进 ➔";
+            // 绘制防区名称与方向胶囊徽标 [A门主通道 | 进 ➔]
+            QString name_str = QString::fromStdString(roi.name.empty() ? QString("防区 %1").arg(roi.roi_id).toStdString() : roi.name);
+            QString dir_tag = QString("%1  进➔").arg(name_str);
             QFont dir_font("Segoe UI", 9, QFont::Bold);
             QFontMetrics dfm(dir_font);
-            int tag_w = dfm.horizontalAdvance(dir_tag) + 10;
-            int tag_h = 18;
-            QPointF tag_pos = centroid + perp * 16.0f - QPointF(tag_w / 2.0f, tag_h / 2.0f);
+            int tag_w = dfm.horizontalAdvance(dir_tag) + 12;
+            int tag_h = 19;
+            QPointF tag_pos = centroid + perp * 18.0f - QPointF(tag_w / 2.0f, tag_h / 2.0f);
             QRectF tag_rect(tag_pos.x(), tag_pos.y(), tag_w, tag_h);
 
-            painter.setPen(QPen(QColor(88, 166, 255, 180), 1));
+            painter.setPen(QPen(base_color, 1));
             painter.setBrush(QColor(13, 17, 23, 220));
-            painter.drawRoundedRect(tag_rect, 3, 3);
+            painter.drawRoundedRect(tag_rect, 4, 4);
 
             painter.setFont(dir_font);
-            painter.setPen(QColor(88, 166, 255));
+            painter.setPen(base_color);
             painter.drawText(tag_rect, Qt::AlignCenter, dir_tag);
 
-            // 标定编辑模式下呈现可拖拽控制点
-            if (mode_ == EditMode::EDITING && !read_only_) {
+            // 标定编辑模式下呈现当前选中防区的可拖拽控制点
+            if (is_active_editing && mode_ == EditMode::EDITING && !read_only_) {
                 painter.setBrush(Qt::white);
                 painter.setPen(QPen(Qt::red, 2));
                 for (int i = 0; i < poly.size(); ++i) {
@@ -194,7 +315,9 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
                 }
             }
         }
-    } else if (mode_ == EditMode::IDLE) {
+    }
+
+    if (!has_any_valid_roi && mode_ == EditMode::IDLE) {
         // 未标定或清空防区时，呈现全域感知模式提示胶囊
         painter.setFont(QFont("Segoe UI", 10, QFont::Bold));
         QString hint = "💡 全域感知模式 (全画面人数实时统计) │ 前往【📐 空间标定】可绘制进出分流防区";
@@ -434,30 +557,49 @@ void VideoCanvas::start_drawing() {
 void VideoCanvas::reset_roi() {
     editing_roi_.vertices.clear();
     editing_roi_.is_valid = false;
-    active_roi_.vertices.clear();
-    active_roi_.is_valid = false;
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].vertices.clear();
+        rois_[active_roi_idx_].is_valid = false;
+    }
+    active_roi_ = editing_roi_;
     mode_ = EditMode::IDLE;
     emit roi_applied(active_roi_);
+    emit rois_applied(rois_);
+    emit polygon_status_changed(false, 0);
     update();
 }
 
 void VideoCanvas::apply_changes() {
     if (validate_polygon(editing_roi_.vertices)) {
+        editing_roi_.version++;
+        editing_roi_.ref_width = static_cast<int>(video_w_ > 0 ? video_w_ : 1920);
+        editing_roi_.ref_height = static_cast<int>(video_h_ > 0 ? video_h_ : 1080);
+        editing_roi_.is_valid = true;
+        if (rois_.empty()) {
+            rois_.push_back(editing_roi_);
+            active_roi_idx_ = 0;
+        } else if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+            rois_[active_roi_idx_] = editing_roi_;
+        }
         active_roi_ = editing_roi_;
-        active_roi_.version++;
-        active_roi_.ref_width = static_cast<int>(video_w_);
-        active_roi_.ref_height = static_cast<int>(video_h_);
-        active_roi_.is_valid = true;
         mode_ = EditMode::IDLE;
+        setCursor(Qt::ArrowCursor);
         emit roi_applied(active_roi_);
+        emit rois_applied(rois_);
         update();
     }
 }
 
 void VideoCanvas::cancel_changes() {
-    editing_roi_ = active_roi_;
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        editing_roi_ = rois_[active_roi_idx_];
+    } else {
+        editing_roi_ = active_roi_;
+    }
     mode_ = EditMode::IDLE;
+    setCursor(Qt::ArrowCursor);
     update();
+    emit polygon_status_changed(editing_roi_.is_valid, static_cast<int>(editing_roi_.vertices.size()));
 }
 
 QPointF VideoCanvas::frame_to_canvas(const cv::Point2f& pt_f) const {

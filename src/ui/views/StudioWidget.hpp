@@ -3,6 +3,8 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QSlider>
+#include <QComboBox>
+#include <QLineEdit>
 #include "common/Types.hpp"
 
 class VideoCanvas;
@@ -14,9 +16,11 @@ public:
 
     void update_frame(const QImage& frame, const std::vector<TrackObject>& tracks);
     void set_roi(const RoiConfig& roi);
+    void set_rois(const std::vector<RoiConfig>& rois);
 
 signals:
     void roi_saved(const RoiConfig& roi);
+    void rois_saved(const std::vector<RoiConfig>& rois);
 
 private slots:
     void on_btn_start_draw();
@@ -25,11 +29,19 @@ private slots:
     void on_btn_cancel();
     void on_btn_preset_default();
     void on_polygon_status(bool is_valid, int vertex_count);
+    void refresh_roi_combo();
 
 private:
     void setup_ui();
 
     VideoCanvas* canvas_ = nullptr;
+
+    // 多防区 (Multi-ROI) 管理控件
+    QComboBox* roi_combo_ = nullptr;
+    QLineEdit* roi_name_edit_ = nullptr;
+    QPushButton* btn_add_roi_ = nullptr;
+    QPushButton* btn_del_roi_ = nullptr;
+
     QPushButton* btn_draw_ = nullptr;
     QPushButton* btn_apply_ = nullptr;
     QPushButton* btn_cancel_ = nullptr;

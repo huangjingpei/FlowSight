@@ -30,6 +30,40 @@ void StudioWidget::setup_ui() {
     auto* tool_vbox = new QVBoxLayout(tool_group);
     tool_vbox->setSpacing(10);
 
+    // 0. 多防区 (Multi-ROI) 切换与管理卡片
+    auto* roi_mgmt_card = new QWidget(this);
+    roi_mgmt_card->setStyleSheet("background-color: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 8px;");
+    auto* roi_mgmt_layout = new QVBoxLayout(roi_mgmt_card);
+    roi_mgmt_layout->setSpacing(6);
+
+    auto* roi_mgmt_title = new QLabel("🏷️  防区选择与管理 (Multi-ROI)", roi_mgmt_card);
+    roi_mgmt_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;");
+    roi_mgmt_layout->addWidget(roi_mgmt_title);
+
+    auto* roi_sel_row = new QHBoxLayout();
+    roi_combo_ = new QComboBox(roi_mgmt_card);
+    roi_combo_->setStyleSheet("background-color: #161b22; color: #58a6ff; font-weight: bold; padding: 4px; border: 1px solid #30363d; border-radius: 4px;");
+    roi_sel_row->addWidget(roi_combo_, 1);
+
+    btn_add_roi_ = new QPushButton("➕ 新增", roi_mgmt_card);
+    btn_add_roi_->setStyleSheet("background-color: #238636; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+    btn_del_roi_ = new QPushButton("🗑️ 删除", roi_mgmt_card);
+    btn_del_roi_->setStyleSheet("background-color: #da3633; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px;");
+    roi_sel_row->addWidget(btn_add_roi_);
+    roi_sel_row->addWidget(btn_del_roi_);
+    roi_mgmt_layout->addLayout(roi_sel_row);
+
+    auto* name_row = new QHBoxLayout();
+    auto* name_lbl = new QLabel("防区名称:", roi_mgmt_card);
+    name_lbl->setStyleSheet("color: #8b949e; font-size: 11px;");
+    roi_name_edit_ = new QLineEdit("A门主通道", roi_mgmt_card);
+    roi_name_edit_->setStyleSheet("background-color: #161b22; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; padding: 3px 6px;");
+    name_row->addWidget(name_lbl);
+    name_row->addWidget(roi_name_edit_, 1);
+    roi_mgmt_layout->addLayout(name_row);
+
+    tool_vbox->addWidget(roi_mgmt_card);
+
     auto* op_card = new QWidget(this);
     op_card->setStyleSheet("background-color: #0d1117; border: 1px solid #21262d; border-radius: 6px; padding: 10px;");
     auto* op_layout = new QVBoxLayout(op_card);
@@ -38,9 +72,9 @@ void StudioWidget::setup_ui() {
     auto* tip_title = new QLabel("📌 标定交互指引", op_card);
     tip_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;");
     auto* op_label = new QLabel(
-        "1. 点击 [新建多边形]，在画面上依次单击打下顶点；\n"
-        "2. 在最后一个点双击，自动闭合生成 N 边形；\n"
-        "3. 拖拽红色圆点微调单点，内部按住拖拽整体平移。",
+        "1. 在防区管理中选择或新建防区；\n"
+        "2. 点击 [重新打点]，在画面依次单击落点，双击闭合；\n"
+        "3. 拖拽红点微调单点，内部按住拖拽整体平移。",
         op_card
     );
     op_label->setWordWrap(true);
@@ -49,12 +83,12 @@ void StudioWidget::setup_ui() {
     op_layout->addWidget(op_label);
     tool_vbox->addWidget(op_card);
 
-    btn_draw_ = new QPushButton("✏️  新建多边形 (N边形)", this);
+    btn_draw_ = new QPushButton("✏️  重新打点当前防区", this);
     btn_draw_->setObjectName("btn_accent");
     btn_draw_->setFixedHeight(38);
     tool_vbox->addWidget(btn_draw_);
 
-    btn_reset_ = new QPushButton("🗑️  清空当前区域", this);
+    btn_reset_ = new QPushButton("🗑️  清空当前防区顶点", this);
     btn_reset_->setFixedHeight(32);
     tool_vbox->addWidget(btn_reset_);
 
@@ -109,7 +143,7 @@ void StudioWidget::setup_ui() {
     btn_cancel_ = new QPushButton("取消修改", this);
     btn_cancel_->setFixedHeight(36);
 
-    btn_apply_ = new QPushButton("✓  立即应用生效", this);
+    btn_apply_ = new QPushButton("✓  立即应用全部防区", this);
     btn_apply_->setObjectName("btn_primary");
     btn_apply_->setFixedHeight(36);
 
@@ -127,11 +161,55 @@ void StudioWidget::setup_ui() {
     connect(btn_cancel_, &QPushButton::clicked, this, &StudioWidget::on_btn_cancel);
     connect(canvas_, &VideoCanvas::polygon_status_changed, this, &StudioWidget::on_polygon_status);
 
+    connect(roi_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (idx >= 0) {
+            canvas_->set_active_roi_index(idx);
+            refresh_roi_combo();
+        }
+    });
+
+    connect(roi_name_edit_, &QLineEdit::textEdited, this, [this](const QString& text) {
+        canvas_->set_active_roi_name(text.toStdString());
+        int cur = roi_combo_->currentIndex();
+        if (cur >= 0 && cur < roi_combo_->count()) {
+            roi_combo_->setItemText(cur, QString("[%1] %2").arg(cur + 1).arg(text));
+        }
+    });
+
+    connect(btn_add_roi_, &QPushButton::clicked, this, [this]() {
+        const char* colors[] = {"#f1e05a", "#bc8cff", "#3fb950", "#ff7b72", "#58a6ff"};
+        auto rois = canvas_->get_rois();
+        int new_id = static_cast<int>(rois.size()) + 1;
+        std::string col = colors[(new_id - 1) % 5];
+        std::string def_name = QString("防区 %1").arg(new_id).toStdString();
+
+        RoiConfig new_cfg;
+        new_cfg.roi_id = new_id;
+        new_cfg.name = def_name;
+        new_cfg.color_hex = col;
+        new_cfg.ref_width = canvas_->video_width() > 0 ? canvas_->video_width() : 1920;
+        new_cfg.ref_height = canvas_->video_height() > 0 ? canvas_->video_height() : 1080;
+        new_cfg.buffer_distance = 10.0f;
+        new_cfg.min_confirm_frames = 2;
+        new_cfg.is_valid = false;
+
+        canvas_->add_roi(new_cfg);
+        refresh_roi_combo();
+        canvas_->start_drawing();
+        status_label_->setText(QString("● 已添加【%1】: 请在画面上依次打点，双击闭合").arg(QString::fromStdString(def_name)));
+        status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
+    connect(btn_del_roi_, &QPushButton::clicked, this, [this]() {
+        canvas_->remove_active_roi();
+        refresh_roi_combo();
+        status_label_->setText("● 状态: 已移除当前防区");
+        status_label_->setStyleSheet("color: #ff7675; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
     connect(btn_invert_dir_, &QPushButton::clicked, this, [this]() {
-        RoiConfig cfg = canvas_->get_roi();
         invert_direction_ = !invert_direction_;
-        cfg.invert_direction = invert_direction_;
-        canvas_->set_roi(cfg);
+        canvas_->set_active_roi_invert_direction(invert_direction_);
         status_label_->setText(invert_direction_ ? "● 判定朝向: 已反转 (向外为进)" : "● 判定朝向: 默认方向 (向内为进)");
         status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     });
@@ -149,6 +227,49 @@ void StudioWidget::setup_ui() {
     connect(canvas_, &VideoCanvas::roi_applied, this, [this](const RoiConfig& roi) {
         emit roi_saved(roi);
     });
+
+    connect(canvas_, &VideoCanvas::rois_applied, this, [this](const std::vector<RoiConfig>& rois) {
+        emit rois_saved(rois);
+    });
+}
+
+void StudioWidget::refresh_roi_combo() {
+    if (!roi_combo_ || !canvas_) return;
+    roi_combo_->blockSignals(true);
+    roi_combo_->clear();
+    auto rois = canvas_->get_rois();
+    for (size_t i = 0; i < rois.size(); ++i) {
+        roi_combo_->addItem(QString("[%1] %2").arg(i + 1).arg(QString::fromStdString(rois[i].name)));
+    }
+    int cur_idx = canvas_->active_roi_index();
+    if (cur_idx >= 0 && cur_idx < roi_combo_->count()) {
+        roi_combo_->setCurrentIndex(cur_idx);
+    }
+    roi_combo_->blockSignals(false);
+
+    RoiConfig cur = canvas_->get_roi();
+    if (roi_name_edit_) {
+        roi_name_edit_->setText(QString::fromStdString(cur.name));
+    }
+    invert_direction_ = cur.invert_direction;
+    if (buffer_slider_) {
+        buffer_slider_->setValue(static_cast<int>(cur.buffer_distance));
+    }
+    if (confirm_slider_) {
+        confirm_slider_->setValue(cur.min_confirm_frames);
+    }
+    if (status_label_) {
+        if (cur.is_valid && cur.vertices.size() >= 3) {
+            status_label_->setText(QString("● 当前防区【%1】: %2 个顶点 (朝向: %3)")
+                .arg(QString::fromStdString(cur.name))
+                .arg(cur.vertices.size())
+                .arg(cur.invert_direction ? "反转" : "常规"));
+            status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+        } else {
+            status_label_->setText(QString("● 当前防区【%1】: 待标定").arg(QString::fromStdString(cur.name)));
+            status_label_->setStyleSheet("color: #ffa502; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+        }
+    }
 }
 
 void StudioWidget::update_frame(const QImage& frame, const std::vector<TrackObject>& tracks) {
@@ -158,24 +279,14 @@ void StudioWidget::update_frame(const QImage& frame, const std::vector<TrackObje
 }
 
 void StudioWidget::set_roi(const RoiConfig& roi) {
+    set_rois({roi});
+}
+
+void StudioWidget::set_rois(const std::vector<RoiConfig>& rois) {
     if (canvas_) {
-        canvas_->set_roi(roi);
+        canvas_->set_rois(rois);
     }
-    invert_direction_ = roi.invert_direction;
-    if (buffer_slider_) {
-        buffer_slider_->setValue(static_cast<int>(roi.buffer_distance));
-    }
-    if (confirm_slider_) {
-        confirm_slider_->setValue(roi.min_confirm_frames);
-    }
-    if (status_label_) {
-        if (roi.is_valid && roi.vertices.size() >= 3) {
-            status_label_->setText(QString("● 当前已载入历史标定: %1 个顶点 (朝向: %2)")
-                .arg(roi.vertices.size())
-                .arg(roi.invert_direction ? "反转" : "常规"));
-            status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
-        }
-    }
+    refresh_roi_combo();
 }
 
 void StudioWidget::on_btn_start_draw() {
@@ -191,18 +302,24 @@ void StudioWidget::on_btn_reset() {
 }
 
 void StudioWidget::on_btn_apply() {
-    RoiConfig cfg = canvas_->get_roi();
-    cfg.buffer_distance = static_cast<float>(buffer_slider_->value());
-    cfg.min_confirm_frames = confirm_slider_->value();
-    cfg.invert_direction = invert_direction_;
-    canvas_->set_roi(cfg);
+    canvas_->set_active_roi_buffer_dist(static_cast<float>(buffer_slider_->value()));
+    canvas_->set_active_roi_confirm_frames(confirm_slider_->value());
+    canvas_->set_active_roi_invert_direction(invert_direction_);
+    if (roi_name_edit_) {
+        canvas_->set_active_roi_name(roi_name_edit_->text().toStdString());
+    }
     canvas_->apply_changes();
-    status_label_->setText("● 状态: 配置已成功应用并存盘");
+    auto all_rois = canvas_->get_rois();
+    emit rois_saved(all_rois);
+    emit roi_saved(canvas_->get_roi());
+    refresh_roi_combo();
+    status_label_->setText(QString("● 状态: 全部 %1 个防区已成功生效并存盘").arg(all_rois.size()));
     status_label_->setStyleSheet("color: #2ed573; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
 
 void StudioWidget::on_btn_cancel() {
     canvas_->cancel_changes();
+    refresh_roi_combo();
     status_label_->setText("● 状态: 已恢复上次配置");
     status_label_->setStyleSheet("color: #8b949e; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }

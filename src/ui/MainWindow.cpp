@@ -57,9 +57,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::crowd_surge_status_changed, this, [](bool is_surged, int occ, int thresh) {
         WebhookPusher::instance().push_surge_alert(is_surged, occ, thresh);
     });
-    connect(pipeline_.get(), &PipelineController::roi_auto_initialized, this, [this](const RoiConfig& roi) {
-        view_monitor_->update_active_roi(roi);
-        view_studio_->set_roi(roi);
+    connect(pipeline_.get(), &PipelineController::rois_auto_initialized, this, [this](const std::vector<RoiConfig>& rois) {
+        view_monitor_->update_active_rois(rois);
+        view_studio_->set_rois(rois);
     });
 
     connect(pipeline_.get(), &PipelineController::media_info_ready, view_monitor_, &MonitorWidget::set_media_info);
@@ -93,13 +93,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     std::string init_video = ConfigManager::instance().get_video_source().toStdString();
     pipeline_->start_pipeline("models/yolov8n.onnx", init_video);
 
-    // 冷启动持久化恢复: 将 SQLite 中最新标定的 ROI 注入分析管线、监控面板与工作室
+    // 冷启动持久化恢复: 将 SQLite 中所有保存的 ROI 注入分析管线、监控面板与工作室
     auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
     if (!saved_rois.empty()) {
-        const auto& latest_roi = saved_rois.front();
-        view_monitor_->update_active_roi(latest_roi);
-        view_studio_->set_roi(latest_roi);
-        pipeline_->update_roi_config(latest_roi);
+        view_monitor_->update_active_rois(saved_rois);
+        view_studio_->set_rois(saved_rois);
+        pipeline_->update_roi_configs(saved_rois);
     }
 }
 
@@ -200,13 +199,13 @@ void MainWindow::setup_ui() {
 
 void MainWindow::setup_connections() {
     connect(nav_sidebar_, &QListWidget::currentRowChanged, this, &MainWindow::on_nav_item_changed);
-    connect(view_studio_, &StudioWidget::roi_saved, this, &MainWindow::on_roi_calibrated);
+    connect(view_studio_, &StudioWidget::rois_saved, this, &MainWindow::on_rois_calibrated);
 
     // 首次载入 ROI 到标定页与监控页
     auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
     if (!saved_rois.empty()) {
-        view_monitor_->update_active_roi(saved_rois.front());
-        view_studio_->set_roi(saved_rois.front());
+        view_monitor_->update_active_rois(saved_rois);
+        view_studio_->set_rois(saved_rois);
     }
 }
 
@@ -220,11 +219,15 @@ void MainWindow::on_nav_item_changed(int row) {
 }
 
 void MainWindow::on_roi_calibrated(const RoiConfig& new_roi) {
-    DatabaseManager::instance().save_roi_config(new_roi);
+    on_rois_calibrated({new_roi});
+}
+
+void MainWindow::on_rois_calibrated(const std::vector<RoiConfig>& new_rois) {
+    DatabaseManager::instance().save_roi_configs(new_rois);
     if (pipeline_) {
-        pipeline_->update_roi_config(new_roi);
+        pipeline_->update_roi_configs(new_rois);
     }
-    view_monitor_->update_active_roi(new_roi);
+    view_monitor_->update_active_rois(new_rois);
 }
 
 void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {

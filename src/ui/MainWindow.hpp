@@ -21,6 +21,7 @@ public:
 private slots:
     void on_nav_item_changed(int row);
     void on_roi_calibrated(const RoiConfig& new_roi);
+    void on_rois_calibrated(const std::vector<RoiConfig>& new_rois);
     void on_stats_updated(const StatisticsSnapshot& stats);
 
 private:

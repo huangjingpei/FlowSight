@@ -105,15 +105,16 @@ void EvidenceWidget::setup_ui() {
 
     // 证据表格定义
     table_ = new QTableWidget(this);
-    table_->setColumnCount(7);
-    table_->setHorizontalHeaderLabels({"发生时间", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
+    table_->setColumnCount(8);
+    table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
     table_->setColumnWidth(0, 140);
-    table_->setColumnWidth(1, 100);
-    table_->setColumnWidth(2, 75);
-    table_->setColumnWidth(3, 55);
-    table_->setColumnWidth(4, 65);
+    table_->setColumnWidth(1, 110);
+    table_->setColumnWidth(2, 95);
+    table_->setColumnWidth(3, 70);
+    table_->setColumnWidth(4, 55);
     table_->setColumnWidth(5, 65);
-    table_->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
+    table_->setColumnWidth(6, 65);
+    table_->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Stretch);
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -259,10 +260,15 @@ void EvidenceWidget::refresh_events() {
         table_->insertRow(row);
 
         QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd hh:mm:ss");
+        QString zone_str = ev.roi_name.empty() ? QString("防区 #%1").arg(ev.roi_id) : QString::fromStdString(ev.roi_name);
         QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入 [IN]" : "🔴 离开 [OUT]";
         QColor dir_color = (ev.direction == PassageDirection::ENTRY) ? QColor(46, 213, 115) : QColor(255, 71, 87);
 
         auto* item_time = new QTableWidgetItem(time_str);
+        auto* item_zone = new QTableWidgetItem(zone_str);
+        item_zone->setForeground(QColor(88, 166, 255));
+        item_zone->setFont(QFont("Segoe UI", 9, QFont::Bold));
+
         auto* item_dir = new QTableWidgetItem(dir_str);
         item_dir->setForeground(dir_color);
         item_dir->setFont(QFont("Segoe UI", 10, QFont::Bold));
@@ -274,12 +280,13 @@ void EvidenceWidget::refresh_events() {
         auto* item_clip = new QTableWidgetItem(QString::fromStdString(ev.clip_path));
 
         table_->setItem(row, 0, item_time);
-        table_->setItem(row, 1, item_dir);
-        table_->setItem(row, 2, item_id);
-        table_->setItem(row, 3, item_gender);
-        table_->setItem(row, 4, item_age);
-        table_->setItem(row, 5, item_conf);
-        table_->setItem(row, 6, item_clip);
+        table_->setItem(row, 1, item_zone);
+        table_->setItem(row, 2, item_dir);
+        table_->setItem(row, 3, item_id);
+        table_->setItem(row, 4, item_gender);
+        table_->setItem(row, 5, item_age);
+        table_->setItem(row, 6, item_conf);
+        table_->setItem(row, 7, item_clip);
     }
 
     count_badge_->setText(QString("共 %1 条证据流水").arg(table_->rowCount()));
@@ -313,8 +320,9 @@ bool EvidenceWidget::event_matches_filter(const PassageEvent& ev) const {
 
     QString kw = search_input_->text().trimmed();
     if (!kw.isEmpty()) {
-        QString full_text = QString("%1 %2 %3 %4")
+        QString full_text = QString("%1 %2 %3 %4 %5")
             .arg(ev.track_id)
+            .arg(QString::fromStdString(ev.roi_name))
             .arg(QString::fromStdString(ev.clip_path))
             .arg(QString::fromStdString(ev.gender))
             .arg(QString::fromStdString(ev.age_group));
@@ -334,10 +342,15 @@ void EvidenceWidget::add_new_event(const PassageEvent& ev) {
     table_->insertRow(0);
 
     QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd hh:mm:ss");
+    QString zone_str = ev.roi_name.empty() ? QString("防区 #%1").arg(ev.roi_id) : QString::fromStdString(ev.roi_name);
     QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入 [IN]" : "🔴 离开 [OUT]";
     QColor dir_color = (ev.direction == PassageDirection::ENTRY) ? QColor(46, 213, 115) : QColor(255, 71, 87);
 
     auto* item_time = new QTableWidgetItem(time_str);
+    auto* item_zone = new QTableWidgetItem(zone_str);
+    item_zone->setForeground(QColor(88, 166, 255));
+    item_zone->setFont(QFont("Segoe UI", 9, QFont::Bold));
+
     auto* item_dir = new QTableWidgetItem(dir_str);
     item_dir->setForeground(dir_color);
     item_dir->setFont(QFont("Segoe UI", 10, QFont::Bold));
@@ -349,12 +362,13 @@ void EvidenceWidget::add_new_event(const PassageEvent& ev) {
     auto* item_clip = new QTableWidgetItem(QString::fromStdString(ev.clip_path));
 
     table_->setItem(0, 0, item_time);
-    table_->setItem(0, 1, item_dir);
-    table_->setItem(0, 2, item_id);
-    table_->setItem(0, 3, item_gender);
-    table_->setItem(0, 4, item_age);
-    table_->setItem(0, 5, item_conf);
-    table_->setItem(0, 6, item_clip);
+    table_->setItem(0, 1, item_zone);
+    table_->setItem(0, 2, item_dir);
+    table_->setItem(0, 3, item_id);
+    table_->setItem(0, 4, item_gender);
+    table_->setItem(0, 5, item_age);
+    table_->setItem(0, 6, item_conf);
+    table_->setItem(0, 7, item_clip);
 
     if (table_->rowCount() > 500) {
         table_->removeRow(table_->rowCount() - 1);
@@ -383,17 +397,18 @@ void EvidenceWidget::update_metadata_inspector(int row) {
     }
 
     QString time_str = table_->item(row, 0) ? table_->item(row, 0)->text() : "--";
-    QString dir_str = table_->item(row, 1) ? table_->item(row, 1)->text() : "--";
-    QString track_id = table_->item(row, 2) ? table_->item(row, 2)->text() : "--";
-    QString gender = table_->item(row, 3) ? table_->item(row, 3)->text() : "--";
-    QString age = table_->item(row, 4) ? table_->item(row, 4)->text() : "--";
-    QString conf = table_->item(row, 5) ? table_->item(row, 5)->text() : "--";
-    QString clip_path = table_->item(row, 6) ? table_->item(row, 6)->text() : "";
+    QString zone_str = table_->item(row, 1) ? table_->item(row, 1)->text() : "--";
+    QString dir_str = table_->item(row, 2) ? table_->item(row, 2)->text() : "--";
+    QString track_id = table_->item(row, 3) ? table_->item(row, 3)->text() : "--";
+    QString gender = table_->item(row, 4) ? table_->item(row, 4)->text() : "--";
+    QString age = table_->item(row, 5) ? table_->item(row, 5)->text() : "--";
+    QString conf = table_->item(row, 6) ? table_->item(row, 6)->text() : "--";
+    QString clip_path = table_->item(row, 7) ? table_->item(row, 7)->text() : "";
 
     selected_clip_path_ = clip_path;
 
     inspector_time_->setText(time_str);
-    inspector_dir_->setText(dir_str);
+    inspector_dir_->setText(QString("%1 │ %2").arg(zone_str).arg(dir_str));
     inspector_track_->setText(QString("%1 (置信度: %2)").arg(track_id).arg(conf));
     inspector_attr_->setText(QString("%1 │ %2").arg(gender).arg(age));
     inspector_file_->setText(clip_path.isEmpty() ? "未关联本地视频切片" : clip_path);

@@ -19,7 +19,9 @@ public:
     void stop_pipeline();
     void set_video_source(const std::string& video_source);
     void update_roi_config(const RoiConfig& config);
+    void update_roi_configs(const std::vector<RoiConfig>& configs);
     RoiConfig get_current_roi() const;
+    std::vector<RoiConfig> get_current_rois() const;
 
     // 专业音视频播放控制 (支持音画同步与精确进度跳转)
     void play();
@@ -47,6 +49,7 @@ signals:
 
     // ROI 自动就绪通知 (用于开箱即用自动适配视频分辨率防区)
     void roi_auto_initialized(const RoiConfig& config);
+    void rois_auto_initialized(const std::vector<RoiConfig>& configs);
 
 private slots:
     void on_worker_loop_restarted();

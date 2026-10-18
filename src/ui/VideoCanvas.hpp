@@ -18,6 +18,18 @@ public:
     void set_roi(const RoiConfig& roi);
     RoiConfig get_roi() const;
 
+    // 多区域 (Multi-ROI) 交互管理接口
+    void set_rois(const std::vector<RoiConfig>& rois);
+    std::vector<RoiConfig> get_rois() const;
+    void set_active_roi_index(int idx);
+    int active_roi_index() const { return active_roi_idx_; }
+    void add_roi(const RoiConfig& roi);
+    void remove_active_roi();
+    void set_active_roi_name(const std::string& name);
+    void set_active_roi_invert_direction(bool invert);
+    void set_active_roi_buffer_dist(float dist);
+    void set_active_roi_confirm_frames(int frames);
+
     void start_drawing();
     void reset_roi();
     void apply_changes();
@@ -32,6 +44,8 @@ public:
 
 signals:
     void roi_applied(const RoiConfig& roi);
+    void rois_applied(const std::vector<RoiConfig>& rois);
+    void active_roi_changed(int index, const RoiConfig& roi);
     void polygon_status_changed(bool is_valid, int vertex_count);
 
 protected:
@@ -53,6 +67,8 @@ private:
     QImage current_frame_;
     std::vector<TrackObject> current_tracks_;
 
+    std::vector<RoiConfig> rois_;
+    int active_roi_idx_ = 0;
     RoiConfig active_roi_;
     RoiConfig editing_roi_;
 

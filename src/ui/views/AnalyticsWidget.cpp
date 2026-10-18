@@ -182,7 +182,7 @@ void AnalyticsWidget::on_btn_export_csv() {
     }
 
     QTextStream out(&file);
-    out << "EventID,Timestamp,TrackID,Direction,Confidence,Gender,AgeGroup,ClipPath\n";
+    out << "EventID,Timestamp,RoiID,RoiName,TrackID,Direction,Confidence,Gender,AgeGroup,ClipPath\n";
 
     int range_idx = combo_range_ ? combo_range_->currentIndex() : 0;
     QDateTime now = QDateTime::currentDateTime();
@@ -198,7 +198,9 @@ void AnalyticsWidget::on_btn_export_csv() {
     for (const auto& ev : events) {
         QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd hh:mm:ss");
         QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "ENTRY" : "EXIT";
-        out << id++ << "," << time_str << "," << ev.track_id << "," << dir_str << ","
+        QString roi_name_str = QString::fromStdString(ev.roi_name);
+        out << id++ << "," << time_str << "," << ev.roi_id << ",\""
+            << roi_name_str << "\"," << ev.track_id << "," << dir_str << ","
             << ev.confidence << "," << QString::fromStdString(ev.gender) << ","
             << QString::fromStdString(ev.age_group) << "," << QString::fromStdString(ev.clip_path) << "\n";
     }

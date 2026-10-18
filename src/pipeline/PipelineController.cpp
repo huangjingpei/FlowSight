@@ -98,6 +98,7 @@ public:
     std::unique_ptr<ClipRecorder> clip_recorder_;
 
     std::mutex roi_mtx_;
+    std::vector<RoiConfig> active_rois_;
     RoiConfig active_roi_;
 
     int today_entry_ = 0;
@@ -109,17 +110,27 @@ public:
     int last_w_ = 0;
     int last_h_ = 0;
 
-    void set_roi(const RoiConfig& cfg) {
+    void set_rois(const std::vector<RoiConfig>& rois) {
         std::lock_guard<std::mutex> lock(roi_mtx_);
-        active_roi_ = cfg;
+        active_rois_ = rois;
+        if (!active_rois_.empty()) active_roi_ = active_rois_.front();
         if (roi_counter_) {
-            if (last_w_ > 0 && last_h_ > 0 && (cfg.ref_width != last_w_ || cfg.ref_height != last_h_)) {
-                RoiConfig adapted = adapt_roi_to_resolution(cfg, last_w_, last_h_);
-                roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
+            if (last_w_ > 0 && last_h_ > 0) {
+                std::vector<RoiConfig> adapted = adapt_rois_to_resolution(rois, last_w_, last_h_);
+                roi_counter_->set_roi_configs(adapted);
             } else {
-                roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(cfg));
+                roi_counter_->set_roi_configs(rois);
             }
         }
+    }
+
+    std::vector<RoiConfig> get_rois() {
+        std::lock_guard<std::mutex> lock(roi_mtx_);
+        return active_rois_;
+    }
+
+    void set_roi(const RoiConfig& cfg) {
+        set_rois({cfg});
     }
 
     RoiConfig get_roi() {
@@ -295,23 +306,24 @@ public slots:
 
             clip_recorder_->push_frame(frame);
 
-            // 检查视频分辨率并自适应调整 ROI 防区 (若尚未标定则自适应开箱默认防区)
+            // 检查视频分辨率并自适应调整 ROI 防区 (若尚未标定则自适应开箱默认防区，支持多防区自适应)
             if (frame.cols != last_w_ || frame.rows != last_h_) {
                 last_w_ = frame.cols;
                 last_h_ = frame.rows;
-                RoiConfig adapted;
+                std::vector<RoiConfig> adapted_list;
                 {
                     std::lock_guard<std::mutex> lock(roi_mtx_);
-                    if (active_roi_.is_valid && !active_roi_.vertices.empty()) {
-                        adapted = adapt_roi_to_resolution(active_roi_, last_w_, last_h_);
-                        roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
-                    } else {
-                        active_roi_ = make_default_corridor_roi(last_w_, last_h_);
-                        DatabaseManager::instance().save_roi_config(active_roi_);
-                        adapted = active_roi_;
-                        roi_counter_->set_roi_config(std::make_shared<const RoiConfig>(adapted));
-                        emit roi_auto_initialized(adapted);
+                    if (active_rois_.empty()) {
+                        active_rois_ = DatabaseManager::instance().load_latest_roi_configs();
                     }
+                    adapted_list = adapt_rois_to_resolution(active_rois_, last_w_, last_h_);
+                    active_rois_ = adapted_list;
+                    if (!active_rois_.empty()) active_roi_ = active_rois_.front();
+                    roi_counter_->set_roi_configs(adapted_list);
+                }
+                emit rois_auto_initialized(adapted_list);
+                if (!adapted_list.empty()) {
+                    emit roi_auto_initialized(adapted_list.front());
                 }
             }
 
@@ -436,6 +448,7 @@ signals:
     void loop_restarted();
     void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
     void roi_auto_initialized(const RoiConfig& config);
+    void rois_auto_initialized(const std::vector<RoiConfig>& configs);
 };
 
 PipelineController::PipelineController(QObject* parent) : QObject(parent) {
@@ -443,6 +456,7 @@ PipelineController::PipelineController(QObject* parent) : QObject(parent) {
     qRegisterMetaType<StatisticsSnapshot>("StatisticsSnapshot");
     qRegisterMetaType<PassageEvent>("PassageEvent");
     qRegisterMetaType<RoiConfig>("RoiConfig");
+    qRegisterMetaType<std::vector<RoiConfig>>("std::vector<RoiConfig>");
 
     // 初始化硬件音频声道
     audio_player_ = new QMediaPlayer(this);
@@ -474,6 +488,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::loop_restarted, this, &PipelineController::on_worker_loop_restarted);
     connect(worker_.get(), &Worker::crowd_surge_status_changed, this, &PipelineController::crowd_surge_status_changed);
     connect(worker_.get(), &Worker::roi_auto_initialized, this, &PipelineController::roi_auto_initialized);
+    connect(worker_.get(), &Worker::rois_auto_initialized, this, &PipelineController::rois_auto_initialized);
 
     worker_thread_.start();
 
@@ -515,14 +530,24 @@ void PipelineController::set_video_source(const std::string& video_source) {
 }
 
 void PipelineController::update_roi_config(const RoiConfig& config) {
+    update_roi_configs({config});
+}
+
+void PipelineController::update_roi_configs(const std::vector<RoiConfig>& configs) {
     if (worker_) {
-        worker_->set_roi(config);
+        worker_->set_rois(configs);
     }
 }
 
 RoiConfig PipelineController::get_current_roi() const {
+    auto list = get_current_rois();
+    if (!list.empty()) return list.front();
+    return {};
+}
+
+std::vector<RoiConfig> PipelineController::get_current_rois() const {
     if (worker_) {
-        return worker_->get_roi();
+        return worker_->get_rois();
     }
     return {};
 }

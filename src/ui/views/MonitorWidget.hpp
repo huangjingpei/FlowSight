@@ -16,6 +16,7 @@ public:
     void update_stats(const StatisticsSnapshot& stats);
     void add_passage_event(const PassageEvent& ev);
     void update_active_roi(const RoiConfig& roi);
+    void update_active_rois(const std::vector<RoiConfig>& rois);
     void set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold);
 
     // 播放控制条状态同步

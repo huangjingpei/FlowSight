@@ -188,9 +188,11 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
     if (!ticker_list_) return;
 
     QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入" : "🔴 离开";
-    QString text = QString("[%1] %2 ID:%3 %4 %5")
+    QString zone_str = QString("[%1]").arg(QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name));
+    QString text = QString("[%1] %2 %3 ID:%4 (%5/%6)")
         .arg(QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("hh:mm:ss"))
         .arg(dir_str)
+        .arg(zone_str)
         .arg(ev.track_id)
         .arg(QString::fromStdString(ev.gender))
         .arg(QString::fromStdString(ev.age_group));
@@ -208,10 +210,14 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
     }
 }
 
-void MonitorWidget::update_active_roi(const RoiConfig& roi) {
+void MonitorWidget::update_active_rois(const std::vector<RoiConfig>& rois) {
     if (canvas_) {
-        canvas_->set_roi(roi);
+        canvas_->set_rois(rois);
     }
+}
+
+void MonitorWidget::update_active_roi(const RoiConfig& roi) {
+    update_active_rois({roi});
 }
 
 void MonitorWidget::set_media_info(bool is_live, qint64 duration_ms, double fps) {

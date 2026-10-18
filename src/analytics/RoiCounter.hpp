@@ -9,6 +9,7 @@ public:
     ~RoiCounter();
 
     void set_roi_config(std::shared_ptr<const RoiConfig> config);
+    void set_roi_configs(const std::vector<RoiConfig>& configs);
 
     void process_frame(const std::vector<TrackObject>& tracks,
                        int64_t timestamp_ms,

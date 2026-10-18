@@ -26,6 +26,9 @@ struct TrackObject {
 
 // 任意 N 边形 ROI 配置
 struct RoiConfig {
+    int roi_id = 1;                    // 防区唯一编号 (1, 2, ...)
+    std::string name = "A门主通道";    // 防区业务名称 (如 "A门主通道", "B门侧通道")
+    std::string color_hex = "#58a6ff"; // 标定渲染强调色 (如 #58a6ff, #f1e05a, #bc8cff)
     int version = 0;
     std::string source_id = "default";
     int ref_width = 1920;
@@ -37,8 +40,11 @@ struct RoiConfig {
     bool is_valid = false;
 };
 
-inline RoiConfig make_default_corridor_roi(int width = 1920, int height = 1080) {
+inline RoiConfig make_default_corridor_roi(int width = 1920, int height = 1080, int roi_id = 1, const std::string& name = "A门主通道", const std::string& color = "#58a6ff") {
     RoiConfig cfg;
+    cfg.roi_id = roi_id;
+    cfg.name = name;
+    cfg.color_hex = color;
     cfg.version = 1;
     cfg.source_id = "default";
     cfg.ref_width = width > 0 ? width : 1920;
@@ -79,18 +85,29 @@ inline RoiConfig adapt_roi_to_resolution(const RoiConfig& src, int target_w, int
     return adapted;
 }
 
+inline std::vector<RoiConfig> adapt_rois_to_resolution(const std::vector<RoiConfig>& src_rois, int target_w, int target_h) {
+    std::vector<RoiConfig> adapted;
+    adapted.reserve(src_rois.size());
+    for (const auto& roi : src_rois) {
+        adapted.push_back(adapt_roi_to_resolution(roi, target_w, target_h));
+    }
+    return adapted;
+}
+
 // 进出事件类型
 enum class PassageDirection {
     ENTRY = 1,
     EXIT = 2
 };
 
-// 通行事实明细（含短视频切片路径）
+// 通行事实明细（含短视频切片路径与所属防区）
 struct PassageEvent {
     int64_t timestamp_ms = 0;
     int track_id = -1;
     PassageDirection direction = PassageDirection::ENTRY;
     int roi_version = 0;
+    int roi_id = 1;                     // 所属防区编号
+    std::string roi_name = "A门主通道"; // 所属防区名称
     float confidence = 0.0f;
     std::string source_id;
     std::string clip_path;   // 关联的短视频切片路径 (如 "clips/clip_12.mp4")
