@@ -428,6 +428,7 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
         .arg(attr_str);
 
     auto* item = new QListWidgetItem(text);
+    item->setToolTip(text);
     if (is_entry) {
         item->setForeground(QColor("#3fb950")); // 安防绿
     } else {

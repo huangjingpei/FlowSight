@@ -27,6 +27,7 @@ private:
     void setup_ui();
     bool event_matches_filter(const PassageEvent& ev) const;
     void update_metadata_inspector(int row);
+    void populate_table_row(int row, const PassageEvent& ev);
 
     // 过滤与搜索控件
     QComboBox* combo_direction_ = nullptr;
