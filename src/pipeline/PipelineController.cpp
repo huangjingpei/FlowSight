@@ -200,8 +200,11 @@ public slots:
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
-        // 初始化二级属性识别轻量级模型 (P1-5)
-        std::string resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+        // 初始化二级属性识别高精度模型 (P1-5: 优先加载量化预训练行人属性模型)
+        std::string resolved_attr_model = resolve_resource_path("models/pedestrian_gender_int8.onnx");
+        if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
+            resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+        }
         AttributeClassifier::instance().init(resolved_attr_model);
 
         // 开机恢复今日已入库的进出累计客流数
@@ -410,7 +413,7 @@ public slots:
                 int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
                 int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
                 int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
-                if (w >= 16 && h >= 32) {
+                if (w >= 28 && h >= 56) {
                     cv::Rect crop_rect(x, y, w, h);
                     cv::Mat crop = frame(crop_rect);
                     AttributeClassifier::instance().classify_async(trk.track_id, crop);

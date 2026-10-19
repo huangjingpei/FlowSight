@@ -2,6 +2,7 @@
 #include "ai/AttributeClassifier.hpp"
 #include <opencv2/opencv.hpp>
 #include <iostream>
+#include <filesystem>
 
 namespace flowsight {
 
@@ -19,7 +20,11 @@ bool FlowSightEngineImpl::initialize(const std::string& model_path, float conf_t
         return false;
     }
 
-    AttributeClassifier::instance().init("models/mobilenetv3_attributes.onnx");
+    std::string attr_model = "models/pedestrian_gender_int8.onnx";
+    if (!std::filesystem::exists(attr_model)) {
+        attr_model = "models/mobilenetv3_attributes.onnx";
+    }
+    AttributeClassifier::instance().init(attr_model);
 
     tracker_ = std::make_unique<ByteTrackWrapper>(30, 30);
     roi_counter_ = std::make_unique<RoiCounter>();
@@ -213,7 +218,7 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
             int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
             int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
             int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
-            if (w >= 16 && h >= 32) {
+            if (w >= 28 && h >= 56) {
                 cv::Rect crop_rect(x, y, w, h);
                 cv::Mat crop = frame(crop_rect);
                 AttributeClassifier::instance().classify_async(trk.track_id, crop);

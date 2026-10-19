@@ -22,7 +22,7 @@ class AttributeClassifier {
 public:
     static AttributeClassifier& instance();
 
-    bool init(const std::string& model_path = "models/mobilenetv3_attributes.onnx");
+    bool init(const std::string& model_path = "models/pedestrian_gender_int8.onnx");
     void stop();
     bool is_loaded() const;
 
