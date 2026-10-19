@@ -117,26 +117,26 @@ void MainWindow::setup_ui() {
     main_layout->setContentsMargins(0, 0, 0, 0);
     main_layout->setSpacing(0);
 
-    // 1. 左侧现代化导航栏容器 (含品牌 Logo 头与健康状态脚)
+    // 1. 左侧标准安防 NVR 导航栏容器 (含品牌 Logo 头与硬件状态脚)
     auto* sidebar_container = new QWidget(this);
     sidebar_container->setFixedWidth(160);
-    sidebar_container->setStyleSheet("background-color: #161b22;");
+    sidebar_container->setStyleSheet("background-color: #181b20; border-right: 1px solid #23272e;");
     auto* sidebar_vbox = new QVBoxLayout(sidebar_container);
-    sidebar_vbox->setContentsMargins(0, 0, 0, 12);
+    sidebar_vbox->setContentsMargins(0, 0, 0, 10);
     sidebar_vbox->setSpacing(0);
 
     // 顶部 Logo 标识区
     auto* brand_widget = new QWidget(this);
-    brand_widget->setFixedHeight(68);
-    brand_widget->setStyleSheet("border-bottom: 1px solid #21262d; background-color: #161b22;");
+    brand_widget->setFixedHeight(64);
+    brand_widget->setStyleSheet("border-bottom: 1px solid #23272e; background-color: #181b20;");
     auto* brand_layout = new QVBoxLayout(brand_widget);
-    brand_layout->setContentsMargins(16, 12, 12, 12);
+    brand_layout->setContentsMargins(14, 10, 10, 10);
     brand_layout->setSpacing(2);
 
     auto* brand_title = new QLabel("FLOWSIGHT", brand_widget);
-    brand_title->setStyleSheet("color: #58a6ff; font-weight: 900; font-size: 16px; letter-spacing: 1px;");
-    auto* brand_sub = new QLabel("AI 客流感知系统", brand_widget);
-    brand_sub->setStyleSheet("color: #8b949e; font-size: 11px;");
+    brand_title->setStyleSheet("color: #388bfd; font-weight: 900; font-size: 15px; letter-spacing: 1px;");
+    auto* brand_sub = new QLabel("NVR 客流分析控制台", brand_widget);
+    brand_sub->setStyleSheet("color: #8c96a3; font-size: 11px;");
     brand_layout->addWidget(brand_title);
     brand_layout->addWidget(brand_sub);
     sidebar_vbox->addWidget(brand_widget);
@@ -157,7 +157,7 @@ void MainWindow::setup_ui() {
 
     // 侧边栏底部硬件标签
     auto* gpu_badge = new QWidget(this);
-    gpu_badge->setStyleSheet("background-color: #21262d; border-radius: 6px; margin: 0 10px; padding: 6px;");
+    gpu_badge->setStyleSheet("background-color: #1f2329; border: 1px solid #282c34; border-radius: 3px; margin: 0 8px; padding: 4px;");
     auto* gpu_layout = new QVBoxLayout(gpu_badge);
     gpu_layout->setContentsMargins(6, 4, 6, 4);
     gpu_badge_label_ = new QLabel("● 推理引擎探测中...", gpu_badge);
