@@ -1,6 +1,7 @@
 #include "VideoCanvas.hpp"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QTimer>
 #include <cmath>
 #include <opencv2/imgproc.hpp>
@@ -8,6 +9,7 @@
 
 VideoCanvas::VideoCanvas(QWidget* parent) : QWidget(parent) {
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(480, 270);
 
     surge_anim_timer_ = new QTimer(this);
@@ -488,7 +490,11 @@ void VideoCanvas::mousePressEvent(QMouseEvent* event) {
 }
 
 void VideoCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
-    if (read_only_) return;
+    if (read_only_) {
+        emit double_clicked();
+        event->accept();
+        return;
+    }
 
     if (mode_ == EditMode::DRAWING && editing_roi_.vertices.size() >= 3) {
         mode_ = EditMode::EDITING;
@@ -496,6 +502,15 @@ void VideoCanvas::mouseDoubleClickEvent(QMouseEvent* event) {
         emit polygon_status_changed(editing_roi_.is_valid, editing_roi_.vertices.size());
         update();
     }
+}
+
+void VideoCanvas::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_Escape) {
+        emit escape_pressed();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 void VideoCanvas::mouseMoveEvent(QMouseEvent* event) {

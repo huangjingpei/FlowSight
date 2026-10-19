@@ -13,6 +13,7 @@ public:
 
 signals:
     void video_source_changed(const QString& source_uri);
+    void settings_applied(int surge_threshold, bool surge_enabled, bool surge_beep);
 
 private slots:
     void on_btn_save();

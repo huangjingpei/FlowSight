@@ -1,5 +1,6 @@
 #include "MonitorWidget.hpp"
 #include "ui/VideoCanvas.hpp"
+#include "storage/ConfigManager.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
@@ -13,6 +14,8 @@
 #include <QScrollArea>
 
 MonitorWidget::MonitorWidget(QWidget* parent) : QWidget(parent) {
+    surge_threshold_ = ConfigManager::instance().get_crowd_surge_threshold();
+    if (surge_threshold_ <= 0) surge_threshold_ = 10;
     setup_ui();
 }
 
@@ -85,10 +88,14 @@ void MonitorWidget::setup_ui() {
     top_hbox->addWidget(btn_fullscreen);
     video_vbox->addWidget(video_top_bar);
 
-    // 1.2 专业 AI 监控视频画布
+    // 1.2 专业 AI 监控视频画布 (支持双击全屏与按 ESC 退出)
     canvas_ = new VideoCanvas(video_container_);
     canvas_->set_read_only(true);
     canvas_->setStyleSheet("border: 1px solid #282c34; border-radius: 3px; background-color: #0d0f12;");
+    connect(canvas_, &VideoCanvas::escape_pressed, this, [this]() {
+        if (is_fullscreen_) toggle_fullscreen();
+    });
+    connect(canvas_, &VideoCanvas::double_clicked, this, &MonitorWidget::toggle_fullscreen);
     video_vbox->addWidget(canvas_, 1);
 
     // 1.3 工业标准首尾时间轴播放控制条
@@ -183,7 +190,7 @@ void MonitorWidget::setup_ui() {
     s_header->setContentsMargins(0, 0, 0, 0);
     auto* s_title = new QLabel("区域安全承载负荷", surge_card);
     s_title->setStyleSheet("color: #8c96a3; font-size: 11px; font-weight: 600;");
-    surge_text_label_ = new QLabel("0 / 30 人 (0%)", surge_card);
+    surge_text_label_ = new QLabel(QString("0 / %1 人 (0%)").arg(surge_threshold_), surge_card);
     surge_text_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
     s_header->addWidget(s_title);
     s_header->addStretch();
@@ -518,5 +525,14 @@ void MonitorWidget::toggle_fullscreen() {
         static_cast<QVBoxLayout*>(video_container_->layout())->insertWidget(1, canvas_, 1);
         canvas_->showNormal();
         is_fullscreen_ = false;
+    }
+}
+
+void MonitorWidget::update_surge_threshold(int threshold) {
+    surge_threshold_ = threshold > 0 ? threshold : 10;
+    if (surge_progress_ && surge_text_label_) {
+        int pct = std::min(100, (current_occupancy_ * 100) / surge_threshold_);
+        surge_progress_->setValue(pct);
+        surge_text_label_->setText(QString("%1 / %2 人 (%3%)").arg(current_occupancy_).arg(surge_threshold_).arg(pct));
     }
 }

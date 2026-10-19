@@ -10,6 +10,9 @@
 #include <QDir>
 #include <QMessageBox>
 #include <QScrollArea>
+#include <QFileDialog>
+#include <QDesktopServices>
+#include <QUrl>
 
 AnalyticsWidget::AnalyticsWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -194,10 +197,15 @@ void AnalyticsWidget::on_btn_export_csv() {
     QDir dir("exports");
     if (!dir.exists()) dir.mkpath(".");
 
-    QString filename = QString("exports/report_%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+    QString default_filename = QString("exports/report_%1.csv").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
+    QString filename = QFileDialog::getSaveFileName(this, "导出客流明细 CSV 报表", default_filename, "CSV 表格文件 (*.csv);;所有文件 (*.*)");
+    if (filename.isEmpty()) {
+        return; // 用户主动取消
+    }
+
     QFile file(filename);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "错误", "无法创建 CSV 报表文件!");
+        QMessageBox::critical(this, "错误", QString("无法创建或写入 CSV 报表文件:\n%1").arg(filename));
         return;
     }
 
@@ -226,5 +234,15 @@ void AnalyticsWidget::on_btn_export_csv() {
     }
 
     file.close();
-    QMessageBox::information(this, "导出成功", QString("所选时段客流报表 (共 %1 条) 已导出至:\n%2").arg(events.size()).arg(filename));
+
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle("导出成功");
+    msgBox.setText(QString("所选时段客流报表 (共 %1 条) 已成功导出至:\n%2").arg(events.size()).arg(filename));
+    auto* btn_open_dir = msgBox.addButton("打开所在文件夹", QMessageBox::ActionRole);
+    msgBox.addButton("完成", QMessageBox::AcceptRole);
+    msgBox.exec();
+
+    if (msgBox.clickedButton() == btn_open_dir) {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filename).absolutePath()));
+    }
 }

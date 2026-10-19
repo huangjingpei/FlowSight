@@ -24,6 +24,9 @@ private slots:
     void on_rois_calibrated(const std::vector<RoiConfig>& new_rois);
     void on_stats_updated(const StatisticsSnapshot& stats);
 
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     void setup_ui();
     void setup_connections();

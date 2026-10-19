@@ -224,5 +224,6 @@ void SettingsWidget::on_btn_save() {
     cfg.save();
 
     emit video_source_changed(video_input_edit_->text());
+    emit settings_applied(surge_threshold_spin_->value(), surge_enabled_chk_->isChecked(), surge_beep_chk_->isChecked());
     QMessageBox::information(this, "成功", "设置已保存至 configs/flowsight.ini！已实时应用并持久化保存。");
 }

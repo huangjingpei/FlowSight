@@ -52,6 +52,7 @@ public slots:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private slots:
     void on_media_status_changed(QMediaPlayer::MediaStatus status);

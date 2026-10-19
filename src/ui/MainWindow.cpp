@@ -16,6 +16,7 @@
 #include <QStatusBar>
 #include <QApplication>
 #include <QPainter>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("FlowSight 智能客流分析系统 v1.2");
@@ -94,6 +95,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(view_settings_, &SettingsWidget::video_source_changed, this, [this](const QString& path) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());
+        }
+    });
+    connect(view_settings_, &SettingsWidget::settings_applied, this, [this](int thresh, bool, bool) {
+        if (view_monitor_) {
+            view_monitor_->update_surge_threshold(thresh);
         }
     });
 
@@ -253,4 +259,11 @@ void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {
             gpu_badge_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
         }
     }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (pipeline_) {
+        pipeline_->stop();
+    }
+    event->accept();
 }

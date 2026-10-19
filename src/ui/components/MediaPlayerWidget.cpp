@@ -30,6 +30,7 @@ void MediaPlayerWidget::setup_ui() {
     video_widget_ = new QVideoWidget(this);
     video_widget_->setStyleSheet("background-color: #0d1117; border: 1px solid #21262d; border-radius: 6px;");
     video_widget_->setMinimumHeight(240);
+    video_widget_->installEventFilter(this);
     player_->setVideoOutput(video_widget_);
     main_layout->addWidget(video_widget_, 1);
 
@@ -221,6 +222,22 @@ void MediaPlayerWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+bool MediaPlayerWidget::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == video_widget_) {
+        if (event->type() == QEvent::KeyPress) {
+            auto* ke = static_cast<QKeyEvent*>(event);
+            if (ke->key() == Qt::Key_Escape && is_fullscreen_) {
+                toggle_fullscreen();
+                return true;
+            }
+        } else if (event->type() == QEvent::MouseButtonDblClick) {
+            toggle_fullscreen();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void MediaPlayerWidget::on_media_status_changed(QMediaPlayer::MediaStatus status) {

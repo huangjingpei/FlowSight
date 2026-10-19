@@ -47,6 +47,8 @@ signals:
     void rois_applied(const std::vector<RoiConfig>& rois);
     void active_roi_changed(int index, const RoiConfig& roi);
     void polygon_status_changed(bool is_valid, int vertex_count);
+    void escape_pressed();
+    void double_clicked();
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -54,6 +56,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     QPointF frame_to_canvas(const cv::Point2f& pt_f) const;
