@@ -4,7 +4,7 @@
 
 class ByteTrackWrapper : public ITracker {
 public:
-    ByteTrackWrapper(int frame_rate = 30, int track_buffer = 30);
+    ByteTrackWrapper(int frame_rate = 30, int track_buffer = 60);
     ~ByteTrackWrapper() override;
 
     std::vector<TrackObject> update(const std::vector<Detection>& detections) override;

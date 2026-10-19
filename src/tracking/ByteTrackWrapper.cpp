@@ -46,6 +46,9 @@ struct STrack {
     void mark_lost() {
         state = STrackState::Lost;
         lost_frame_count++;
+        // 丢失状态下衰减速度矢量，避免外推发散导致脱靶
+        velocity.x *= 0.70f;
+        velocity.y *= 0.70f;
     }
 };
 
@@ -56,18 +59,24 @@ float calculate_iou(const cv::Rect2f& bb_test, const cv::Rect2f& bb_gt) {
     return in / un;
 }
 
+float center_distance(const cv::Rect2f& b1, const cv::Rect2f& b2) {
+    cv::Point2f c1(b1.x + b1.width * 0.5f, b1.y + b1.height * 0.5f);
+    cv::Point2f c2(b2.x + b2.width * 0.5f, b2.y + b2.height * 0.5f);
+    return std::hypot(c1.x - c2.x, c1.y - c2.y);
+}
+
 } // namespace
 
 class ByteTrackWrapper::Impl {
 public:
     int frame_rate_ = 30;
-    int track_buffer_ = 30;
+    int track_buffer_ = 60; // 存活缓冲提升至 2 秒 (60帧)
     int next_id_ = 1;
     std::vector<STrack> tracked_stracks_;
     std::vector<STrack> lost_stracks_;
 
     Impl(int frame_rate, int track_buffer)
-        : frame_rate_(frame_rate), track_buffer_(track_buffer) {}
+        : frame_rate_(frame_rate), track_buffer_(track_buffer > 0 ? track_buffer : 60) {}
 
     std::vector<TrackObject> update(const std::vector<Detection>& detections) {
         // 1. 分离高置信度与低置信度检测框 (ByteTrack 核心原理)
@@ -75,7 +84,7 @@ public:
         std::vector<Detection> det_second;
 
         for (const auto& det : detections) {
-            if (det.confidence >= 0.40f) {
+            if (det.confidence >= 0.35f) {
                 det_first.push_back(det);
             } else if (det.confidence >= 0.15f) {
                 det_second.push_back(det);
@@ -95,17 +104,29 @@ public:
         for (const auto& st : tracked_stracks_) pool_tracks.push_back(st);
         for (const auto& st : lost_stracks_) pool_tracks.push_back(st);
 
-        // 3. 第一轮关联：高分检测框与活跃/丢失轨迹做 IoU 匹配
+        // 3. 第一轮关联：高分检测框与活跃/丢失轨迹做尺度自适应 IoU + 距离融合匹配
         std::vector<bool> det_matched(det_first.size(), false);
         std::vector<bool> track_matched(pool_tracks.size(), false);
         std::vector<STrack> updated_tracks;
 
         for (size_t d = 0; d < det_first.size(); ++d) {
-            float best_iou = 0.25f; // IoU 阈值
+            float best_iou = 0.20f; // 基础 IoU 阈值
             int best_t = -1;
             for (size_t t = 0; t < pool_tracks.size(); ++t) {
                 if (track_matched[t]) continue;
                 float iou = calculate_iou(det_first[d].bbox, pool_tracks[t].bbox);
+                // 距离自适应兜底：当行人步幅较大或产生姿态形变导致 IoU < 0.20 时，检测中心欧氏距离
+                if (iou < best_iou) {
+                    float cd = center_distance(det_first[d].bbox, pool_tracks[t].bbox);
+                    float diag = std::hypot(det_first[d].bbox.width, det_first[d].bbox.height);
+                    if (cd < diag * 0.85f) {
+                        float h_ratio = det_first[d].bbox.height / std::max(1.0f, pool_tracks[t].bbox.height);
+                        if (h_ratio > 0.5f && h_ratio < 1.8f) {
+                            iou = 0.22f; // 判定为同一目标有效匹配
+                        }
+                    }
+                }
+
                 if (iou > best_iou) {
                     best_iou = iou;
                     best_t = static_cast<int>(t);
@@ -120,7 +141,7 @@ public:
             }
         }
 
-        // 4. 第二轮关联：剩余未匹配轨迹与低分检测框匹配（恢复被遮挡目标）
+        // 4. 第二轮关联：剩余未匹配轨迹与低分检测框匹配（恢复被遮挡或低对比度目标）
         std::vector<STrack> remain_tracks;
         for (size_t t = 0; t < pool_tracks.size(); ++t) {
             if (!track_matched[t]) {
@@ -129,10 +150,17 @@ public:
         }
 
         for (const auto& det : det_second) {
-            float best_iou = 0.35f;
+            float best_iou = 0.25f;
             int best_idx = -1;
             for (size_t t = 0; t < remain_tracks.size(); ++t) {
                 float iou = calculate_iou(det.bbox, remain_tracks[t].bbox);
+                if (iou < best_iou) {
+                    float cd = center_distance(det.bbox, remain_tracks[t].bbox);
+                    float diag = std::hypot(det.bbox.width, det.bbox.height);
+                    if (cd < diag * 0.75f) {
+                        iou = 0.26f;
+                    }
+                }
                 if (iou > best_iou) {
                     best_iou = iou;
                     best_idx = static_cast<int>(t);
@@ -145,18 +173,35 @@ public:
             }
         }
 
-        // 5. 对剩余未匹配的高分框创建新轨迹
+        // 5. 对剩余未匹配的高分框：优先尝试重关联到近期丢失的旧轨迹，消除 ID 频繁重新编号
         for (size_t d = 0; d < det_first.size(); ++d) {
             if (!det_matched[d]) {
-                STrack new_track;
-                new_track.track_id = next_id_++;
-                new_track.bbox = det_first[d].bbox;
-                new_track.score = det_first[d].confidence;
-                new_track.state = STrackState::Tracked;
-                new_track.tracklet_len = 1;
-                new_track.lost_frame_count = 0;
-                new_track.is_activated = (new_track.score >= 0.70f); // 暂定(Tentative)状态，次帧确认后激活
-                updated_tracks.push_back(new_track);
+                int reid_idx = -1;
+                for (size_t r = 0; r < remain_tracks.size(); ++r) {
+                    if (remain_tracks[r].lost_frame_count <= 45) { // 1.5 秒内丢失
+                        float cd = center_distance(det_first[d].bbox, remain_tracks[r].bbox);
+                        if (cd < 60.0f) { // 距离邻近，重关联为同一人
+                            reid_idx = static_cast<int>(r);
+                            break;
+                        }
+                    }
+                }
+
+                if (reid_idx != -1) {
+                    remain_tracks[reid_idx].update(det_first[d]);
+                    updated_tracks.push_back(remain_tracks[reid_idx]);
+                    remain_tracks.erase(remain_tracks.begin() + reid_idx);
+                } else {
+                    STrack new_track;
+                    new_track.track_id = next_id_++;
+                    new_track.bbox = det_first[d].bbox;
+                    new_track.score = det_first[d].confidence;
+                    new_track.state = STrackState::Tracked;
+                    new_track.tracklet_len = 1;
+                    new_track.lost_frame_count = 0;
+                    new_track.is_activated = (new_track.score >= 0.70f); // 暂定(Tentative)状态，次帧确认后激活
+                    updated_tracks.push_back(new_track);
+                }
             }
         }
 

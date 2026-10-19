@@ -97,7 +97,7 @@ public:
                 invert = roi_configs_.front().invert_direction;
             }
             cv::Point2f flow_dir = get_roi_flow_unit_vector(angle, invert);
-            float d_thresh = std::max(30.0f, std::min(w, h) * 0.05f);
+            float d_thresh = std::max(20.0f, std::min(w, h) * 0.030f);
 
             for (const auto& trk : tracks) {
                 int64_t key = make_track_roi_key(trk.track_id, 0);
@@ -113,9 +113,9 @@ public:
                 float side = (trk.foot_point.x - center_pt.x) * flow_dir.x + (trk.foot_point.y - center_pt.y) * flow_dir.y;
                 float disp = (trk.foot_point.x - ctx.start_pt.x) * flow_dir.x + (trk.foot_point.y - ctx.start_pt.y) * flow_dir.y;
 
-                if (!ctx.passage_triggered && ctx.cooldown_ticks == 0 && ctx.has_last_side) {
-                    bool forward = (disp >= d_thresh) || (ctx.last_side < -3.0f && side >= -3.0f);
-                    bool backward = (disp <= -d_thresh) || (ctx.last_side > 3.0f && side <= 3.0f);
+                if (!ctx.passage_triggered && ctx.cooldown_ticks == 0) {
+                    bool forward = (disp >= d_thresh) || (ctx.has_last_side && ctx.last_side < -2.0f && side >= -2.0f);
+                    bool backward = (disp <= -d_thresh) || (ctx.has_last_side && ctx.last_side > 2.0f && side <= 2.0f);
 
                     if (forward) {
                         PassageEvent ev;
@@ -173,7 +173,8 @@ public:
                 int min_confirm = roi.min_confirm_frames;
 
                 // 1. AABB 快速外接矩形初筛 (提升多目标多防区检测性能)
-                float aabb_pad = buf_dist + 10.0f;
+                float effective_buf = std::max(20.0f, buf_dist);
+                float aabb_pad = effective_buf + 15.0f;
                 if (trk.foot_point.x < roi_meta.min_x - aabb_pad || trk.foot_point.x > roi_meta.max_x + aabb_pad ||
                     trk.foot_point.y < roi_meta.min_y - aabb_pad || trk.foot_point.y > roi_meta.max_y + aabb_pad) {
 
@@ -181,7 +182,8 @@ public:
                     auto it = track_states_.find(key);
                     if (it != track_states_.end()) {
                         it->second.last_seen_ms = timestamp_ms;
-                        if (++it->second.outside_counter >= min_confirm) {
+                        // 离开防区较长时间 (>= 45 帧，约 1.5 秒) 时才复位，彻底杜绝目标在边缘走动导致重复计数
+                        if (++it->second.outside_counter >= std::max(45, min_confirm * 15)) {
                             it->second.state = TrackState::OUTSIDE;
                             it->second.passage_triggered = false;
                             it->second.has_start_pt = false;
@@ -204,8 +206,8 @@ public:
                 ctx.last_seen_ms = timestamp_ms;
                 if (ctx.cooldown_ticks > 0) ctx.cooldown_ticks--;
 
-                // 3. 核心穿行判定 (处于多边形内部或几何缓冲带范围内)
-                if (dist >= -buf_dist) {
+                // 3. 核心穿行判定 (处于多边形内部或自适应几何缓冲带范围内)
+                if (dist >= -effective_buf) {
                     ctx.state = TrackState::INSIDE;
                     ctx.outside_counter = 0;
 
@@ -222,17 +224,17 @@ public:
                     float disp = (trk.foot_point.x - ctx.start_pt.x) * roi_meta.dir.x +
                                  (trk.foot_point.y - ctx.start_pt.y) * roi_meta.dir.y;
 
-                    // 动态计算该防区尺度下的位移触发门限 (保证灵敏性与抗抖动的最佳平衡)
-                    float d_thresh = std::max(22.0f, buf_dist * 2.2f);
+                    // 动态计算该防区尺度下的位移触发门限
+                    float d_thresh = std::max(20.0f, effective_buf * 1.5f);
 
                     if (!ctx.passage_triggered && ctx.cooldown_ticks == 0) {
                         // 判定条件 1: 沿流向发生实质性单向净位移
                         bool forward_disp = (disp >= d_thresh);
                         bool backward_disp = (disp <= -d_thresh);
 
-                        // 判定条件 2: 跨越防区几何法向中线 (从上游 side < -2 跨越至下游 side >= -2)
-                        bool forward_cross = (ctx.has_last_side && ctx.last_side < -2.0f && side >= -2.0f);
-                        bool backward_cross = (ctx.has_last_side && ctx.last_side > 2.0f && side <= 2.0f);
+                        // 判定条件 2: 跨越防区几何法向中线 (从上游 side < -1.5 跨越至下游 side >= -1.5)
+                        bool forward_cross = (ctx.has_last_side && ctx.last_side < -1.5f && side >= -1.5f);
+                        bool backward_cross = (ctx.has_last_side && ctx.last_side > 1.5f && side <= 1.5f);
 
                         if (forward_disp || forward_cross) {
                             PassageEvent ev;
@@ -280,8 +282,8 @@ public:
                     ctx.last_pt = trk.foot_point;
                     ctx.has_last_pt = true;
                 } else {
-                    // 4. 处于外部边界之外：确认离开后复位触发标记，准备接收下一次穿行
-                    if (++ctx.outside_counter >= min_confirm) {
+                    // 4. 处于外部边界之外：确认长时间离开后才复位触发标记
+                    if (++ctx.outside_counter >= std::max(45, min_confirm * 15)) {
                         ctx.state = TrackState::OUTSIDE;
                         ctx.passage_triggered = false;
                         ctx.has_start_pt = false;

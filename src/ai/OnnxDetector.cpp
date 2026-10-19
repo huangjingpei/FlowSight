@@ -181,10 +181,11 @@ public:
         boxes.reserve(256);
         confidences.reserve(256);
 
+        float min_score = std::min(0.15f, conf_thresh_);
         for (int i = 0; i < num_proposals; ++i) {
             // YOLOv8 class 0 is person
             float person_score = raw_output[4 * num_proposals + i];
-            if (person_score >= conf_thresh_) {
+            if (person_score >= min_score) {
                 float cx = raw_output[0 * num_proposals + i];
                 float cy = raw_output[1 * num_proposals + i];
                 float w = raw_output[2 * num_proposals + i];
@@ -201,9 +202,9 @@ public:
             }
         }
 
-        // 5. OpenCV NMS 消除冗余重叠框
+        // 5. OpenCV NMS 消除冗余重叠框 (保留低分框供 ByteTrack 二阶段关联)
         std::vector<int> indices;
-        cv::dnn::NMSBoxes(boxes, confidences, conf_thresh_, nms_thresh_, indices);
+        cv::dnn::NMSBoxes(boxes, confidences, min_score, nms_thresh_, indices);
 
         detections.reserve(indices.size());
         for (int idx : indices) {
