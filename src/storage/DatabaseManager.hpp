@@ -29,6 +29,9 @@ public:
     void get_demographics(int64_t start_ms, int64_t end_ms, int& out_male, int& out_female);
     void get_top_age_group(int64_t start_ms, int64_t end_ms, std::string& out_top_age, int& out_count);
 
+    // 一键清空系统全部历史记录与预聚合数据
+    bool clear_all_history_data(bool reset_roi_configs = false, int* out_deleted_events = nullptr);
+
 private:
     DatabaseManager() = default;
     ~DatabaseManager() = default;

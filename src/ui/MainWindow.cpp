@@ -102,6 +102,26 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             view_monitor_->update_surge_threshold(thresh);
         }
     });
+    connect(view_settings_, &SettingsWidget::data_cleared, this, [this](bool reset_rois) {
+        if (pipeline_) {
+            pipeline_->reset_today_counts();
+        }
+        if (view_monitor_) {
+            view_monitor_->clear_display_records();
+        }
+        if (view_evidence_) {
+            view_evidence_->refresh_events();
+        }
+        if (view_analytics_) {
+            view_analytics_->refresh_report();
+        }
+        if (reset_rois) {
+            auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
+            if (view_monitor_) view_monitor_->update_active_rois(saved_rois);
+            if (view_studio_) view_studio_->set_rois(saved_rois);
+            if (pipeline_) pipeline_->update_roi_configs(saved_rois);
+        }
+    });
 
     std::string init_video = ConfigManager::instance().get_video_source().toStdString();
     pipeline_->start_pipeline("models/yolov8n.onnx", init_video);

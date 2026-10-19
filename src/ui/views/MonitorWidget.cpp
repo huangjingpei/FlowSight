@@ -540,3 +540,38 @@ void MonitorWidget::update_surge_threshold(int threshold) {
         surge_text_label_->setText(QString("%1 / %2 人 (%3%)").arg(current_occupancy_).arg(surge_threshold_).arg(pct));
     }
 }
+
+void MonitorWidget::clear_display_records() {
+    current_occupancy_ = 0;
+    if (occupancy_label_) {
+        occupancy_label_->setText("0");
+        occupancy_label_->setStyleSheet("color: #f0f6fc; font-size: 26px; font-weight: bold; font-family: 'Segoe UI', 'Consolas', sans-serif;");
+    }
+    if (occupancy_sub_label_) {
+        occupancy_sub_label_->setText("● 瞬时在场负荷监控中");
+        occupancy_sub_label_->setStyleSheet("color: #57606a; font-size: 10px;");
+    }
+    if (entry_label_) entry_label_->setText("0");
+    if (exit_label_) exit_label_->setText("0");
+    if (total_label_) total_label_->setText("0");
+
+    if (surge_progress_) {
+        surge_progress_->setValue(0);
+        surge_progress_->setStyleSheet(
+            "QProgressBar { background-color: #121417; border: none; border-radius: 2px; } "
+            "QProgressBar::chunk { background-color: #2ecb71; border-radius: 2px; }"
+        );
+    }
+    if (surge_text_label_) {
+        surge_text_label_->setText(QString("0 / %1 人 (0%)").arg(surge_threshold_));
+        surge_text_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
+    }
+
+    if (ticker_list_) {
+        ticker_list_->clear();
+    }
+
+    if (canvas_) {
+        canvas_->set_crowd_surge_alert(false, 0, surge_threshold_);
+    }
+}

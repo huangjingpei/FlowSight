@@ -1,5 +1,7 @@
 #include "SettingsWidget.hpp"
 #include "storage/ConfigManager.hpp"
+#include "storage/DatabaseManager.hpp"
+#include "storage/StoragePruner.hpp"
 #include "network/WebhookPusher.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -164,6 +166,42 @@ void SettingsWidget::setup_ui() {
     hw_layout->addWidget(hardware_info_label_);
     main_layout->addWidget(hw_group);
 
+    // 6. 数据清理与系统维护 (Data Maintenance)
+    auto* maint_group = new QGroupBox("数据清理与系统维护 (Data Maintenance)", this);
+    maint_group->setStyleSheet(
+        "QGroupBox { font-weight: bold; border: 1px solid #4a1e1e; border-radius: 4px; margin-top: 10px; padding-top: 10px; } "
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; color: #f85149; }"
+    );
+    auto* maint_layout = new QVBoxLayout(maint_group);
+    maint_layout->setSpacing(8);
+
+    auto* maint_hint = new QLabel(
+        "• 数据库记录: 彻底清空通行历史事件 (`passage_events`)、小时统计聚合表 (`stats_hourly`) 并收缩释放 SQLite 磁盘碎片；\n"
+        "• 磁盘录像切片: 物理删除 `clips/` 目录下所有已保存的视频切片文件，彻底释放磁盘占用；\n"
+        "• 内存与界面归零: 实时监控看板今日进、出、总客流及实时事件流水即刻归零，所有图表与证据回溯列表同步清空；\n"
+        "• ⚠️ 警告: 该操作为永久物理删除，数据清除后将无法恢复，请谨慎操作！",
+        this
+    );
+    maint_hint->setStyleSheet("color: #f0883e; font-size: 12px; line-height: 150%;");
+    maint_layout->addWidget(maint_hint);
+
+    auto* maint_action_row = new QHBoxLayout();
+    reset_rois_chk_ = new QCheckBox("同时重置所有防区标定线与进出反向配置 (Reset Zone & Direction Configs)", this);
+    reset_rois_chk_->setStyleSheet("color: #8b949e; font-size: 12px;");
+    maint_action_row->addWidget(reset_rois_chk_);
+    maint_action_row->addStretch();
+
+    btn_clear_data_ = new QPushButton("⚠️ 彻底清空所有历史数据与录像切片", this);
+    btn_clear_data_->setStyleSheet(
+        "QPushButton { background: #8c1d18; color: #ffffff; font-weight: bold; font-size: 12px; padding: 7px 16px; border-radius: 4px; border: 1px solid #da3633; }"
+        "QPushButton:hover { background: #b3231c; border-color: #f85149; }"
+        "QPushButton:pressed { background: #6e1410; }"
+    );
+    maint_action_row->addWidget(btn_clear_data_);
+    maint_layout->addLayout(maint_action_row);
+
+    main_layout->addWidget(maint_group);
+
     main_layout->addSpacing(8);
 
     btn_save_ = new QPushButton("保存并应用设置", container);
@@ -175,6 +213,7 @@ void SettingsWidget::setup_ui() {
 
     connect(btn_browse_, &QPushButton::clicked, this, &SettingsWidget::on_btn_browse);
     connect(btn_save_, &QPushButton::clicked, this, &SettingsWidget::on_btn_save);
+    connect(btn_clear_data_, &QPushButton::clicked, this, &SettingsWidget::on_btn_clear_data);
 
     connect(btn_test_ping_, &QPushButton::clicked, this, [this]() {
         QString url = webhook_url_edit_->text().trimmed();
@@ -226,4 +265,50 @@ void SettingsWidget::on_btn_save() {
     emit video_source_changed(video_input_edit_->text());
     emit settings_applied(surge_threshold_spin_->value(), surge_enabled_chk_->isChecked(), surge_beep_chk_->isChecked());
     QMessageBox::information(this, "成功", "设置已保存至 configs/flowsight.ini！已实时应用并持久化保存。");
+}
+
+void SettingsWidget::on_btn_clear_data() {
+    auto reply = QMessageBox::warning(
+        this,
+        "高危数据清除确认",
+        "确定要清空全部通行历史记录及本地视频切片吗？\n\n"
+        "1. 数据库中的所有通行事实 (`passage_events`) 及小时统计聚合将被物理抹除；\n"
+        "2. clips 录像切片目录下的所有切片视频文件将被彻底删除；\n"
+        "3. 实时监控看板今日进、出、总人次流水将即刻归零。\n\n"
+        "⚠️ 本操作不可逆！是否确认继续？",
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No
+    );
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    bool reset_rois = (reset_rois_chk_ && reset_rois_chk_->isChecked());
+
+    // 1. 物理清空 clips 目录下所有切片视频
+    qint64 freed_bytes = 0;
+    int deleted_files = StoragePruner::clear_all_clips("clips", &freed_bytes);
+
+    // 2. 清空数据库记录 (passage_events, stats_hourly, VACUUM)
+    int deleted_events = 0;
+    bool db_ok = DatabaseManager::instance().clear_all_history_data(reset_rois, &deleted_events);
+
+    // 3. 广播信号给 MainWindow 联动清空内存与界面
+    emit data_cleared(reset_rois);
+
+    // 4. 统计并弹窗展示清理成果
+    double freed_mb = freed_bytes / (1024.0 * 1024.0);
+    QString summary_msg = QString(
+        "数据清理已彻底完成！\n\n"
+        "• 数据库清除: 成功移除 %1 条通行历史与统计记录\n"
+        "• 磁盘切片清理: 成功删除 %2 个视频切片文件，释放磁盘空间 %3 MB\n"
+        "• 内存与界面: 今日进出客流与流水记录已全部归零"
+    ).arg(deleted_events).arg(deleted_files).arg(QString::number(freed_mb, 'f', 2));
+
+    if (reset_rois) {
+        summary_msg += "\n• 防区配置: 通道标定线与进出反向配置已恢复初始预设";
+    }
+
+    QMessageBox::information(this, "系统清理完成", summary_msg);
 }

@@ -186,6 +186,25 @@ public:
         }
     }
 
+    void reset_today_counts() {
+        today_entry_ = 0;
+        today_exit_ = 0;
+        if (roi_counter_) {
+            roi_counter_->reset();
+        }
+        if (tracker_) {
+            tracker_->reset();
+        }
+        AttributeClassifier::instance().clear_cache();
+        StatisticsSnapshot snap;
+        snap.current_occupancy = 0;
+        snap.today_entry = 0;
+        snap.today_exit = 0;
+        snap.today_total = 0;
+        if (detector_) snap.backend_name = detector_->get_backend_name();
+        emit stats_updated(snap);
+    }
+
 public slots:
     void process() {
         is_running_ = true;
@@ -734,6 +753,12 @@ void PipelineController::on_worker_loop_restarted() {
     if (audio_player_ && !is_live_) {
         audio_player_->setPosition(0);
         audio_player_->play();
+    }
+}
+
+void PipelineController::reset_today_counts() {
+    if (worker_) {
+        worker_->reset_today_counts();
     }
 }
 

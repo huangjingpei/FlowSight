@@ -300,6 +300,9 @@ void EvidenceWidget::refresh_events() {
         update_metadata_inspector(0);
     } else {
         update_metadata_inspector(-1);
+        if (player_) {
+            player_->stop();
+        }
     }
 }
 

@@ -14,10 +14,12 @@ public:
 signals:
     void video_source_changed(const QString& source_uri);
     void settings_applied(int surge_threshold, bool surge_enabled, bool surge_beep);
+    void data_cleared(bool reset_rois);
 
 private slots:
     void on_btn_save();
     void on_btn_browse();
+    void on_btn_clear_data();
 
 private:
     void setup_ui();
@@ -40,4 +42,8 @@ private:
 
     QLabel* hardware_info_label_ = nullptr;
     QPushButton* btn_save_ = nullptr;
+
+    // 系统数据彻底清理与系统维护
+    QCheckBox* reset_rois_chk_ = nullptr;
+    QPushButton* btn_clear_data_ = nullptr;
 };

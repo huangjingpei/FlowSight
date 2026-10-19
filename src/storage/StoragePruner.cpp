@@ -42,3 +42,35 @@ int StoragePruner::prune_expired_clips(const QString& clips_dir, int retention_d
 
     return deleted_count;
 }
+
+int StoragePruner::clear_all_clips(const QString& clips_dir, qint64* out_freed_bytes) {
+    QDir dir(clips_dir);
+    if (!dir.exists()) {
+        if (out_freed_bytes) *out_freed_bytes = 0;
+        return 0;
+    }
+
+    QFileInfoList file_list = dir.entryInfoList(QStringList() << "*.mp4" << "*.mkv" << "*.avi" << "*.tmp", QDir::Files);
+    int deleted_count = 0;
+    qint64 freed_bytes = 0;
+
+    for (const auto& fi : file_list) {
+        qint64 size = fi.size();
+        if (QFile::remove(fi.absoluteFilePath())) {
+            deleted_count++;
+            freed_bytes += size;
+        }
+    }
+
+    if (out_freed_bytes) {
+        *out_freed_bytes = freed_bytes;
+    }
+
+    double freed_mb = freed_bytes / (1024.0 * 1024.0);
+    qInfo() << QString("[StoragePruner] 一键全量清空切片完成，共删除 %1 个视频文件，释放空间: %2 MB")
+               .arg(deleted_count)
+               .arg(QString::number(freed_mb, 'f', 2));
+
+    return deleted_count;
+}
+

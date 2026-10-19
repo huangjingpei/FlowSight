@@ -667,4 +667,37 @@ void DatabaseManager::get_top_age_group(int64_t start_ms, int64_t end_ms, std::s
     }
 }
 
+bool DatabaseManager::clear_all_history_data(bool reset_roi_configs, int* out_deleted_events) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    int event_count = 0;
+    QSqlQuery q_cnt(db);
+    if (q_cnt.exec("SELECT COUNT(*) FROM passage_events") && q_cnt.next()) {
+        event_count = q_cnt.value(0).toInt();
+    }
+    if (out_deleted_events) {
+        *out_deleted_events = event_count;
+    }
+
+    db.transaction();
+    QSqlQuery q(db);
+    q.exec("DELETE FROM passage_events;");
+    q.exec("DELETE FROM stats_hourly;");
+    q.exec("DELETE FROM sqlite_sequence WHERE name='passage_events';");
+
+    if (reset_roi_configs) {
+        q.exec("DELETE FROM roi_configs;");
+        q.exec("DELETE FROM sqlite_sequence WHERE name='roi_configs';");
+    }
+
+    bool ok = db.commit();
+    if (ok) {
+        QSqlQuery q_vac(db);
+        q_vac.exec("VACUUM;");
+    }
+    return ok;
+}
+
+
 

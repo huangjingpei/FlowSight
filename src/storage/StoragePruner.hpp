@@ -14,4 +14,12 @@ public:
      * @return 实际清理的文件数量
      */
     static int prune_expired_clips(const QString& clips_dir = "clips", int retention_days = 30);
+
+    /**
+     * @brief 彻底清除切片目录下的所有视频切片文件
+     * @param clips_dir 视频切片根目录 (默认 "clips")
+     * @param out_freed_bytes 输出释放的字节数
+     * @return 实际物理删除的文件数量
+     */
+    static int clear_all_clips(const QString& clips_dir = "clips", qint64* out_freed_bytes = nullptr);
 };
