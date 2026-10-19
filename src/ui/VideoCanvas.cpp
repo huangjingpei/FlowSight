@@ -365,8 +365,17 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
         painter.setBrush(QColor(255, 71, 87, 230));
         painter.drawEllipse(c_foot, 3.5, 3.5);
 
-        // 顶部属性气泡胶囊标签
-        QString tag = QString("ID:%1 [%2]").arg(trk.track_id).arg(QString::fromStdString(trk.gender));
+        // 顶部属性气泡胶囊标签 (展示真实 AI 识别的性别与年龄段)
+        QString tag;
+        if (!trk.age_group.empty() && trk.age_group != "未知") {
+            tag = QString("ID:%1 [%2 | %3]").arg(trk.track_id)
+                                             .arg(QString::fromStdString(trk.gender))
+                                             .arg(QString::fromStdString(trk.age_group));
+        } else if (!trk.gender.empty() && trk.gender != "未知") {
+            tag = QString("ID:%1 [%2]").arg(trk.track_id).arg(QString::fromStdString(trk.gender));
+        } else {
+            tag = QString("ID:%1").arg(trk.track_id);
+        }
         QFontMetrics fm(painter.font());
         int text_w = fm.horizontalAdvance(tag) + 12;
         int text_h = 20;

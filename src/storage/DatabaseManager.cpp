@@ -27,6 +27,7 @@ QSqlDatabase DatabaseManager::get_database() {
         QSqlQuery q(db);
         q.exec("PRAGMA journal_mode = WAL;");
         q.exec("PRAGMA synchronous = NORMAL;");
+        q.exec("PRAGMA busy_timeout = 5000;");
     }
     return db;
 }
@@ -46,9 +47,10 @@ bool DatabaseManager::init_database(const QString& db_path) {
     }
 
     QSqlQuery q(db);
-    // 强制开启 WAL 模式以支撑多线程高频无锁读写
+    // 强制开启 WAL 模式以支撑多线程高频无锁读写，配置 5s busy_timeout 消除并发锁死
     q.exec("PRAGMA journal_mode = WAL;");
     q.exec("PRAGMA synchronous = NORMAL;");
+    q.exec("PRAGMA busy_timeout = 5000;");
 
     // 1. ROI 配置历史版本表
     q.exec(
@@ -451,6 +453,22 @@ void DatabaseManager::prune_expired_event_clips(int64_t threshold_ms) {
     if (q.exec()) {
         qInfo() << "[DatabaseManager] 成功同步清理早于" << threshold_ms << "的数据库过期切片引用记录";
     }
+}
+
+bool DatabaseManager::update_event_attributes(int track_id, const std::string& gender, const std::string& age_group) {
+    if (track_id <= 0 || gender.empty() || gender == "未知") return false;
+
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    // 异步属性校准：将对应 track_id 尚为 '未知' 的历史通行记录自动回填补齐
+    q.prepare("UPDATE passage_events SET gender = ?, age_group = ? "
+              "WHERE track_id = ? AND (gender = '未知' OR gender = '' OR gender IS NULL);");
+    q.addBindValue(QString::fromStdString(gender));
+    q.addBindValue(QString::fromStdString(age_group));
+    q.addBindValue(track_id);
+    return q.exec();
 }
 
 bool DatabaseManager::sync_hourly_aggregation() {

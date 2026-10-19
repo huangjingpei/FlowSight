@@ -261,10 +261,14 @@ public:
                 cache_[track_id] = res;
                 pending_tracks_.erase(track_id);
 
-                // 缓存数量保护
-                if (cache_.size() > 5000) {
-                    cache_.clear();
-                    history_.clear();
+                // 缓存数量保护：LRU 适度淘汰，杜绝全量清空导致正在跟踪的活跃目标丢失
+                if (cache_.size() > 2000) {
+                    int to_remove = 200;
+                    for (auto it = cache_.begin(); it != cache_.end() && to_remove > 0; ) {
+                        history_.erase(it->first);
+                        it = cache_.erase(it);
+                        --to_remove;
+                    }
                 }
             }
         }

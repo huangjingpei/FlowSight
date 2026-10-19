@@ -237,18 +237,50 @@ public slots:
                 total_duration_ms = is_live ? 0 : static_cast<qint64>((frame_count / video_fps) * 1000.0);
                 emit media_info_ready(is_live, total_duration_ms, video_fps);
 
-                // 针对网络实时流启动异步专用抓帧线程，始终抓取最新帧丢弃旧帧，杜绝延迟积压
+                // 针对网络实时流启动异步专用抓帧线程，始终抓取最新帧丢弃旧帧，内置断网自愈重连状态机
                 if (is_live) {
                     live_frame_seq_ = 0;
                     last_consumed_seq_ = 0;
                     grabber_running_ = true;
-                    grabber_thread_ = std::thread([this, &cap]() {
+                    grabber_thread_ = std::thread([this, &cap, resolved_video]() {
                         cv::Mat tmp_frame;
+                        int failed_reads = 0;
+                        int backoff_ms = 1000;
                         while (grabber_running_.load() && is_running_.load()) {
-                            if (!cap.read(tmp_frame) || tmp_frame.empty()) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                            if (!cap.isOpened() || !cap.read(tmp_frame) || tmp_frame.empty()) {
+                                failed_reads++;
+                                // 连续读失败达 40 次（约 2 秒读不到有效帧，判定断流）
+                                if (failed_reads >= 40) {
+                                    qWarning() << "[PipelineController] RTSP 视频流断开，正在尝试自愈重连...";
+                                    emit network_state_changed(false, QString("实时流断开，正在重连 (等待 %1s)...").arg(backoff_ms / 1000));
+                                    cap.release();
+
+                                    for (int s = 0; s < backoff_ms; s += 100) {
+                                        if (!grabber_running_.load() || !is_running_.load()) break;
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                                    }
+                                    if (!grabber_running_.load() || !is_running_.load()) break;
+
+                                    if (open_video_capture(cap, resolved_video)) {
+                                        qInfo() << "[PipelineController] RTSP 实时流重连成功！";
+                                        emit network_state_changed(true, "实时流已连接");
+                                        failed_reads = 0;
+                                        backoff_ms = 1000;
+                                    } else {
+                                        backoff_ms = std::min(backoff_ms * 2, 10000); // 指数退避，最高 10 秒
+                                    }
+                                } else {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                                }
                                 continue;
                             }
+
+                            if (failed_reads > 0) {
+                                failed_reads = 0;
+                                backoff_ms = 1000;
+                                emit network_state_changed(true, "实时流已连接");
+                            }
+
                             {
                                 std::lock_guard<std::mutex> lk(live_frame_mtx_);
                                 live_latest_frame_ = tmp_frame;
@@ -359,6 +391,9 @@ public slots:
                 if (!cap.read(frame) || frame.empty()) {
                     // 本地视频循环播放
                     cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                    if (tracker_) tracker_->reset();
+                    if (roi_counter_) roi_counter_->reset();
+                    AttributeClassifier::instance().clear_cache();
                     emit loop_restarted();
                     if (!cap.read(frame) || frame.empty()) {
                         QThread::msleep(40);
@@ -418,7 +453,12 @@ public slots:
                     cv::Mat crop = frame(crop_rect);
                     AttributeClassifier::instance().classify_async(trk.track_id, crop);
                 }
-                AttributeClassifier::instance().get_attributes(trk.track_id, trk.gender, trk.age_group);
+                if (AttributeClassifier::instance().get_attributes(trk.track_id, trk.gender, trk.age_group)) {
+                    // 若已成功获得真实识别属性，尝试异步校准该目标若在早期被记为 '未知' 的历史通行事件
+                    if (trk.gender != "未知") {
+                        DatabaseManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
+                    }
+                }
             }
 
             // 7. 区域滞后防抖计数
@@ -531,6 +571,7 @@ signals:
     void crowd_surge_status_changed(bool is_surged, int current_occupancy, int threshold);
     void roi_auto_initialized(const RoiConfig& config);
     void rois_auto_initialized(const std::vector<RoiConfig>& configs);
+    void network_state_changed(bool is_connected, const QString& status_msg);
 };
 
 PipelineController::PipelineController(QObject* parent) : QObject(parent) {
@@ -571,6 +612,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::crowd_surge_status_changed, this, &PipelineController::crowd_surge_status_changed);
     connect(worker_.get(), &Worker::roi_auto_initialized, this, &PipelineController::roi_auto_initialized);
     connect(worker_.get(), &Worker::rois_auto_initialized, this, &PipelineController::rois_auto_initialized);
+    connect(worker_.get(), &Worker::network_state_changed, this, &PipelineController::network_state_changed);
 
     worker_thread_.start();
 

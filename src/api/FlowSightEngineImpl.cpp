@@ -197,6 +197,9 @@ void FlowSightEngineImpl::worker_loop(const std::string video_uri) {
         if (!cap.read(frame) || frame.empty()) {
             // 本地视频自动循环播放，保持持续在线感知
             cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+            if (tracker_) tracker_->reset();
+            if (roi_counter_) roi_counter_->reset();
+            AttributeClassifier::instance().clear_cache();
             if (!cap.read(frame) || frame.empty()) {
                 break;
             }

@@ -60,9 +60,9 @@ public:
 
         {
             std::lock_guard<std::mutex> lock(task_mtx_);
-            // 队列积压保护：若同时超过 5 个编码任务在排队，丢弃最旧的任务防止内存爆满
-            if (task_queue_.size() >= 5) {
-                task_queue_.pop();
+            // 队列积压保护：若超过 15 个编码任务在排队，直接饱和降级返回空，杜绝已入库任务被弹出导致证据回溯 404 死链
+            if (task_queue_.size() >= 15) {
+                return "";
             }
             task_queue_.push(ClipTask{std::move(snapshot), filename, fps});
         }

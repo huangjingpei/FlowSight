@@ -51,6 +51,9 @@ signals:
     void roi_auto_initialized(const RoiConfig& config);
     void rois_auto_initialized(const std::vector<RoiConfig>& configs);
 
+    // 网络实时流连接与自愈状态信号
+    void network_state_changed(bool is_connected, const QString& status_msg);
+
 private slots:
     void on_worker_loop_restarted();
 

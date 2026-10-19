@@ -9,6 +9,7 @@
 #include "storage/StoragePruner.hpp"
 #include "network/WebhookPusher.hpp"
 #include <QTimer>
+#include <QThreadPool>
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -27,13 +28,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // 初始化 Webhook 推送中心
     WebhookPusher::instance().init(this);
 
-    // 执行磁盘保护清理 (按配置天数清理过期短视频切片)
-    StoragePruner::prune_expired_clips("clips", ConfigManager::instance().get_clip_retention_days());
+    // 异步执行磁盘保护清理 (按配置天数清理过期短视频切片，非阻塞杜绝 UI 卡顿)
+    int retention_days = ConfigManager::instance().get_clip_retention_days();
+    QThreadPool::globalInstance()->start([retention_days]() {
+        StoragePruner::prune_expired_clips("clips", retention_days);
+    });
 
     // 启动后台定时器: 每 6 小时自动巡检一次磁盘切片
     auto* prune_timer = new QTimer(this);
     connect(prune_timer, &QTimer::timeout, this, []() {
-        StoragePruner::prune_expired_clips("clips", ConfigManager::instance().get_clip_retention_days());
+        int days = ConfigManager::instance().get_clip_retention_days();
+        QThreadPool::globalInstance()->start([days]() {
+            StoragePruner::prune_expired_clips("clips", days);
+        });
     });
     prune_timer->start(6 * 3600 * 1000);
 

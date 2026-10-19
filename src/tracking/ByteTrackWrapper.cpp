@@ -172,6 +172,9 @@ public:
             st.mark_lost();
             if (st.lost_frame_count < track_buffer_) {
                 lost_stracks_.push_back(st);
+            } else {
+                // 轨迹超出存活缓冲，彻底析构，联动释放属性模型中的历史与缓存
+                AttributeClassifier::instance().remove_track(st.track_id);
             }
         }
 
@@ -192,10 +195,10 @@ public:
             // 足底接触点 (x1+x2)/2, y2
             obj.foot_point = cv::Point2f(st.bbox.x + st.bbox.width * 0.5f, st.bbox.y + st.bbox.height);
 
-            // 查询二级真实属性分类结果 (若仍在异步推理中则使用平滑缺省)
+            // 查询二级真实属性分类结果 (若仍在异步推理中则暂标为未知，待推理完毕自动回填校准)
             if (!AttributeClassifier::instance().get_attributes(st.track_id, obj.gender, obj.age_group)) {
-                obj.gender = (st.track_id % 2 == 0) ? "男" : "女";
-                obj.age_group = "青年(18-35)";
+                obj.gender = "未知";
+                obj.age_group = "未知";
             }
 
             output_tracks.push_back(obj);
@@ -205,6 +208,12 @@ public:
     }
 
     void reset() {
+        for (const auto& st : tracked_stracks_) {
+            AttributeClassifier::instance().remove_track(st.track_id);
+        }
+        for (const auto& st : lost_stracks_) {
+            AttributeClassifier::instance().remove_track(st.track_id);
+        }
         tracked_stracks_.clear();
         lost_stracks_.clear();
         next_id_ = 1;
