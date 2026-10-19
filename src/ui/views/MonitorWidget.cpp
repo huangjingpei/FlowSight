@@ -410,6 +410,10 @@ void MonitorWidget::set_crowd_surge_alert(bool is_surged, int current_occupancy,
 }
 
 void MonitorWidget::add_passage_event(const PassageEvent& ev) {
+    if (canvas_) {
+        canvas_->trigger_passage_animation(ev.track_id, ev.direction, ev.foot_x, ev.foot_y);
+    }
+
     if (!ticker_list_) return;
 
     QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("hh:mm:ss");

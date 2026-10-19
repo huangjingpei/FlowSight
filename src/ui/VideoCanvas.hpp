@@ -42,6 +42,9 @@ public:
     void set_crowd_surge_alert(bool active, int current_count = 0, int threshold = 0);
     bool is_crowd_surge_active() const { return crowd_surge_active_; }
 
+    // 实时通行事件动态反馈动画
+    void trigger_passage_animation(int track_id, PassageDirection dir, float foot_x, float foot_y);
+
 signals:
     void roi_applied(const RoiConfig& roi);
     void rois_applied(const std::vector<RoiConfig>& rois);
@@ -65,6 +68,15 @@ private:
     int get_hovered_vertex_index(const QPointF& pt_c) const;
     bool validate_polygon(const std::vector<cv::Point2f>& pts) const;
     void draw_standby_screen(QPainter& painter);
+    void draw_flow_legend(QPainter& painter, float render_x, float render_y, float render_w, float render_h);
+
+    struct PassageAnim {
+        int track_id = 0;
+        PassageDirection direction = PassageDirection::ENTRY;
+        cv::Point2f foot_point{0, 0};
+        qint64 start_time_ms = 0;
+    };
+    std::vector<PassageAnim> active_passage_anims_;
 
     bool read_only_ = false;
     QImage current_frame_;

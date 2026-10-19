@@ -76,12 +76,14 @@ void StudioWidget::setup_ui() {
     auto* op_layout = new QVBoxLayout(op_card);
     op_layout->setContentsMargins(2, 2, 2, 2);
 
-    auto* tip_title = new QLabel("📌 标定交互指引", op_card);
+    auto* tip_title = new QLabel("📌 空间防区与进出流向交互指引", op_card);
     tip_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;");
     auto* op_label = new QLabel(
         "1. 在防区管理中选择或新建防区；\n"
-        "2. 点击 [重新打点]，在画面依次单击落点，双击闭合；\n"
-        "3. 拖拽红点微调单点，内部按住拖拽整体平移。",
+        "2. 点击 [重新打点]，画面单击落点，双击自动闭合多边形；\n"
+        "3. 标定后防区内显示形象化罗盘：🟢绿色箭头表示【进入 IN】，🔴红色箭头表示【离开 OUT】；\n"
+        "4. 如实际人流方向与当前相反，点击下方 [🔄 反转进出判定朝向] 即可一键对调；\n"
+        "5. 拖拽红点微调单点，内部按住拖拽整体平移。",
         op_card
     );
     op_label->setWordWrap(true);
