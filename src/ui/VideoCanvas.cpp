@@ -744,16 +744,7 @@ void VideoCanvas::cancel_changes() {
 }
 
 QPointF VideoCanvas::frame_to_canvas(const cv::Point2f& pt_f) const {
-    float x = pt_f.x;
-    float y = pt_f.y;
-    const auto& roi = (mode_ == EditMode::IDLE) ? active_roi_ : editing_roi_;
-    if (roi.ref_width > 0 && video_w_ > 0 && roi.ref_width != static_cast<int>(video_w_)) {
-        x = x * video_w_ / static_cast<float>(roi.ref_width);
-    }
-    if (roi.ref_height > 0 && video_h_ > 0 && roi.ref_height != static_cast<int>(video_h_)) {
-        y = y * video_h_ / static_cast<float>(roi.ref_height);
-    }
-    return QPointF(x * scale_ + offset_x_, y * scale_ + offset_y_);
+    return QPointF(pt_f.x * scale_ + offset_x_, pt_f.y * scale_ + offset_y_);
 }
 
 cv::Point2f VideoCanvas::canvas_to_frame(const QPointF& pt_c) const {
@@ -773,7 +764,15 @@ int VideoCanvas::get_hovered_vertex_index(const QPointF& pt_c) const {
     const auto& roi = (mode_ == EditMode::IDLE) ? active_roi_ : editing_roi_;
     const float hit_radius_sq = 64.0f;
     for (int i = 0; i < static_cast<int>(roi.vertices.size()); ++i) {
-        QPointF v_c = frame_to_canvas(roi.vertices[i]);
+        float vx = roi.vertices[i].x;
+        float vy = roi.vertices[i].y;
+        if (roi.ref_width > 0 && video_w_ > 0 && roi.ref_width != static_cast<int>(video_w_)) {
+            vx = vx * video_w_ / static_cast<float>(roi.ref_width);
+        }
+        if (roi.ref_height > 0 && video_h_ > 0 && roi.ref_height != static_cast<int>(video_h_)) {
+            vy = vy * video_h_ / static_cast<float>(roi.ref_height);
+        }
+        QPointF v_c(vx * scale_ + offset_x_, vy * scale_ + offset_y_);
         float dx = pt_c.x() - v_c.x();
         float dy = pt_c.y() - v_c.y();
         if (dx * dx + dy * dy <= hit_radius_sq) {
