@@ -136,7 +136,7 @@ void EvidenceWidget::setup_ui() {
     right_scroll->setMinimumWidth(380);
     right_scroll->setWidgetResizable(true);
     right_scroll->setFrameShape(QFrame::NoFrame);
-    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    right_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     right_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     player_container_ = new QWidget(right_scroll);
@@ -182,7 +182,8 @@ void EvidenceWidget::setup_ui() {
     auto add_row = [&](int r, const QString& label_str, QLabel*& val_label) {
         auto* title = new QLabel(label_str, meta_card);
         title->setStyleSheet("color: #8b949e; font-size: 12px; font-weight: 500;");
-        title->setFixedWidth(68);
+        title->setMinimumWidth(75);
+        title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
         val_label = new QLabel("--", meta_card);
         val_label->setStyleSheet("color: #f0f6fc; font-size: 12px; font-weight: 500;");
         val_label->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -203,6 +204,7 @@ void EvidenceWidget::setup_ui() {
     btn_inspect_play_ = new QPushButton("▶  立即起播此证据切片", meta_card);
     btn_inspect_play_->setObjectName("btn_primary");
     btn_inspect_play_->setFixedHeight(34);
+    btn_inspect_play_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     btn_inspect_play_->setEnabled(false);
     connect(btn_inspect_play_, &QPushButton::clicked, this, [this]() {
         if (!selected_clip_path_.isEmpty()) {
@@ -227,8 +229,9 @@ void EvidenceWidget::setup_ui() {
     splitter->addWidget(right_scroll);
     splitter->setCollapsible(0, false);
     splitter->setCollapsible(1, false);
-    splitter->setStretchFactor(0, 65);
-    splitter->setStretchFactor(1, 35);
+    splitter->setStretchFactor(0, 60);
+    splitter->setStretchFactor(1, 40);
+    splitter->setSizes({1120, 750});
     main_layout->addWidget(splitter);
 
     // 连接信号槽

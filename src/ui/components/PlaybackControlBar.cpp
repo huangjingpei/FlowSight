@@ -52,88 +52,105 @@ void PlaybackControlBar::setup_ui() {
     root_layout->addLayout(timeline_layout);
 
     // ==========================================
-    // 第二行: 核心控制操作栏 (播放控制 + 音量 + 倍速 + 功能扩展)
+    // 第二行: 核心播控与音频控制行 (▶ 播放、■ 停止、⏪ 帧-、⏩ 帧+、状态、静音、音量)
     // ==========================================
-    auto* ctrl_layout = new QHBoxLayout();
-    ctrl_layout->setContentsMargins(0, 0, 0, 0);
-    ctrl_layout->setSpacing(6);
+    auto* ctrl_row1 = new QHBoxLayout();
+    ctrl_row1->setContentsMargins(0, 0, 0, 0);
+    ctrl_row1->setSpacing(6);
 
     // 播放/暂停
     btn_play_pause_ = new QPushButton("▶ 播放", this);
     btn_play_pause_->setCursor(Qt::PointingHandCursor);
-    btn_play_pause_->setFixedWidth(72);
-    ctrl_layout->addWidget(btn_play_pause_);
+    btn_play_pause_->setFixedWidth(68);
+    ctrl_row1->addWidget(btn_play_pause_);
 
     // 停止
     btn_stop_ = new QPushButton("■ 停止", this);
     btn_stop_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_stop_);
+    btn_stop_->setFixedWidth(52);
+    ctrl_row1->addWidget(btn_stop_);
 
     // 单帧步退与步进 (30FPS ~ 33ms)
-    btn_step_back_ = new QPushButton("⏪ 逐帧-", this);
+    btn_step_back_ = new QPushButton("⏪ 帧-", this);
     btn_step_back_->setToolTip("单帧精准步退 (约 33ms)");
     btn_step_back_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_step_back_);
+    btn_step_back_->setFixedWidth(50);
+    ctrl_row1->addWidget(btn_step_back_);
 
-    btn_step_fwd_ = new QPushButton("⏩ 逐帧+", this);
+    btn_step_fwd_ = new QPushButton("⏩ 帧+", this);
     btn_step_fwd_->setToolTip("单帧精准步进 (约 33ms)");
     btn_step_fwd_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_step_fwd_);
+    btn_step_fwd_->setFixedWidth(50);
+    ctrl_row1->addWidget(btn_step_fwd_);
 
-    // 运行状态小胶囊
+    // 运行状态指示小胶囊
     status_badge_ = new QLabel("● 就绪", this);
-    status_badge_->setStyleSheet("color: #3fb950; font-size: 11px; font-weight: bold; margin-left: 8px;");
-    ctrl_layout->addWidget(status_badge_);
+    status_badge_->setStyleSheet("color: #3fb950; font-size: 11px; font-weight: bold; margin-left: 4px;");
+    ctrl_row1->addWidget(status_badge_);
 
-    ctrl_layout->addStretch();
+    ctrl_row1->addStretch();
 
     // 音频控制组: 静音按钮 + 音量滑块 + 百分比标签
     btn_mute_ = new QPushButton("🔊", this);
     btn_mute_->setToolTip("静音 / 恢复声音");
-    btn_mute_->setFixedWidth(34);
+    btn_mute_->setFixedWidth(30);
     btn_mute_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_mute_);
+    ctrl_row1->addWidget(btn_mute_);
 
     slider_volume_ = new QSlider(Qt::Horizontal, this);
     slider_volume_->setRange(0, 100);
     slider_volume_->setValue(80);
-    slider_volume_->setFixedWidth(70);
+    slider_volume_->setFixedWidth(60);
     slider_volume_->setCursor(Qt::PointingHandCursor);
     slider_volume_->setToolTip("音量调节 (0% ~ 100%)");
-    ctrl_layout->addWidget(slider_volume_);
+    ctrl_row1->addWidget(slider_volume_);
 
     lbl_volume_val_ = new QLabel("80%", this);
-    lbl_volume_val_->setStyleSheet("color: #8b949e; font-size: 11px; min-width: 28px;");
-    ctrl_layout->addWidget(lbl_volume_val_);
+    lbl_volume_val_->setStyleSheet("color: #8b949e; font-size: 11px; min-width: 26px;");
+    ctrl_row1->addWidget(lbl_volume_val_);
 
-    ctrl_layout->addSpacing(8);
+    root_layout->addLayout(ctrl_row1);
 
-    // 播放倍速
+    // ==========================================
+    // 第三行: 专业回放功能工具栏 (倍速选择、循环切换、关键帧抓拍、全屏展开)
+    // ==========================================
+    auto* ctrl_row2 = new QHBoxLayout();
+    ctrl_row2->setContentsMargins(0, 0, 0, 0);
+    ctrl_row2->setSpacing(8);
+
+    auto* lbl_rate_title = new QLabel("倍速:", this);
+    lbl_rate_title->setStyleSheet("color: #8b949e; font-size: 11px;");
+    ctrl_row2->addWidget(lbl_rate_title);
+
     combo_rate_ = new QComboBox(this);
     combo_rate_->addItems({"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"});
     combo_rate_->setCurrentIndex(2); // 1.0x
     combo_rate_->setToolTip("播放倍速调整");
-    ctrl_layout->addWidget(combo_rate_);
+    combo_rate_->setFixedWidth(64);
+    ctrl_row2->addWidget(combo_rate_);
 
-    // 循环播放开关
     btn_loop_ = new QPushButton("🔁 循环: 关", this);
     btn_loop_->setCheckable(true);
     btn_loop_->setToolTip("开启/关闭循环播放");
     btn_loop_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_loop_);
+    btn_loop_->setFixedHeight(26);
+    ctrl_row2->addWidget(btn_loop_);
 
-    // 抓拍与全屏
-    btn_snapshot_ = new QPushButton("📸 抓拍", this);
+    ctrl_row2->addStretch();
+
+    btn_snapshot_ = new QPushButton("📸 关键帧抓拍", this);
     btn_snapshot_->setToolTip("截取当前高画质关键帧并保存至 snapshots/ 目录");
     btn_snapshot_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_snapshot_);
+    btn_snapshot_->setFixedHeight(26);
+    ctrl_row2->addWidget(btn_snapshot_);
 
     btn_fullscreen_ = new QPushButton("⛶ 全屏", this);
     btn_fullscreen_->setToolTip("进入/退出全屏");
     btn_fullscreen_->setCursor(Qt::PointingHandCursor);
-    ctrl_layout->addWidget(btn_fullscreen_);
+    btn_fullscreen_->setFixedHeight(26);
+    ctrl_row2->addWidget(btn_fullscreen_);
 
-    root_layout->addLayout(ctrl_layout);
+    root_layout->addLayout(ctrl_row2);
 
     // ==========================================
     // 内部事件连接
