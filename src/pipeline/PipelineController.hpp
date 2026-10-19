@@ -23,6 +23,7 @@ public:
     RoiConfig get_current_roi() const;
     std::vector<RoiConfig> get_current_rois() const;
     void reset_today_counts();
+    void set_roi_flow_direction(float angle_deg, bool invert);
 
     // 专业音视频播放控制 (支持音画同步与精确进度跳转)
     void play();

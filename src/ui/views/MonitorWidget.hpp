@@ -3,6 +3,8 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QProgressBar>
+#include <QComboBox>
+#include <QPushButton>
 #include "common/Types.hpp"
 #include "ui/components/PlaybackControlBar.hpp"
 
@@ -31,6 +33,7 @@ public:
 
 signals:
     void request_change_video(const QString& path);
+    void flow_direction_changed(float angle_deg, bool invert);
 
 public slots:
     void take_snapshot();
@@ -59,6 +62,10 @@ private:
 
     QProgressBar* surge_progress_ = nullptr;
     QLabel* surge_text_label_ = nullptr;
+
+    // 顶部快捷通行流向控制
+    QComboBox* dir_combo_ = nullptr;
+    QPushButton* btn_quick_invert_ = nullptr;
 
     // 实时通行抓拍记录审计流
     QListWidget* ticker_list_ = nullptr;

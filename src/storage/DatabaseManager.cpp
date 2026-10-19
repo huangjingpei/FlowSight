@@ -392,12 +392,14 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
                 cfg.flow_angle_deg = q.value(11).isNull() ? 90.0f : q.value(11).toFloat();
 
                 cfg.is_valid = (cfg.vertices.size() >= 3);
-                list.push_back(cfg);
+                if (cfg.is_valid) {
+                    list.push_back(cfg);
+                }
             }
         }
     }
 
-    // 若库中尚无任何标定记录，开箱即用自动生成并存入首选默认地面通道防区
+    // 若库中尚无任何有效标定记录（或因重置导致顶点被抹空），开箱即用自动自愈生成并存入首选默认地面通道防区
     if (list.empty()) {
         RoiConfig default_roi = make_default_corridor_roi(1920, 1080);
         save_roi_configs({default_roi});

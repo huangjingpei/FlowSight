@@ -79,10 +79,58 @@ void MonitorWidget::setup_ui() {
     );
     connect(btn_fullscreen, &QPushButton::clicked, this, &MonitorWidget::toggle_fullscreen);
 
+    auto* dir_box = new QWidget(video_top_bar);
+    auto* dir_layout = new QHBoxLayout(dir_box);
+    dir_layout->setContentsMargins(0, 0, 0, 0);
+    dir_layout->setSpacing(4);
+
+    auto* dir_title = new QLabel("通行流向:", dir_box);
+    dir_title->setStyleSheet("color: #8c96a3; font-size: 11px;");
+    dir_layout->addWidget(dir_title);
+
+    dir_combo_ = new QComboBox(dir_box);
+    dir_combo_->addItem("⬇️ 向前进入 (下)", 90.0f);
+    dir_combo_->addItem("⬆️ 纵深进入 (上)", 270.0f);
+    dir_combo_->addItem("➡️ 向右进入", 0.0f);
+    dir_combo_->addItem("⬅️ 向左进入", 180.0f);
+    dir_combo_->setStyleSheet(
+        "QComboBox { background: #1f2329; color: #58a6ff; border: 1px solid #2d323b; border-radius: 3px; padding: 2px 6px; font-size: 11px; } "
+        "QComboBox::drop-down { border: none; } "
+        "QComboBox QAbstractItemView { background-color: #1a1d22; color: #e6edf3; selection-background-color: #1f6feb; }"
+    );
+    dir_layout->addWidget(dir_combo_);
+
+    btn_quick_invert_ = new QPushButton("🔄 反向", dir_box);
+    btn_quick_invert_->setCursor(Qt::PointingHandCursor);
+    btn_quick_invert_->setCheckable(true);
+    btn_quick_invert_->setToolTip("一键对调进出方向 (180°)");
+    btn_quick_invert_->setStyleSheet(
+        "QPushButton { background-color: #1f2329; color: #8c96a3; border: 1px solid #2d323b; border-radius: 3px; padding: 2px 8px; font-size: 11px; } "
+        "QPushButton:hover { background-color: #282c34; color: #ffffff; } "
+        "QPushButton:checked { background-color: #388bfd; color: #ffffff; border-color: #58a6ff; font-weight: bold; }"
+    );
+    dir_layout->addWidget(btn_quick_invert_);
+
+    auto apply_direction = [this]() {
+        if (!dir_combo_ || !btn_quick_invert_) return;
+        float angle = dir_combo_->currentData().toFloat();
+        bool invert = btn_quick_invert_->isChecked();
+        if (canvas_) {
+            canvas_->set_active_roi_flow_angle(angle);
+            canvas_->set_active_roi_invert_direction(invert);
+        }
+        emit flow_direction_changed(angle, invert);
+    };
+
+    connect(dir_combo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, apply_direction);
+    connect(btn_quick_invert_, &QPushButton::toggled, this, apply_direction);
+
     top_hbox->addWidget(rec_dot);
     top_hbox->addSpacing(10);
     top_hbox->addWidget(res_tag_);
     top_hbox->addStretch();
+    top_hbox->addWidget(dir_box);
+    top_hbox->addSpacing(6);
     top_hbox->addWidget(btn_load_video);
     top_hbox->addWidget(btn_snapshot);
     top_hbox->addWidget(btn_fullscreen);
@@ -455,6 +503,21 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
 void MonitorWidget::update_active_rois(const std::vector<RoiConfig>& rois) {
     if (canvas_) {
         canvas_->set_rois(rois);
+    }
+    if (!rois.empty() && dir_combo_ && btn_quick_invert_) {
+        const auto& r = rois.front();
+        dir_combo_->blockSignals(true);
+        for (int i = 0; i < dir_combo_->count(); ++i) {
+            if (std::abs(dir_combo_->itemData(i).toFloat() - r.flow_angle_deg) < 1.0f) {
+                dir_combo_->setCurrentIndex(i);
+                break;
+            }
+        }
+        dir_combo_->blockSignals(false);
+
+        btn_quick_invert_->blockSignals(true);
+        btn_quick_invert_->setChecked(r.invert_direction);
+        btn_quick_invert_->blockSignals(false);
     }
 }
 

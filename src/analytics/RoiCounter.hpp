@@ -14,7 +14,9 @@ public:
     void process_frame(const std::vector<TrackObject>& tracks,
                        int64_t timestamp_ms,
                        int& current_occupancy,
-                       std::vector<PassageEvent>& out_events);
+                       std::vector<PassageEvent>& out_events,
+                       int frame_w = 0,
+                       int frame_h = 0);
 
     void reset();
 

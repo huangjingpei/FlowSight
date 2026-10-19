@@ -165,6 +165,21 @@ public:
         return active_roi_;
     }
 
+    void set_flow_direction(float angle_deg, bool invert) {
+        std::lock_guard<std::mutex> lock(roi_mtx_);
+        for (auto& r : active_rois_) {
+            r.flow_angle_deg = angle_deg;
+            r.invert_direction = invert;
+        }
+        if (!active_rois_.empty()) {
+            active_roi_.flow_angle_deg = angle_deg;
+            active_roi_.invert_direction = invert;
+        }
+        if (roi_counter_) {
+            roi_counter_->set_roi_configs(active_rois_);
+        }
+    }
+
     void change_video_source(const std::string& new_source) {
         std::lock_guard<std::mutex> lock(source_mtx_);
         pending_video_source_ = new_source;
@@ -334,7 +349,21 @@ public slots:
                     next_source = pending_video_source_;
                 }
                 cur_source = next_source;
+                last_w_ = 0;
+                last_h_ = 0; // 重置宽高缓存，强制在新视频首帧自适应分辨率防区
                 init_capture(cur_source);
+                if (tracker_) tracker_->reset();
+                if (roi_counter_) roi_counter_->reset();
+                AttributeClassifier::instance().clear_cache();
+                today_entry_ = 0;
+                today_exit_ = 0;
+                StatisticsSnapshot snap;
+                snap.current_occupancy = 0;
+                snap.today_entry = 0;
+                snap.today_exit = 0;
+                snap.today_total = 0;
+                if (detector_) snap.backend_name = detector_->get_backend_name();
+                emit stats_updated(snap);
             }
 
             // 2. 暂停与单帧步进处理
@@ -483,7 +512,7 @@ public slots:
             // 7. 区域滞后防抖计数
             int current_occupancy = 0;
             std::vector<PassageEvent> events;
-            roi_counter_->process_frame(tracks, now_ms, current_occupancy, events);
+            roi_counter_->process_frame(tracks, now_ms, current_occupancy, events, frame.cols, frame.rows);
 
             // 7.1 区域客流超载与拥挤度实时风控研判
             auto& cfg = ConfigManager::instance();
@@ -759,6 +788,12 @@ void PipelineController::on_worker_loop_restarted() {
 void PipelineController::reset_today_counts() {
     if (worker_) {
         worker_->reset_today_counts();
+    }
+}
+
+void PipelineController::set_roi_flow_direction(float angle_deg, bool invert) {
+    if (worker_) {
+        worker_->set_flow_direction(angle_deg, invert);
     }
 }
 

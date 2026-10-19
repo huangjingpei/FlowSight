@@ -91,10 +91,30 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());
         }
+        if (view_monitor_) {
+            view_monitor_->clear_display_records();
+        }
     });
     connect(view_settings_, &SettingsWidget::video_source_changed, this, [this](const QString& path) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());
+        }
+        if (view_monitor_) {
+            view_monitor_->clear_display_records();
+        }
+    });
+    connect(view_monitor_, &MonitorWidget::flow_direction_changed, this, [this](float angle, bool invert) {
+        if (pipeline_) {
+            pipeline_->set_roi_flow_direction(angle, invert);
+        }
+        auto rois = DatabaseManager::instance().load_latest_roi_configs();
+        for (auto& r : rois) {
+            r.flow_angle_deg = angle;
+            r.invert_direction = invert;
+        }
+        DatabaseManager::instance().save_roi_configs(rois);
+        if (view_studio_) {
+            view_studio_->set_rois(rois);
         }
     });
     connect(view_settings_, &SettingsWidget::settings_applied, this, [this](int thresh, bool, bool) {

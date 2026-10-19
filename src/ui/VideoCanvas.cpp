@@ -696,17 +696,22 @@ void VideoCanvas::start_drawing() {
 }
 
 void VideoCanvas::reset_roi() {
-    editing_roi_.vertices.clear();
-    editing_roi_.is_valid = false;
+    int w = video_w_ > 0 ? static_cast<int>(video_w_) : 1920;
+    int h = video_h_ > 0 ? static_cast<int>(video_h_) : 1080;
+    RoiConfig def_roi = make_default_corridor_roi(w, h, 1, "A门主通道", "#58a6ff");
+
     if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
-        rois_[active_roi_idx_].vertices.clear();
-        rois_[active_roi_idx_].is_valid = false;
+        rois_[active_roi_idx_] = def_roi;
+    } else {
+        rois_ = {def_roi};
+        active_roi_idx_ = 0;
     }
-    active_roi_ = editing_roi_;
+    active_roi_ = def_roi;
+    editing_roi_ = def_roi;
     mode_ = EditMode::IDLE;
     emit roi_applied(active_roi_);
     emit rois_applied(rois_);
-    emit polygon_status_changed(false, 0);
+    emit polygon_status_changed(true, static_cast<int>(active_roi_.vertices.size()));
     update();
 }
 
