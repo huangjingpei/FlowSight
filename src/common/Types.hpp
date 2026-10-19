@@ -36,9 +36,19 @@ struct RoiConfig {
     std::vector<cv::Point2f> vertices; // 任意 N 边形原始像素顶点 (N >= 3)
     float buffer_distance = 20.0f;     // 几何缓冲带距离 (px)
     int min_confirm_frames = 4;        // 状态确认帧数
+    float flow_angle_deg = 90.0f;      // 进方向基准朝向角度 (以视频像素坐标系: 0°向右, 90°向下/前进, 180°向左, 270°向上/后退)
     bool invert_direction = false;     // 是否反转进出判定朝向
     bool is_valid = false;
 };
+
+inline cv::Point2f get_roi_flow_unit_vector(float flow_angle_deg, bool invert_direction) {
+    float rad = flow_angle_deg * 3.14159265358979323846f / 180.0f;
+    cv::Point2f dir(std::cos(rad), std::sin(rad));
+    if (invert_direction) {
+        dir = -dir;
+    }
+    return dir;
+}
 
 inline RoiConfig make_default_corridor_roi(int width = 1920, int height = 1080, int roi_id = 1, const std::string& name = "A门主通道", const std::string& color = "#58a6ff") {
     RoiConfig cfg;
@@ -60,6 +70,7 @@ inline RoiConfig make_default_corridor_roi(int width = 1920, int height = 1080, 
     };
     cfg.buffer_distance = 10.0f;
     cfg.min_confirm_frames = 2;
+    cfg.flow_angle_deg = 90.0f;
     cfg.invert_direction = false;
     cfg.is_valid = true;
     return cfg;

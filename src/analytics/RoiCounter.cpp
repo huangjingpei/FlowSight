@@ -23,26 +23,9 @@ inline int64_t make_track_roi_key(int track_id, int roi_id) {
     return (static_cast<int64_t>(track_id) << 32) | (static_cast<uint32_t>(roi_id) & 0xFFFFFFFF);
 }
 
-// 计算防区几何重心与主流动法向基准向量 (与 VideoCanvas 矢量箭头保持完全一致)
-static cv::Point2f compute_flow_normal(const std::vector<cv::Point2f>& poly, const cv::Point2f& centroid, bool invert_direction) {
-    cv::Point2f upper_sum(0, 0), lower_sum(0, 0);
-    int upper_cnt = 0, lower_cnt = 0;
-    for (const auto& pt : poly) {
-        if (pt.y < centroid.y) { upper_sum += pt; upper_cnt++; }
-        else { lower_sum += pt; lower_cnt++; }
-    }
-    cv::Point2f dir(0.0f, 1.0f);
-    if (upper_cnt > 0 && lower_cnt > 0) {
-        dir = (lower_sum * (1.0f / static_cast<float>(upper_cnt))) - (upper_sum * (1.0f / static_cast<float>(lower_cnt)));
-    }
-    float len = std::hypot(dir.x, dir.y);
-    if (len > 1e-3f) dir *= (1.0f / len);
-    else dir = cv::Point2f(0.0f, 1.0f);
-
-    if (invert_direction) {
-        dir = -dir;
-    }
-    return dir;
+// 计算防区进方向法向基准向量 (依据 flow_angle_deg 与 invert_direction，与 VideoCanvas 矢量箭头保持完全一致)
+static cv::Point2f compute_flow_normal(const RoiConfig& roi) {
+    return get_roi_flow_unit_vector(roi.flow_angle_deg, roi.invert_direction);
 }
 
 struct RoiMeta {
@@ -84,7 +67,7 @@ public:
                     meta.max_y = std::max(meta.max_y, v.y);
                 }
                 meta.centroid *= (1.0f / static_cast<float>(r.vertices.size()));
-                meta.dir = compute_flow_normal(r.vertices, meta.centroid, r.invert_direction);
+                meta.dir = compute_flow_normal(r);
                 valid_rois.push_back(meta);
             }
         }

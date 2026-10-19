@@ -27,6 +27,7 @@ public:
     void remove_active_roi();
     void set_active_roi_name(const std::string& name);
     void set_active_roi_invert_direction(bool invert);
+    void set_active_roi_flow_angle(float deg);
     void set_active_roi_buffer_dist(float dist);
     void set_active_roi_confirm_frames(int frames);
 

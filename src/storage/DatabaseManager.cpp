@@ -72,6 +72,7 @@ bool DatabaseManager::init_database(const QString& db_path) {
     q.exec("ALTER TABLE roi_configs ADD COLUMN roi_id INTEGER DEFAULT 1;");
     q.exec("ALTER TABLE roi_configs ADD COLUMN name TEXT DEFAULT 'A门主通道';");
     q.exec("ALTER TABLE roi_configs ADD COLUMN color_hex TEXT DEFAULT '#58a6ff';");
+    q.exec("ALTER TABLE roi_configs ADD COLUMN flow_angle_deg REAL DEFAULT 90.0;");
 
     // 2. 通行明细表 (含短视频切片与属性)
     q.exec(
@@ -328,8 +329,8 @@ bool DatabaseManager::save_roi_configs(const std::vector<RoiConfig>& configs) {
         QString r_color = QString::fromStdString(config.color_hex.empty() ? "#58a6ff" : config.color_hex);
 
         QSqlQuery q(db);
-        q.prepare("INSERT INTO roi_configs (source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction, roi_id, name, color_hex) "
-                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        q.prepare("INSERT INTO roi_configs (source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction, roi_id, name, color_hex, flow_angle_deg) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         q.addBindValue(QString::fromStdString(src_id));
         q.addBindValue(next_ver);
         q.addBindValue(config.ref_width > 0 ? config.ref_width : 1920);
@@ -341,6 +342,7 @@ bool DatabaseManager::save_roi_configs(const std::vector<RoiConfig>& configs) {
         q.addBindValue(r_id);
         q.addBindValue(r_name);
         q.addBindValue(r_color);
+        q.addBindValue(config.flow_angle_deg);
         q.exec();
     }
 
@@ -359,7 +361,7 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
 
     if (latest_ver > 0) {
         QSqlQuery q(db);
-        q.prepare("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction, roi_id, name, color_hex "
+        q.prepare("SELECT source_id, roi_version, ref_width, ref_height, vertices_json, buffer_distance, min_confirm_frames, invert_direction, roi_id, name, color_hex, flow_angle_deg "
                   "FROM roi_configs WHERE roi_version = ? ORDER BY roi_id ASC");
         q.addBindValue(latest_ver);
         if (q.exec()) {
@@ -387,6 +389,7 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
                 if (cfg.name.empty()) cfg.name = "A门主通道";
                 cfg.color_hex = q.value(10).toString().toStdString();
                 if (cfg.color_hex.empty()) cfg.color_hex = "#58a6ff";
+                cfg.flow_angle_deg = q.value(11).isNull() ? 90.0f : q.value(11).toFloat();
 
                 cfg.is_valid = (cfg.vertices.size() >= 3);
                 list.push_back(cfg);

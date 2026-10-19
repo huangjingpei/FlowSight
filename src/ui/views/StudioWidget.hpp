@@ -50,6 +50,17 @@ private:
     QPushButton* btn_preset_default_ = nullptr;
 
     bool invert_direction_ = false;
+    float flow_angle_deg_ = 90.0f;
+
+    // 进出方向航向角配置控件
+    QPushButton* btn_dir_down_ = nullptr;
+    QPushButton* btn_dir_up_ = nullptr;
+    QPushButton* btn_dir_right_ = nullptr;
+    QPushButton* btn_dir_left_ = nullptr;
+    QSlider* dir_slider_ = nullptr;
+    QLabel* dir_angle_label_ = nullptr;
+
+    void update_direction_display(float deg, bool invert);
 
     QLabel* status_label_ = nullptr;
     QSlider* buffer_slider_ = nullptr;

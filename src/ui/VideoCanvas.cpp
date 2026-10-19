@@ -137,6 +137,15 @@ void VideoCanvas::set_active_roi_invert_direction(bool invert) {
     }
 }
 
+void VideoCanvas::set_active_roi_flow_angle(float deg) {
+    if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
+        rois_[active_roi_idx_].flow_angle_deg = deg;
+        editing_roi_.flow_angle_deg = deg;
+        active_roi_.flow_angle_deg = deg;
+        update();
+    }
+}
+
 void VideoCanvas::set_active_roi_buffer_dist(float dist) {
     if (active_roi_idx_ >= 0 && active_roi_idx_ < static_cast<int>(rois_.size())) {
         rois_[active_roi_idx_].buffer_distance = dist;
@@ -260,21 +269,9 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
             for (const auto& pt : poly) centroid += pt;
             centroid /= poly.size();
 
-            // 计算法向方向矢量
-            QPointF upper_half(0, 0); int upper_cnt = 0;
-            QPointF lower_half(0, 0); int lower_cnt = 0;
-            for (const auto& pt : poly) {
-                if (pt.y() < centroid.y()) { upper_half += pt; upper_cnt++; }
-                else { lower_half += pt; lower_cnt++; }
-            }
-            QPointF base_dir(0, 1);
-            if (upper_cnt > 0 && lower_cnt > 0) {
-                base_dir = (lower_half / lower_cnt) - (upper_half / upper_cnt);
-            }
-            float dir_len = std::hypot(base_dir.x(), base_dir.y());
-            if (dir_len > 1e-3f) base_dir /= dir_len;
-            else base_dir = QPointF(0, 1);
-
+            // 计算进方向法向矢量 (支持 0°~360° 任意航向角与反转朝向)
+            float rad = roi.flow_angle_deg * 3.14159265358979323846f / 180.0f;
+            QPointF base_dir(std::cos(rad), std::sin(rad));
             if (roi.invert_direction) base_dir = -base_dir;
 
             // 双向形象化罗盘指示系统:

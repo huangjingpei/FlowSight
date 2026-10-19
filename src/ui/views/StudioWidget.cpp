@@ -4,6 +4,8 @@
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QGridLayout>
+#include <cmath>
 
 StudioWidget::StudioWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -80,9 +82,9 @@ void StudioWidget::setup_ui() {
     tip_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 12px;");
     auto* op_label = new QLabel(
         "1. 在防区管理中选择或新建防区；\n"
-        "2. 点击 [重新打点]，画面单击落点，双击自动闭合多边形；\n"
-        "3. 标定后防区内显示形象化罗盘：🟢绿色箭头表示【进入 IN】，🔴红色箭头表示【离开 OUT】；\n"
-        "4. 如实际人流方向与当前相反，点击下方 [🔄 反转进出判定朝向] 即可一键对调；\n"
+        "2. 点击 [重新打点]，画面单击落点，双击自动闭合；\n"
+        "3. 在下方【进出判定方向】选择或滑动微调通行朝向；\n"
+        "4. 画面实时显示 🟢进入 [IN] 与 🔴离开 [OUT] 罗盘箭头；\n"
         "5. 拖拽红点微调单点，内部按住拖拽整体平移。",
         op_card
     );
@@ -101,13 +103,64 @@ void StudioWidget::setup_ui() {
     btn_reset_->setFixedHeight(32);
     tool_vbox->addWidget(btn_reset_);
 
-    btn_invert_dir_ = new QPushButton("🔄  反转进出判定朝向", this);
-    btn_invert_dir_->setFixedHeight(32);
+    // 进出通行航向配置组 (Direction Configuration Group)
+    auto* dir_group = new QGroupBox("🧭 通行进出判定方向配置", this);
+    auto* dir_vbox = new QVBoxLayout(dir_group);
+    dir_vbox->setSpacing(8);
+
+    dir_angle_label_ = new QLabel("当前进入方向: ⬇️ 向前/下 (90°)", this);
+    dir_angle_label_->setStyleSheet("color: #7ee787; font-weight: bold; font-size: 11px;");
+    dir_vbox->addWidget(dir_angle_label_);
+
+    // 4 大主方位快速切换网格 (2x2)
+    auto* dir_grid = new QGridLayout();
+    dir_grid->setSpacing(6);
+
+    auto btn_dir_style = "QPushButton { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; font-size: 11px; font-weight: 600; } QPushButton:hover { background-color: #30363d; color: #ffffff; }";
+
+    btn_dir_down_ = new QPushButton("⬇️ 向前/下", this);
+    btn_dir_down_->setFixedHeight(28);
+    btn_dir_down_->setStyleSheet(btn_dir_style);
+
+    btn_dir_up_ = new QPushButton("⬆️ 向后/上", this);
+    btn_dir_up_->setFixedHeight(28);
+    btn_dir_up_->setStyleSheet(btn_dir_style);
+
+    btn_dir_right_ = new QPushButton("➡️ 向右为进", this);
+    btn_dir_right_->setFixedHeight(28);
+    btn_dir_right_->setStyleSheet(btn_dir_style);
+
+    btn_dir_left_ = new QPushButton("⬅️ 向左为进", this);
+    btn_dir_left_->setFixedHeight(28);
+    btn_dir_left_->setStyleSheet(btn_dir_style);
+
+    dir_grid->addWidget(btn_dir_down_, 0, 0);
+    dir_grid->addWidget(btn_dir_up_, 0, 1);
+    dir_grid->addWidget(btn_dir_right_, 1, 0);
+    dir_grid->addWidget(btn_dir_left_, 1, 1);
+    dir_vbox->addLayout(dir_grid);
+
+    // 罗盘微调滑条 (0° ~ 359°)
+    auto* slider_row = new QHBoxLayout();
+    auto* s_title = new QLabel("航向微调:", this);
+    s_title->setStyleSheet("color: #8b949e; font-size: 11px;");
+    dir_slider_ = new QSlider(Qt::Horizontal, this);
+    dir_slider_->setRange(0, 359);
+    dir_slider_->setValue(90);
+    dir_slider_->setToolTip("拖拽罗盘角度 (0°向右, 90°向下, 180°向左, 270°向上)");
+    slider_row->addWidget(s_title);
+    slider_row->addWidget(dir_slider_);
+    dir_vbox->addLayout(slider_row);
+
+    btn_invert_dir_ = new QPushButton("🔄  进出判定一键对调 (180°)", this);
+    btn_invert_dir_->setFixedHeight(30);
     btn_invert_dir_->setStyleSheet(
-        "QPushButton { background-color: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 4px; font-weight: 600; font-size: 12px; } "
+        "QPushButton { background-color: #21262d; color: #58a6ff; border: 1px solid #30363d; border-radius: 4px; font-weight: 600; font-size: 11px; } "
         "QPushButton:hover { background-color: #30363d; border-color: #58a6ff; color: #ffffff; }"
     );
-    tool_vbox->addWidget(btn_invert_dir_);
+    dir_vbox->addWidget(btn_invert_dir_);
+
+    tool_vbox->addWidget(dir_group);
 
     btn_preset_default_ = new QPushButton("🎯  一键预置默认通道防区", this);
     btn_preset_default_->setFixedHeight(32);
@@ -217,10 +270,57 @@ void StudioWidget::setup_ui() {
         status_label_->setStyleSheet("color: #ff7675; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     });
 
+    connect(btn_dir_down_, &QPushButton::clicked, this, [this]() {
+        flow_angle_deg_ = 90.0f;
+        invert_direction_ = false;
+        canvas_->set_active_roi_flow_angle(90.0f);
+        canvas_->set_active_roi_invert_direction(false);
+        update_direction_display(90.0f, false);
+        status_label_->setText("● 进出朝向: 已设为【⬇️ 向前/下为进】(90°)");
+        status_label_->setStyleSheet("color: #7ee787; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
+    connect(btn_dir_up_, &QPushButton::clicked, this, [this]() {
+        flow_angle_deg_ = 270.0f;
+        invert_direction_ = false;
+        canvas_->set_active_roi_flow_angle(270.0f);
+        canvas_->set_active_roi_invert_direction(false);
+        update_direction_display(270.0f, false);
+        status_label_->setText("● 进出朝向: 已设为【⬆️ 向后/上为进】(270°)");
+        status_label_->setStyleSheet("color: #7ee787; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
+    connect(btn_dir_right_, &QPushButton::clicked, this, [this]() {
+        flow_angle_deg_ = 0.0f;
+        invert_direction_ = false;
+        canvas_->set_active_roi_flow_angle(0.0f);
+        canvas_->set_active_roi_invert_direction(false);
+        update_direction_display(0.0f, false);
+        status_label_->setText("● 进出朝向: 已设为【➡️ 向右为进】(0°)");
+        status_label_->setStyleSheet("color: #7ee787; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
+    connect(btn_dir_left_, &QPushButton::clicked, this, [this]() {
+        flow_angle_deg_ = 180.0f;
+        invert_direction_ = false;
+        canvas_->set_active_roi_flow_angle(180.0f);
+        canvas_->set_active_roi_invert_direction(false);
+        update_direction_display(180.0f, false);
+        status_label_->setText("● 进出朝向: 已设为【⬅️ 向左为进】(180°)");
+        status_label_->setStyleSheet("color: #7ee787; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
+    });
+
+    connect(dir_slider_, &QSlider::valueChanged, this, [this](int val) {
+        flow_angle_deg_ = static_cast<float>(val);
+        canvas_->set_active_roi_flow_angle(flow_angle_deg_);
+        update_direction_display(flow_angle_deg_, invert_direction_);
+    });
+
     connect(btn_invert_dir_, &QPushButton::clicked, this, [this]() {
         invert_direction_ = !invert_direction_;
         canvas_->set_active_roi_invert_direction(invert_direction_);
-        status_label_->setText(invert_direction_ ? "● 判定朝向: 已反转 (向外为进)" : "● 判定朝向: 默认方向 (向内为进)");
+        update_direction_display(flow_angle_deg_, invert_direction_);
+        status_label_->setText(invert_direction_ ? "● 判定朝向: 已反转进出方向 (180° 对调)" : "● 判定朝向: 恢复正向判定");
         status_label_->setStyleSheet("color: #58a6ff; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     });
 
@@ -262,6 +362,9 @@ void StudioWidget::refresh_roi_combo() {
         roi_name_edit_->setText(QString::fromStdString(cur.name));
     }
     invert_direction_ = cur.invert_direction;
+    flow_angle_deg_ = cur.flow_angle_deg;
+    update_direction_display(cur.flow_angle_deg, cur.invert_direction);
+
     if (buffer_slider_) {
         buffer_slider_->setValue(static_cast<int>(cur.buffer_distance));
     }
@@ -307,6 +410,11 @@ void StudioWidget::on_btn_start_draw() {
 
 void StudioWidget::on_btn_reset() {
     canvas_->reset_roi();
+    flow_angle_deg_ = 90.0f;
+    invert_direction_ = false;
+    canvas_->set_active_roi_flow_angle(90.0f);
+    canvas_->set_active_roi_invert_direction(false);
+    update_direction_display(90.0f, false);
     status_label_->setText("● 状态: 已清空区域");
     status_label_->setStyleSheet("color: #ff7675; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
 }
@@ -314,6 +422,7 @@ void StudioWidget::on_btn_reset() {
 void StudioWidget::on_btn_apply() {
     canvas_->set_active_roi_buffer_dist(static_cast<float>(buffer_slider_->value()));
     canvas_->set_active_roi_confirm_frames(confirm_slider_->value());
+    canvas_->set_active_roi_flow_angle(flow_angle_deg_);
     canvas_->set_active_roi_invert_direction(invert_direction_);
     if (roi_name_edit_) {
         canvas_->set_active_roi_name(roi_name_edit_->text().toStdString());
@@ -354,4 +463,44 @@ void StudioWidget::on_polygon_status(bool is_valid, int vertex_count) {
         status_label_->setText("● 非法多边形: 请避免线段自相交");
         status_label_->setStyleSheet("color: #ff4757; font-weight: bold; background: #21262d; padding: 6px; border-radius: 4px;");
     }
+}
+
+void StudioWidget::update_direction_display(float deg, bool invert) {
+    flow_angle_deg_ = deg;
+    invert_direction_ = invert;
+
+    float effective_angle = deg;
+    if (invert) {
+        effective_angle = std::fmod(deg + 180.0f, 360.0f);
+    }
+    if (effective_angle < 0.0f) effective_angle += 360.0f;
+
+    int int_ang = static_cast<int>(std::round(effective_angle)) % 360;
+    QString dir_name;
+    if (int_ang >= 45 && int_ang < 135) {
+        dir_name = "⬇️ 向前/下为进";
+    } else if (int_ang >= 135 && int_ang < 225) {
+        dir_name = "⬅️ 向左为进";
+    } else if (int_ang >= 225 && int_ang < 315) {
+        dir_name = "⬆️ 向后/上为进";
+    } else {
+        dir_name = "➡️ 向右为进";
+    }
+
+    if (dir_angle_label_) {
+        dir_angle_label_->setText(QString("当前进入方向: %1 (%2°)").arg(dir_name).arg(int_ang));
+    }
+    if (dir_slider_) {
+        dir_slider_->blockSignals(true);
+        dir_slider_->setValue(int_ang);
+        dir_slider_->blockSignals(false);
+    }
+
+    auto style_normal = "QPushButton { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 4px; font-size: 11px; font-weight: 600; } QPushButton:hover { background-color: #30363d; color: #ffffff; }";
+    auto style_active = "QPushButton { background-color: #1a3824; color: #7ee787; border: 1px solid #2ea043; border-radius: 4px; font-size: 11px; font-weight: bold; }";
+
+    if (btn_dir_down_) btn_dir_down_->setStyleSheet((int_ang == 90) ? style_active : style_normal);
+    if (btn_dir_up_) btn_dir_up_->setStyleSheet((int_ang == 270) ? style_active : style_normal);
+    if (btn_dir_right_) btn_dir_right_->setStyleSheet((int_ang == 0) ? style_active : style_normal);
+    if (btn_dir_left_) btn_dir_left_->setStyleSheet((int_ang == 180) ? style_active : style_normal);
 }
