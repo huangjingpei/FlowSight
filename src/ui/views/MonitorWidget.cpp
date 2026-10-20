@@ -638,3 +638,39 @@ void MonitorWidget::clear_display_records() {
         canvas_->set_crowd_surge_alert(false, 0, surge_threshold_);
     }
 }
+
+void MonitorWidget::populate_recent_events(const std::vector<PassageEvent>& events) {
+    if (!ticker_list_) return;
+    ticker_list_->clear();
+    // events 列表按时间降序（最新在上）
+    for (const auto& ev : events) {
+        QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("hh:mm:ss");
+        bool is_entry = (ev.direction == PassageDirection::ENTRY);
+        QString dir_tag = is_entry ? "🟢 进" : "🔴 出";
+        QString zone_str = QString("[%1]").arg(QString::fromStdString(ev.roi_name.empty() ? "A门通道" : ev.roi_name));
+
+        QString attr_str;
+        if (!ev.gender.empty() && ev.gender != "未知") {
+            attr_str = QString("%1").arg(QString::fromStdString(ev.gender));
+            if (!ev.age_group.empty() && ev.age_group != "未知") {
+                attr_str += QString("/%1").arg(QString::fromStdString(ev.age_group));
+            }
+        } else {
+            attr_str = "已记录";
+        }
+
+        QString item_text = QString("%1  %2  %3  目标#%4  (%5)")
+            .arg(time_str)
+            .arg(dir_tag)
+            .arg(zone_str)
+            .arg(ev.track_id)
+            .arg(attr_str);
+
+        auto* item = new QListWidgetItem(item_text, ticker_list_);
+        if (is_entry) {
+            item->setForeground(QColor("#7ee787"));
+        } else {
+            item->setForeground(QColor("#ff7b72"));
+        }
+    }
+}

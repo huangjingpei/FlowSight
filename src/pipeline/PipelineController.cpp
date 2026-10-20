@@ -239,10 +239,17 @@ public slots:
         if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
             resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
         }
-        AttributeClassifier::instance().init(resolved_attr_model);
-
-        // 开机恢复今日已入库的进出累计客流数
+        // 开机恢复今日已入库的进出累计客流数并立即广播同步大屏
         DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
+        {
+            StatisticsSnapshot init_snap;
+            init_snap.current_occupancy = 0;
+            init_snap.today_entry = today_entry_;
+            init_snap.today_exit = today_exit_;
+            init_snap.today_total = today_entry_ + today_exit_;
+            if (detector_) init_snap.backend_name = detector_->get_backend_name();
+            emit stats_updated(init_snap);
+        }
 
         std::string cur_source = video_source_;
         std::string resolved_video = resolve_resource_path(cur_source);
@@ -355,13 +362,13 @@ public slots:
                 if (tracker_) tracker_->reset();
                 if (roi_counter_) roi_counter_->reset();
                 AttributeClassifier::instance().clear_cache();
-                today_entry_ = 0;
-                today_exit_ = 0;
+                // 重新从 SQLite 恢复今日最新累计客流，绝不暴力清零！
+                DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
                 StatisticsSnapshot snap;
                 snap.current_occupancy = 0;
-                snap.today_entry = 0;
-                snap.today_exit = 0;
-                snap.today_total = 0;
+                snap.today_entry = today_entry_;
+                snap.today_exit = today_exit_;
+                snap.today_total = today_entry_ + today_exit_;
                 if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
             }
@@ -682,7 +689,9 @@ void PipelineController::stop_pipeline() {
 
 void PipelineController::set_video_source(const std::string& video_source) {
     if (worker_) {
-        worker_->change_video_source(video_source);
+        if (worker_->video_source_ != video_source) {
+            worker_->change_video_source(video_source);
+        }
     }
 
     // 检查是否为包含音频轨道的本地媒体文件

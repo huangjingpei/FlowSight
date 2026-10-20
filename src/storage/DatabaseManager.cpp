@@ -10,6 +10,7 @@
 
 #include <QThread>
 #include <QFileInfo>
+#include <QCoreApplication>
 
 DatabaseManager& DatabaseManager::instance() {
     static DatabaseManager inst;
@@ -33,8 +34,12 @@ QSqlDatabase DatabaseManager::get_database() {
 }
 
 bool DatabaseManager::init_database(const QString& db_path) {
-    db_path_ = db_path;
-    QFileInfo fi(db_path);
+    QString actual_path = db_path;
+    if (QDir::isRelativePath(actual_path)) {
+        actual_path = QCoreApplication::applicationDirPath() + "/" + actual_path;
+    }
+    db_path_ = actual_path;
+    QFileInfo fi(db_path_);
     QDir dir = fi.dir();
     if (!dir.exists()) {
         dir.mkpath(".");
@@ -412,33 +417,22 @@ std::vector<RoiConfig> DatabaseManager::load_latest_roi_configs() {
 void DatabaseManager::get_today_counts(int& out_entry, int& out_exit) {
     out_entry = 0;
     out_exit = 0;
-    QString today_str = QDateTime::currentDateTime().toString("yyyy-MM-dd");
 
     QSqlDatabase db = get_database();
     if (!db.isOpen()) return;
 
-    // 优先直接查询 stats_hourly 小时预聚合加速表 (至多扫描 24 行，< 0.1ms)
-    QSqlQuery q(db);
-    q.prepare("SELECT SUM(entry_count), SUM(exit_count) FROM stats_hourly WHERE date = ?");
-    q.addBindValue(today_str);
-    if (q.exec() && q.next()) {
-        if (!q.value(0).isNull() || !q.value(1).isNull()) {
-            out_entry = q.value(0).toInt();
-            out_exit = q.value(1).toInt();
-            return;
-        }
-    }
-
-    // 兜底回退：若 stats_hourly 无数据则查询原始明细
     QDateTime now = QDateTime::currentDateTime();
     int64_t start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
-    QSqlQuery q_fallback(db);
-    q_fallback.prepare("SELECT direction, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? GROUP BY direction");
-    q_fallback.addBindValue(static_cast<qint64>(start_ms));
-    if (q_fallback.exec()) {
-        while (q_fallback.next()) {
-            int dir = q_fallback.value(0).toInt();
-            int cnt = q_fallback.value(1).toInt();
+    int64_t end_ms = QDateTime(now.date(), QTime(23, 59, 59, 999)).toMSecsSinceEpoch();
+
+    QSqlQuery q(db);
+    q.prepare("SELECT direction, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? AND timestamp_ms <= ? GROUP BY direction");
+    q.addBindValue(static_cast<qint64>(start_ms));
+    q.addBindValue(static_cast<qint64>(end_ms));
+    if (q.exec()) {
+        while (q.next()) {
+            int dir = q.value(0).toInt();
+            int cnt = q.value(1).toInt();
             if (dir == static_cast<int>(PassageDirection::ENTRY)) {
                 out_entry = cnt;
             } else if (dir == static_cast<int>(PassageDirection::EXIT)) {

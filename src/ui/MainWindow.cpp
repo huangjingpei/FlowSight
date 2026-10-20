@@ -48,6 +48,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setup_ui();
     setup_connections();
 
+    // 冷启动从 SQLite 恢复今日累计统计与最新通行记录流水
+    {
+        int init_in = 0, init_out = 0;
+        DatabaseManager::instance().get_today_counts(init_in, init_out);
+        StatisticsSnapshot init_snap;
+        init_snap.current_occupancy = 0;
+        init_snap.today_entry = init_in;
+        init_snap.today_exit = init_out;
+        init_snap.today_total = init_in + init_out;
+        view_monitor_->update_stats(init_snap);
+
+        auto recent_events = DatabaseManager::instance().query_recent_events(50);
+        view_monitor_->populate_recent_events(recent_events);
+    }
+
     // 启动后台分析管线
     pipeline_ = std::make_unique<PipelineController>(this);
 
@@ -91,16 +106,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());
         }
-        if (view_monitor_) {
-            view_monitor_->clear_display_records();
-        }
     });
     connect(view_settings_, &SettingsWidget::video_source_changed, this, [this](const QString& path) {
         if (pipeline_) {
             pipeline_->set_video_source(path.toStdString());
-        }
-        if (view_monitor_) {
-            view_monitor_->clear_display_records();
         }
     });
     connect(view_monitor_, &MonitorWidget::flow_direction_changed, this, [this](float angle, bool invert) {

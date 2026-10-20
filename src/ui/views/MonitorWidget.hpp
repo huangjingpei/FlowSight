@@ -23,6 +23,7 @@ public:
     void set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold);
     void update_surge_threshold(int threshold);
     void clear_display_records();
+    void populate_recent_events(const std::vector<PassageEvent>& events);
 
     // 播放控制条状态同步
     void set_media_info(bool is_live, qint64 duration_ms, double fps);
