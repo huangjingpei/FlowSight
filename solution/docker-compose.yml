@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  flowsight-mysql:
+    image: mysql:8.0.34
+    container_name: flowsight-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: flowsight_cloud
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+      - ./backend/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  flowsight-redis:
+    image: redis:7.0-alpine
+    container_name: flowsight-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+
+  flowsight-minio:
+    image: minio/minio:RELEASE.2023-09-07T02-17-48Z
+    container_name: flowsight-minio
+    restart: always
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: flowsight_admin
+      MINIO_ROOT_PASSWORD: FlowSightMinio123!
+    ports:
+      - "9000:9000"     # API S3 端口
+      - "9001:9001"     # Web 控制台端口
+    volumes:
+      - ./data/minio:/data
