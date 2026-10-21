@@ -79,7 +79,7 @@ target_link_libraries(FlowSightEngine PRIVATE
 set(APP_ICON_RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.rc")
 set(APP_QRC "${CMAKE_CURRENT_SOURCE_DIR}/resources/app.qrc")
 
-add_executable(FlowSight
+add_executable(FlowSight WIN32
     ${SRC_COMMON}
     ${SRC_AI}
     ${SRC_TRACKING}
