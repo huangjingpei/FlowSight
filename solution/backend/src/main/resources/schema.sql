@@ -1,6 +1,4 @@
 -- FlowSight Cloud Backend Database Initialization Script (MySQL 8.0)
-CREATE DATABASE IF NOT EXISTS `flowsight_cloud` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `flowsight_cloud`;
 
 -- 1. 用户认证与租户表
 CREATE TABLE IF NOT EXISTS `sys_user` (

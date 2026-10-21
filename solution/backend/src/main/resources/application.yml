@@ -11,15 +11,23 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:flowsight_cloud}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:flowsight_cloud}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries=true
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:root1234}
+    password: ${MYSQL_PASSWORD:89dfu*#$ewr87l}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 20
       idle-timeout: 30000
       max-lifetime: 1800000
       connection-timeout: 30000
+
+  # 启动时自动初始化 schema.sql 数据表结构
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      encoding: UTF-8
+      continue-on-error: true
 
 
   data:
