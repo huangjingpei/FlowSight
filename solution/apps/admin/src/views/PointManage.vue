@@ -39,6 +39,13 @@
             <span style="font-weight: 600; color: #303133;">{{ row.pointName }}</span>
           </template>
         </el-table-column>
+        <el-table-column prop="pointCode" label="点位编码 (PointCode)" width="180">
+          <template #default="{ row }">
+            <el-tag type="warning" size="small" style="font-family: monospace; font-weight: bold;">
+              {{ row.pointCode }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="归属客户 / 商户" width="180">
           <template #default="{ row }">
             <div style="font-weight: 600; color: #1989fa;">
@@ -108,6 +115,12 @@
         <el-form-item label="点位名称" prop="pointName">
           <el-input v-model="createForm.pointName" placeholder="例如: 正门主通道 / 收银区" />
         </el-form-item>
+        <el-form-item label="点位编码">
+          <el-input v-model="createForm.pointCode" placeholder="例如: POINT_VK_EAST_01 (留空则系统自动生成)" />
+        </el-form-item>
+        <el-form-item label="设备密码(密码2)">
+          <el-input v-model="createForm.devicePassword" placeholder="边缘设备接入密码 (留空默认: Edge@123456)" />
+        </el-form-item>
         <el-form-item label="物理地址">
           <el-input v-model="createForm.address" placeholder="例如: 1号楼大厅西侧门" />
         </el-form-item>
@@ -134,6 +147,12 @@
       <el-form :model="editForm" label-width="110px">
         <el-form-item label="点位名称">
           <el-input v-model="editForm.pointName" />
+        </el-form-item>
+        <el-form-item label="点位编码">
+          <el-input v-model="editForm.pointCode" placeholder="例如: POINT_VK_EAST_01" />
+        </el-form-item>
+        <el-form-item label="重置设备密码">
+          <el-input v-model="editForm.devicePassword" placeholder="留空则不修改当前设备密码" />
         </el-form-item>
         <el-form-item label="物理地址">
           <el-input v-model="editForm.address" />
@@ -183,6 +202,8 @@ const createFormRef = ref();
 const createForm = reactive({
   userId: undefined as number | undefined,
   pointName: '',
+  pointCode: '',
+  devicePassword: '',
   address: '',
   cameraRtsp: '',
   resolution: '1920x1080'
@@ -197,6 +218,8 @@ const editVisible = ref(false);
 const currentEditId = ref<number | null>(null);
 const editForm = reactive({
   pointName: '',
+  pointCode: '',
+  devicePassword: '',
   address: '',
   cameraRtsp: '',
   resolution: ''
@@ -234,6 +257,8 @@ const clearUserFilter = () => {
 const openCreateDialog = () => {
   createForm.userId = filteredUserId.value;
   createForm.pointName = '';
+  createForm.pointCode = '';
+  createForm.devicePassword = '';
   createForm.address = '';
   createForm.cameraRtsp = '';
   createForm.resolution = '1920x1080';
@@ -262,6 +287,8 @@ const submitCreate = async () => {
 const openEditDialog = (row: any) => {
   currentEditId.value = row.id;
   editForm.pointName = row.pointName;
+  editForm.pointCode = row.pointCode || '';
+  editForm.devicePassword = '';
   editForm.address = row.address;
   editForm.cameraRtsp = row.cameraRtsp;
   editForm.resolution = row.resolution;

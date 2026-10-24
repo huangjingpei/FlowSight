@@ -93,7 +93,14 @@ public class PointServiceImpl implements PointService {
         BizPoint point = new BizPoint();
         point.setUserId(dto.getUserId());
         point.setPointName(dto.getPointName());
-        point.setPointCode("POINT_" + System.currentTimeMillis() % 1000000);
+        if (dto.getPointCode() != null && !dto.getPointCode().trim().isEmpty()) {
+            point.setPointCode(dto.getPointCode().trim());
+        } else {
+            point.setPointCode("POINT_" + System.currentTimeMillis() % 1000000);
+        }
+        String devPwd = (dto.getDevicePassword() != null && !dto.getDevicePassword().trim().isEmpty())
+                ? dto.getDevicePassword().trim() : "Edge@123456";
+        point.setDevicePasswordHash(passwordEncoder.encode(devPwd));
         point.setAddress(dto.getAddress() != null ? dto.getAddress() : "");
         point.setCameraRtsp(dto.getCameraRtsp() != null ? dto.getCameraRtsp() : "");
         point.setResolution(dto.getResolution() != null ? dto.getResolution() : "1920x1080");
@@ -111,6 +118,13 @@ public class PointServiceImpl implements PointService {
             throw new IllegalArgumentException("点位不存在");
         }
         if (dto.getPointName() != null) point.setPointName(dto.getPointName());
+        if (dto.getPointCode() != null && !dto.getPointCode().trim().isEmpty()) {
+            point.setPointCode(dto.getPointCode().trim());
+        }
+        if (dto.getDevicePassword() != null && !dto.getDevicePassword().trim().isEmpty()) {
+            point.setDevicePasswordHash(passwordEncoder.encode(dto.getDevicePassword().trim()));
+            point.setPointToken("ptk_" + UUID.randomUUID().toString().replace("-", ""));
+        }
         if (dto.getAddress() != null) point.setAddress(dto.getAddress());
         if (dto.getCameraRtsp() != null) point.setCameraRtsp(dto.getCameraRtsp());
         if (dto.getResolution() != null) point.setResolution(dto.getResolution());

@@ -10,6 +10,10 @@ public class PointCreateDTO {
     @NotBlank(message = "点位名称不能为空")
     private String pointName;
 
+    private String pointCode; // 点位唯一编码 (若为空则由后台自动生成)
+
+    private String devicePassword; // 边缘设备专属接入密码 (密码 2，默认 Edge@123456)
+
     private String address;
 
     private String cameraRtsp;
