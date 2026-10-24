@@ -181,10 +181,12 @@ void EdgeReportManager::send_test_batch(std::function<void(bool success, const Q
     QJsonArray events_arr;
     QJsonObject ev_obj;
     ev_obj["trackId"] = 999;
+    ev_obj["track_id"] = 999;
     ev_obj["direction"] = "ENTRY";
     ev_obj["confidence"] = 0.95;
     ev_obj["timestamp"] = now_ts;
     ev_obj["clipPath"] = "";
+    ev_obj["clip_path"] = "";
     QJsonObject attrs;
     attrs["gender"] = "男";
     attrs["age_group"] = "青年(18-35)";
@@ -385,10 +387,12 @@ void EdgeReportManager::flush_batch() {
     for (const auto& ev : batch_events_) {
         QJsonObject ev_obj;
         ev_obj["trackId"] = ev.track_id;
+        ev_obj["track_id"] = ev.track_id;
         ev_obj["direction"] = (ev.direction == PassageDirection::ENTRY) ? "ENTRY" : "EXIT";
         ev_obj["confidence"] = static_cast<double>(ev.confidence);
         ev_obj["timestamp"] = static_cast<qint64>(ev.timestamp_ms);
         ev_obj["clipPath"] = QString::fromStdString(ev.clip_path);
+        ev_obj["clip_path"] = QString::fromStdString(ev.clip_path);
         QJsonObject attrs;
         attrs["gender"] = QString::fromStdString(ev.gender);
         attrs["age_group"] = QString::fromStdString(ev.age_group);

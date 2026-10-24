@@ -1,5 +1,6 @@
 package com.flowsight.cloud.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
@@ -7,12 +8,14 @@ import java.util.Map;
 
 @Data
 public class EdgeEventDTO {
-    @JsonProperty("event_type")
+    @JsonAlias({"event_type", "eventType"})
+    @JsonProperty("eventType")
     private String eventType;
 
     private String direction; // ENTRY, EXIT
 
-    @JsonProperty("track_id")
+    @JsonAlias({"track_id", "trackId"})
+    @JsonProperty("trackId")
     private Integer trackId;
 
     private Long timestamp;
@@ -21,10 +24,12 @@ public class EdgeEventDTO {
 
     private Float confidence;
 
-    @JsonProperty("source_id")
+    @JsonAlias({"source_id", "sourceId"})
+    @JsonProperty("sourceId")
     private String sourceId;
 
-    @JsonProperty("clip_path")
+    @JsonAlias({"clip_path", "clipPath"})
+    @JsonProperty("clipPath")
     private String clipPath;
 
     private Map<String, String> attributes; // gender, age_group
