@@ -3,7 +3,7 @@ import Login from '../views/Login.vue';
 import Dashboard from '../views/Dashboard.vue';
 import Trends from '../views/Trends.vue';
 import Playback from '../views/Playback.vue';
-import Insights from '../views/Insights.vue';
+import Settings from '../views/Settings.vue';
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -11,7 +11,8 @@ const routes = [
   { path: '/dashboard', component: Dashboard },
   { path: '/trends', component: Trends },
   { path: '/playback', component: Playback },
-  { path: '/insights', component: Insights }
+  { path: '/settings', component: Settings },
+  { path: '/insights', redirect: '/settings' }
 ];
 
 const router = createRouter({

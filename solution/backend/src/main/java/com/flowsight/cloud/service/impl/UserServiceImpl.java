@@ -152,4 +152,23 @@ public class UserServiceImpl implements UserService {
         vo.setPointCount(ptCount != null ? ptCount.intValue() : 0);
         return vo;
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        if (userId == null) throw new IllegalArgumentException("用户ID不能为空");
+        if (newPassword == null || newPassword.trim().length() < 6) {
+            throw new IllegalArgumentException("新密码长度不能少于6位");
+        }
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) throw new IllegalArgumentException("用户不存在");
+
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new IllegalArgumentException("原密码不正确，请核对后重试");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        user.setUpdateTime(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
 }

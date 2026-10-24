@@ -147,29 +147,65 @@ const renderECharts = () => {
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#182030',
-      borderColor: '#1E2636',
+      borderColor: '#2A364F',
       borderWidth: 1,
-      padding: [6, 10],
-      textStyle: { color: '#FFFFFF', fontSize: 11, fontWeight: 600 },
-      axisPointer: { type: isBar ? 'shadow' : 'line', lineStyle: { color: '#00D2FF', width: 1 } }
+      padding: [8, 12],
+      textStyle: { color: '#FFFFFF', fontSize: 12, fontWeight: 600 },
+      axisPointer: { type: isBar ? 'shadow' : 'line', lineStyle: { color: '#00D2FF', width: 1.5, type: 'dashed' } }
     },
     grid: {
-      left: '3%',
-      right: '3%',
-      top: '8%',
-      bottom: '10%',
+      left: '4%',
+      right: '8%',
+      top: '16%',
+      bottom: '12%',
       containLabel: true
     },
     xAxis: {
       type: 'category',
+      name: '时间',
+      nameLocation: 'end',
+      nameTextStyle: { color: '#94A3B8', fontSize: 11, padding: [0, 0, 0, 4] },
       data: categories,
       boundaryGap: isBar,
-      axisLine: { lineStyle: { color: '#1E2636' } },
+      axisLine: {
+        show: true,
+        symbol: ['none', 'arrow'],
+        symbolSize: [6, 10],
+        symbolOffset: [0, 8],
+        lineStyle: { color: '#475569', width: 1.5 }
+      },
+      axisTick: {
+        show: true,
+        alignWithLabel: true,
+        lineStyle: { color: '#475569' }
+      },
+      splitLine: {
+        show: true,
+        lineStyle: { color: '#1A2230', type: 'dashed' }
+      },
       axisLabel: { color: '#94A3B8', fontSize: 10, interval: categories.length > 14 ? 1 : 0 }
     },
     yAxis: {
       type: 'value',
-      splitLine: { lineStyle: { color: '#182030', type: 'dashed' } },
+      name: '人次 (人)',
+      nameLocation: 'end',
+      nameTextStyle: { color: '#94A3B8', fontSize: 11, padding: [0, 0, 6, 0] },
+      minInterval: 1,
+      axisLine: {
+        show: true,
+        symbol: ['none', 'arrow'],
+        symbolSize: [6, 10],
+        symbolOffset: [0, 8],
+        lineStyle: { color: '#475569', width: 1.5 }
+      },
+      axisTick: {
+        show: true,
+        lineStyle: { color: '#475569' }
+      },
+      splitLine: {
+        show: true,
+        lineStyle: { color: '#1F293D', type: 'dashed' }
+      },
       axisLabel: { color: '#94A3B8', fontSize: 10 }
     },
     series: [

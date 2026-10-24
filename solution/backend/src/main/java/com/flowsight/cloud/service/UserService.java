@@ -11,4 +11,5 @@ public interface UserService {
     void updateUser(Long id, UserUpdateDTO dto);
     void deleteUserCascadeCloud(Long id);
     UserVO getUserById(Long id);
+    void changePassword(Long userId, String oldPassword, String newPassword);
 }

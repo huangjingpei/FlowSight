@@ -3,17 +3,19 @@
     <!-- 1. 顶部嵌入式标题栏 -->
     <header class="flat-header">
       <div class="header-left">
-        <span class="status-dot" :class="summary.streamStatus === 'ONLINE' ? 'online' : 'offline'"></span>
+        <span class="header-dot"></span>
         <span class="company-name">{{ currentCompanyName }}</span>
       </div>
-      <div class="header-right" @click="handleLogout">
-        <span class="logout-btn">退出</span>
+      <div class="header-right">
+        <span class="live-status-pill" :class="summary.streamStatus === 'ONLINE' ? 'online' : 'offline'">
+          {{ summary.streamStatus === 'ONLINE' ? '● 边缘在线' : '○ 边缘离线' }}
+        </span>
       </div>
     </header>
 
-    <!-- 2. 主体：单屏纯平数据仪表盘 (无圈套、无滚动、数据极度聚焦) -->
+    <!-- 2. 主体：单屏纯平实时监控 (无圈套、5秒近实时动态曲线、数据极度聚焦) -->
     <main class="flat-main">
-      <!-- 行 1: 通道选择条 -->
+      <!-- 行 1: 通道点位选择条 -->
       <div class="flat-point-bar">
         <span class="point-label">监控通道:</span>
         <div class="point-select-wrap">
@@ -23,21 +25,19 @@
             </option>
           </select>
         </div>
-        <span class="online-tag" :class="summary.streamStatus === 'ONLINE' ? 'tag-online' : 'tag-offline'">
-          {{ summary.streamStatus === 'ONLINE' ? '在线' : '离线' }}
-        </span>
+        <span class="poll-badge">5s实时同步</span>
       </div>
 
-      <!-- 行 2: 四大核心客流指标矩阵 (扁平化高反差色块，大字号聚焦) -->
+      <!-- 行 2: 四大核心客流指标矩阵 (扁平化高反差色块) -->
       <div class="kpi-matrix">
         <!-- 1. 瞬时滞留 -->
         <div class="kpi-block border-cyan">
           <div class="kpi-top">
-            <span class="kpi-title">瞬时滞留</span>
-            <span class="kpi-badge badge-cyan">在场</span>
+            <span class="kpi-title">瞬时在场</span>
+            <span class="kpi-badge badge-cyan">实时</span>
           </div>
           <div class="kpi-num text-cyan">{{ summary.currentOccupancy }}<span class="kpi-unit">人</span></div>
-          <div class="kpi-footer">当前通道内实时在场</div>
+          <div class="kpi-footer">当前通道内滞留感知</div>
         </div>
 
         <!-- 2. 今日进入 -->
@@ -47,27 +47,27 @@
             <span class="kpi-badge badge-green">进场</span>
           </div>
           <div class="kpi-num text-green">{{ summary.todayEntry }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">当日累计进门总人次</div>
+          <div class="kpi-footer">今日累计进门总人次</div>
         </div>
 
         <!-- 3. 今日离开 -->
         <div class="kpi-block border-orange">
           <div class="kpi-top">
             <span class="kpi-title">累计离开 (Out)</span>
-            <span class="kpi-badge badge-orange">离场</span>
+            <span class="kpi-badge badge-orange">出场</span>
           </div>
           <div class="kpi-num text-orange">{{ summary.todayExit }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">当日累计出门总人次</div>
+          <div class="kpi-footer">今日累计出门总人次</div>
         </div>
 
         <!-- 4. 双向总流 -->
         <div class="kpi-block border-purple">
           <div class="kpi-top">
             <span class="kpi-title">双向总客流</span>
-            <span class="kpi-badge badge-purple">汇聚</span>
+            <span class="kpi-badge badge-purple">通量</span>
           </div>
           <div class="kpi-num text-purple">{{ summary.todayTotal }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">进出双向总吞吐通量</div>
+          <div class="kpi-footer">双向累计综合总人次</div>
         </div>
       </div>
 
@@ -75,28 +75,23 @@
       <div class="flat-status-bar" :class="summary.currentOccupancy > 30 ? 'status-warn' : 'status-ok'">
         <span class="status-icon">{{ summary.currentOccupancy > 30 ? '⚠️' : '✓' }}</span>
         <span class="status-msg">
-          {{ summary.currentOccupancy > 30 ? '当前人流密度偏高，已触发疏导指引' : '通道通行状态与人流安全基线正常' }}
+          {{ summary.currentOccupancy > 30 ? '当前人流密度偏高，已触发人流疏导指引' : '通道通行状态感知与安全基线正常' }}
         </span>
       </div>
 
-      <!-- 行 4: 底部边缘节点工业遥测条 -->
-      <div class="flat-tele-bar">
-        <div class="tele-col">
-          <span class="t-label">推理引擎</span>
-          <span class="t-val text-cyan">YOLOv8</span>
+      <!-- 行 4: 实时动态流速折线图 (5秒近实时刷新动态绘制，自适应填满剩余空间) -->
+      <div class="realtime-wave-card">
+        <div class="wave-header">
+          <div class="wave-title-box">
+            <span class="wave-dot"></span>
+            <span class="wave-title">通道实时流速脉冲 (5秒步进动态曲线)</span>
+          </div>
+          <div class="wave-legend">
+            <span class="w-leg-item"><i class="w-dot cyan"></i>进入流速</span>
+            <span class="w-leg-item"><i class="w-dot pink"></i>离开流速</span>
+          </div>
         </div>
-        <div class="tele-col">
-          <span class="t-label">采集帧率</span>
-          <span class="t-val text-green">30.0 FPS</span>
-        </div>
-        <div class="tele-col">
-          <span class="t-label">单帧时延</span>
-          <span class="t-val text-orange">14.2 ms</span>
-        </div>
-        <div class="tele-col">
-          <span class="t-label">离线积压</span>
-          <span class="t-val text-white">0 同步</span>
-        </div>
+        <div ref="pulseChartRef" class="pulse-chart-container"></div>
       </div>
     </main>
   </div>
@@ -104,14 +99,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { showToast, showDialog } from 'vant';
+import * as echarts from 'echarts';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
 
-const router = useRouter();
 const pointStore = usePointStore();
-
 const activePointId = ref<number>(0);
 
 const currentCompanyName = computed(() => {
@@ -119,10 +111,10 @@ const currentCompanyName = computed(() => {
     const raw = localStorage.getItem('flowsight_user');
     if (raw) {
       const u = JSON.parse(raw);
-      return u.companyName || u.nickname || 'FlowSight 决策中台';
+      return u.companyName || u.nickname || 'FlowSight 实时监控';
     }
   } catch (e) {}
-  return 'FlowSight 决策中台';
+  return 'FlowSight 实时监控';
 });
 
 const summary = ref<DashboardSummaryVO>({
@@ -146,7 +138,18 @@ const summary = ref<DashboardSummaryVO>({
   hourlyChart: []
 });
 
-let timer: any = null;
+// 实时 5 秒动态波形数据
+const pulseChartRef = ref<HTMLDivElement | null>(null);
+let pulseChart: echarts.ECharts | null = null;
+let pollTimer: any = null;
+
+// 滑动时间序列 (保持最近 12 个 5s 时间点)
+const waveTimeline = ref<string[]>([]);
+const waveEntryDelta = ref<number[]>([]);
+const waveExitDelta = ref<number[]>([]);
+
+let lastEntryCount = -1;
+let lastExitCount = -1;
 
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({
@@ -165,46 +168,207 @@ const loadPoints = async () => {
   } catch (e) {}
 };
 
-const loadSummary = async () => {
+// 5秒轮询：拉取当前通道最新人数与变化，推入动态时序
+const pollTick = async () => {
   if (!activePointId.value) return;
   try {
     const data: any = await h5Api.getDashboardSummary(activePointId.value);
     summary.value = data;
+
+    const now = new Date();
+    const timeStr = [
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+      String(now.getSeconds()).padStart(2, '0')
+    ].join(':');
+
+    let inDelta = 0;
+    let outDelta = 0;
+
+    if (lastEntryCount >= 0) {
+      inDelta = Math.max(0, data.todayEntry - lastEntryCount);
+    }
+    if (lastExitCount >= 0) {
+      outDelta = Math.max(0, data.todayExit - lastExitCount);
+    }
+
+    lastEntryCount = data.todayEntry;
+    lastExitCount = data.todayExit;
+
+    // 滑动窗口：保留最近 12 个点
+    waveTimeline.value.push(timeStr);
+    waveEntryDelta.value.push(inDelta);
+    waveExitDelta.value.push(outDelta);
+
+    if (waveTimeline.value.length > 12) {
+      waveTimeline.value.shift();
+      waveEntryDelta.value.shift();
+      waveExitDelta.value.shift();
+    }
+
+    renderPulseChart();
   } catch (e) {}
 };
 
-const onPointChange = () => {
-  loadSummary();
+const renderPulseChart = () => {
+  if (!pulseChartRef.value) return;
+  if (!pulseChart) {
+    pulseChart = echarts.init(pulseChartRef.value);
+  }
+
+  const option: echarts.EChartsOption = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#182030',
+      borderColor: '#2A364F',
+      borderWidth: 1,
+      padding: [6, 10],
+      textStyle: { color: '#FFFFFF', fontSize: 11, fontWeight: 600 },
+      axisPointer: { type: 'line', lineStyle: { color: '#00D2FF', width: 1, type: 'dashed' } }
+    },
+    grid: {
+      left: '3%',
+      right: '6%',
+      top: '16%',
+      bottom: '14%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: waveTimeline.value,
+      name: '时间',
+      nameLocation: 'end',
+      nameTextStyle: { color: '#94A3B8', fontSize: 10, padding: [0, 0, 0, 2] },
+      axisLine: {
+        show: true,
+        symbol: ['none', 'arrow'],
+        symbolSize: [6, 8],
+        symbolOffset: [0, 6],
+        lineStyle: { color: '#475569', width: 1.5 }
+      },
+      axisTick: {
+        show: true,
+        alignWithLabel: true,
+        lineStyle: { color: '#475569' }
+      },
+      splitLine: {
+        show: true,
+        lineStyle: { color: '#1A2230', type: 'dashed' }
+      },
+      axisLabel: { color: '#94A3B8', fontSize: 10 }
+    },
+    yAxis: {
+      type: 'value',
+      name: '流速(人/5s)',
+      nameLocation: 'end',
+      nameTextStyle: { color: '#94A3B8', fontSize: 10, padding: [0, 0, 6, 0] },
+      minInterval: 1,
+      axisLine: {
+        show: true,
+        symbol: ['none', 'arrow'],
+        symbolSize: [6, 8],
+        symbolOffset: [0, 6],
+        lineStyle: { color: '#475569', width: 1.5 }
+      },
+      axisTick: {
+        show: true,
+        lineStyle: { color: '#475569' }
+      },
+      splitLine: {
+        show: true,
+        lineStyle: { color: '#1F293D', type: 'dashed' }
+      },
+      axisLabel: { color: '#94A3B8', fontSize: 10 }
+    },
+    series: [
+      {
+        name: '进入流速',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 5,
+        itemStyle: { color: '#00D2FF' },
+        lineStyle: { width: 2.5 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(0, 210, 255, 0.3)' },
+            { offset: 1, color: 'rgba(0, 210, 255, 0.0)' }
+          ])
+        },
+        data: waveEntryDelta.value
+      },
+      {
+        name: '离开流速',
+        type: 'line',
+        smooth: 0.35,
+        symbol: 'circle',
+        symbolSize: 5,
+        itemStyle: { color: '#FF3D71' },
+        lineStyle: { width: 2.5 },
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(255, 61, 113, 0.3)' },
+            { offset: 1, color: 'rgba(255, 61, 113, 0.0)' }
+          ])
+        },
+        data: waveExitDelta.value
+      }
+    ]
+  };
+
+  pulseChart.setOption(option);
 };
 
-const handleLogout = () => {
-  showDialog({
-    title: '安全登出',
-    message: '确定要退出当前 FlowSight 决策账号吗？',
-    showCancelButton: true
-  }).then(() => {
-    localStorage.removeItem('flowsight_token');
-    localStorage.removeItem('flowsight_user');
-    showToast('已安全登出');
-    router.push('/login');
-  }).catch(() => {});
+const onPointChange = () => {
+  lastEntryCount = -1;
+  lastExitCount = -1;
+  waveTimeline.value = [];
+  waveEntryDelta.value = [];
+  waveExitDelta.value = [];
+  pollTick();
+};
+
+const handleResize = () => {
+  if (pulseChart) pulseChart.resize();
 };
 
 onMounted(async () => {
   await loadPoints();
-  if (activePointId.value) {
-    await loadSummary();
+  // 初始化时间轴缓冲
+  const now = new Date();
+  for (let i = 5; i >= 1; i--) {
+    const t = new Date(now.getTime() - i * 5000);
+    const ts = [
+      String(t.getHours()).padStart(2, '0'),
+      String(t.getMinutes()).padStart(2, '0'),
+      String(t.getSeconds()).padStart(2, '0')
+    ].join(':');
+    waveTimeline.value.push(ts);
+    waveEntryDelta.value.push(0);
+    waveExitDelta.value.push(0);
   }
-  timer = setInterval(loadSummary, 10000);
+
+  await pollTick();
+
+  // 严格 5 秒一次近实时动态刷新
+  const pollRateSec = Number(localStorage.getItem('flowsight_poll_rate') || 5);
+  pollTimer = setInterval(pollTick, pollRateSec * 1000);
+
+  window.addEventListener('resize', handleResize);
 });
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer);
+  if (pollTimer) clearInterval(pollTimer);
+  window.removeEventListener('resize', handleResize);
+  if (pulseChart) {
+    pulseChart.dispose();
+    pulseChart = null;
+  }
 });
 </script>
 
 <style scoped>
-/* 整个页面视口高度固定，严禁任何滚动 */
+/* 整个页面视口高度固定，严禁任何页面滚动 */
 .dashboard-viewport {
   width: 100%;
   height: 100%;
@@ -234,13 +398,12 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.status-dot {
+.header-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background: #00D2FF;
 }
-.status-dot.online { background: #00E676; }
-.status-dot.offline { background: #FF3D71; }
 
 .company-name {
   font-size: 14px;
@@ -253,19 +416,19 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.logout-btn {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94A3B8;
-  cursor: pointer;
-  padding: 3px 8px;
+.live-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
   border-radius: 4px;
-  background: #182030;
-  border: 1px solid #2A364F;
 }
-.logout-btn:active {
+.live-status-pill.online {
+  background: rgba(0, 230, 118, 0.15);
+  color: #00E676;
+}
+.live-status-pill.offline {
+  background: rgba(255, 61, 113, 0.15);
   color: #FF3D71;
-  border-color: #FF3D71;
 }
 
 /* 主体内容区：纯平单屏填充 */
@@ -278,13 +441,13 @@ onUnmounted(() => {
   padding: 8px 10px;
   box-sizing: border-box;
   overflow: hidden;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* 行 1: 点位选择条 */
 .flat-point-bar {
   flex-shrink: 0;
-  height: 36px;
+  height: 34px;
   background: #121722;
   border: 1px solid #1E2636;
   border-radius: 6px;
@@ -295,7 +458,7 @@ onUnmounted(() => {
 }
 
 .point-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #94A3B8;
   font-weight: 600;
   flex-shrink: 0;
@@ -307,7 +470,7 @@ onUnmounted(() => {
 
 .flat-select {
   width: 100%;
-  height: 26px;
+  height: 24px;
   background: transparent;
   color: #FFFFFF;
   border: none;
@@ -316,38 +479,38 @@ onUnmounted(() => {
   outline: none;
 }
 
-.online-tag {
+.poll-badge {
   font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
+  color: #00D2FF;
+  background: rgba(0, 210, 255, 0.12);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
   flex-shrink: 0;
 }
-.tag-online { background: rgba(0, 230, 118, 0.15); color: #00E676; }
-.tag-offline { background: rgba(255, 61, 113, 0.15); color: #FF3D71; }
 
 /* 行 2: 四大指标矩阵 (2x2，等高自适应) */
 .kpi-matrix {
   flex: 1;
   min-height: 0;
+  max-height: 180px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 
 .kpi-block {
   background: #121722;
   border: 1px solid #1E2636;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   box-sizing: border-box;
 }
 
-/* 扁平纯色左侧重点色 */
 .border-cyan { border-left: 3px solid #00D2FF; }
 .border-green { border-left: 3px solid #00E676; }
 .border-orange { border-left: 3px solid #FF9100; }
@@ -360,16 +523,16 @@ onUnmounted(() => {
 }
 
 .kpi-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #CBD5E1;
 }
 
 .kpi-badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
+  padding: 1px 4px;
+  border-radius: 2px;
 }
 .badge-cyan { background: rgba(0, 210, 255, 0.12); color: #00D2FF; }
 .badge-green { background: rgba(0, 230, 118, 0.12); color: #00E676; }
@@ -377,10 +540,10 @@ onUnmounted(() => {
 .badge-purple { background: rgba(157, 78, 221, 0.12); color: #9D4EDD; }
 
 .kpi-num {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
   line-height: 1;
-  margin: 4px 0;
+  margin: 2px 0;
 }
 
 .text-cyan { color: #00D2FF; }
@@ -389,23 +552,23 @@ onUnmounted(() => {
 .text-purple { color: #9D4EDD; }
 
 .kpi-unit {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #64748B;
   margin-left: 2px;
 }
 
 .kpi-footer {
-  font-size: 10px;
+  font-size: 9px;
   color: #64748B;
 }
 
 /* 行 3: 安全状态条 */
 .flat-status-bar {
   flex-shrink: 0;
-  height: 30px;
-  border-radius: 6px;
-  padding: 0 10px;
+  height: 26px;
+  border-radius: 4px;
+  padding: 0 8px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -415,52 +578,83 @@ onUnmounted(() => {
 .status-ok {
   background: rgba(0, 230, 118, 0.1);
   color: #00E676;
-  border: 1px solid rgba(0, 230, 118, 0.25);
+  border: 1px solid rgba(0, 230, 118, 0.2);
 }
 .status-warn {
   background: rgba(255, 145, 0, 0.1);
   color: #FF9100;
-  border: 1px solid rgba(255, 145, 0, 0.25);
+  border: 1px solid rgba(255, 145, 0, 0.2);
 }
 
 .status-icon {
   font-weight: 800;
 }
 
-/* 行 4: 底部遥测条 */
-.flat-tele-bar {
-  flex-shrink: 0;
-  height: 40px;
+/* 行 4: 实时动态波形卡片 (填满下方剩余全部高度) */
+.realtime-wave-card {
+  flex: 1;
+  min-height: 0;
   background: #121722;
   border: 1px solid #1E2636;
   border-radius: 6px;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 4px 0;
+  padding: 6px 8px 2px 8px;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
 }
 
-.tele-col {
+.wave-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  border-right: 1px solid #1E2636;
-}
-.tele-col:last-child {
-  border-right: none;
+  margin-bottom: 2px;
 }
 
-.t-label {
-  font-size: 9px;
-  color: #64748B;
-  font-weight: 600;
+.wave-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.t-val {
+.wave-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00D2FF;
+}
+
+.wave-title {
   font-size: 11px;
   font-weight: 700;
+  color: #CBD5E1;
 }
-.text-white { color: #FFFFFF; }
+
+.wave-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.w-leg-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94A3B8;
+}
+
+.w-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.w-dot.cyan { background: #00D2FF; }
+.w-dot.pink { background: #FF3D71; }
+
+.pulse-chart-container {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
 </style>

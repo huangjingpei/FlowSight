@@ -10,7 +10,7 @@
       <nav v-if="showTabBar" class="flat-tabbar">
         <router-link to="/dashboard" class="tab-item" active-class="tab-active">
           <span class="tab-icon">⚡</span>
-          <span class="tab-label">实时座舱</span>
+          <span class="tab-label">实时监控</span>
         </router-link>
         <router-link to="/trends" class="tab-item" active-class="tab-active">
           <span class="tab-icon">📈</span>
@@ -20,9 +20,9 @@
           <span class="tab-icon">🎬</span>
           <span class="tab-label">证据切片</span>
         </router-link>
-        <router-link to="/insights" class="tab-item" active-class="tab-active">
-          <span class="tab-icon">👥</span>
-          <span class="tab-label">客群遥测</span>
+        <router-link to="/settings" class="tab-item" active-class="tab-active">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-label">系统设置</span>
         </router-link>
       </nav>
     </div>

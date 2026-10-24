@@ -2,13 +2,16 @@ package com.flowsight.cloud.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.common.Result;
+import com.flowsight.cloud.dto.ChangePasswordDTO;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
+import com.flowsight.cloud.service.UserService;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.PointVO;
 import com.flowsight.cloud.vo.TrendReportVO;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +26,9 @@ public class H5DashboardController {
 
     @Autowired
     private EventService eventService;
+
+    @Autowired
+    private UserService userService;
 
     private void checkPointOwnership(Long pointId, HttpServletRequest request) {
         String role = (String) request.getAttribute("role");
@@ -68,5 +74,12 @@ public class H5DashboardController {
             checkPointOwnership(pointId, request);
         }
         return Result.success(eventService.pageEvents(userId, pointId, startDate, endDate, direction, page, size));
+    }
+
+    @PostMapping("/user/password")
+    public Result<Void> changePassword(@Valid @RequestBody ChangePasswordDTO dto, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        userService.changePassword(userId, dto.getOldPassword(), dto.getNewPassword());
+        return Result.success("密码修改成功，请妥善保管新密码", null);
     }
 }

@@ -65,5 +65,6 @@ export const h5Api = {
       return api.get('/h5/events', { params: paramsOrPointId });
     }
     return api.get('/h5/events', { params: { pointId: paramsOrPointId, page, size } });
-  }
+  },
+  changePassword: (data: { oldPassword: string; newPassword: string }) => api.post('/h5/user/password', data)
 };
