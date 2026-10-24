@@ -11,7 +11,7 @@
       </div>
     </header>
 
-    <!-- 2. 主体内容区 (可内部轻量滚动) -->
+    <!-- 2. 主体内容区 (纯平菜单列表，拒绝页面内折叠跳动) -->
     <main class="settings-scroll-body">
       <!-- 商户租户卡片 -->
       <div class="profile-card">
@@ -21,225 +21,100 @@
             <div class="company-name">{{ userProfile.companyName || '万科物业服务有限公司' }}</div>
             <div class="phone-str">📱 绑定账号: {{ userProfile.phone || '13454118762' }}</div>
           </div>
+          <div class="auth-pill">已认证</div>
         </div>
       </div>
 
-      <!-- 设置条目 1: 修改密码 -->
-      <div class="settings-card">
-        <div class="card-header" @click="showPwdForm = !showPwdForm">
-          <div class="header-title-box">
-            <span class="item-icon">🔐</span>
-            <span class="item-title">账号登录密码修改</span>
-          </div>
-          <span class="toggle-btn">{{ showPwdForm ? '收起 ▲' : '修改 ▼' }}</span>
-        </div>
-
-        <div v-if="showPwdForm" class="pwd-form-wrap">
-          <div class="form-item">
-            <span class="f-label">原密码:</span>
-            <input
-              v-model="pwdForm.oldPassword"
-              type="password"
-              placeholder="请输入当前原密码"
-              class="f-input"
-            />
-          </div>
-          <div class="form-item">
-            <span class="f-label">新密码:</span>
-            <input
-              v-model="pwdForm.newPassword"
-              type="password"
-              placeholder="请输入新密码（至少6位）"
-              class="f-input"
-            />
-          </div>
-          <div class="form-item">
-            <span class="f-label">确认新密码:</span>
-            <input
-              v-model="pwdForm.confirmPassword"
-              type="password"
-              placeholder="再次输入新密码"
-              class="f-input"
-            />
-          </div>
-          <button class="btn-change-pwd" :disabled="pwdLoading" @click="handleChangePassword">
-            {{ pwdLoading ? '密码验签提交中...' : '确认修改密码' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 设置条目 2: ⚡ 6位动态配对码 (极速秒连) -->
-      <div class="settings-card">
-        <div class="card-header" @click="showPairingCard = !showPairingCard">
-          <div class="header-title-box">
-            <span class="item-icon">⚡</span>
-            <span class="item-title">现场设备 6 位动态配对码 (极速接入)</span>
-          </div>
-          <span class="toggle-btn">{{ showPairingCard ? '收起 ▲' : '生成配对码 ▼' }}</span>
-        </div>
-
-        <div class="card-sub-info">
-          <div class="sub-meta-row">
-            <span class="sm-k">目标通道:</span>
-            <span class="sm-v cyan-code">{{ pointCredential.pointName || summary.pointName || '当前通道' }} ({{ pointCredential.pointCode || 'POINT_01' }})</span>
-          </div>
-          <div class="sub-meta-row">
-            <span class="sm-k">极简接入:</span>
-            <span class="sm-v green-status">无需复杂输入，工控机输入 6 位数字即可 1 秒配对接入</span>
-          </div>
-        </div>
-
-        <div v-if="showPairingCard" class="pairing-box-wrap">
-          <div v-if="!pairingData" class="pairing-init">
-            <p class="pairing-desc">
-              无需向施工人员透露账号主密码。点击下方按钮即可生成 5 分钟有效的一次性 6 位数字配对码，工控机输入后即可自动完成身份鉴权与点位绑定。
-            </p>
-            <button class="btn-change-pwd btn-cyan-action" :disabled="pairingLoading" @click="handleGeneratePairingCode">
-              {{ pairingLoading ? '正在生成配对码...' : '⚡ 立即生成 6 位接入配对码' }}
-            </button>
-          </div>
-
-          <div v-else class="pairing-active">
-            <div class="pairing-countdown">
-              <span>⏳ 配对码有效期剩余: <b class="text-orange">{{ pairingRemainingSec }}秒</b></span>
-            </div>
-            <!-- 6 位大字号排版卡片 -->
-            <div class="pin-digits-row">
-              <span v-for="(digit, idx) in pairingDigits" :key="idx" class="pin-digit-box">
-                {{ digit }}
-              </span>
-            </div>
-            <div class="pairing-tip">
-              💡 施工人员在工控机客户端「设置 → 云端协同」中输入上述 6 位数字即可自动同步。
-            </div>
-            <div class="pairing-action-row">
-              <button class="btn-copy-pin" @click="handleCopyPin">
-                📋 复制 6 位配对码
-              </button>
-              <button class="btn-refresh-pin" :disabled="pairingLoading" @click="handleGeneratePairingCode">
-                🔄 重新生成
-              </button>
+      <!-- 设置分组 1: 边端接入与安全凭据 -->
+      <div class="group-title">边端接入与安全凭据</div>
+      <div class="menu-group">
+        <!-- 条目 1: 6 位动态配对码 -->
+        <div class="menu-cell" @click="openModal('pairing')">
+          <div class="cell-left">
+            <span class="cell-icon">⚡</span>
+            <div class="cell-text">
+              <span class="cell-title">现场设备 6 位动态配对码</span>
+              <span class="cell-sub">5 分钟动态 PIN 码 · 工控机 1 秒接入免输密码</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- 设置条目 3: 双密码体系 - 边缘设备专用接入密钥 (密码 2) -->
-      <div class="settings-card">
-        <div class="card-header" @click="showDevPwdForm = !showDevPwdForm">
-          <div class="header-title-box">
-            <span class="item-icon">🛡️</span>
-            <span class="item-title">边缘专属设备密码 (密码 2)</span>
-          </div>
-          <span class="toggle-btn">{{ showDevPwdForm ? '收起 ▲' : '管理/重置 ▼' }}</span>
-        </div>
-
-        <div class="card-sub-info">
-          <div class="sub-meta-row">
-            <span class="sm-k">点位唯一编码:</span>
-            <span class="sm-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
-          </div>
-          <div class="sub-meta-row">
-            <span class="sm-k">设备密码状态:</span>
-            <span class="sm-v green-status">✅ 已设置并安全加密 (BCrypt)</span>
+          <div class="cell-right">
+            <span class="cell-action-pill cyan-pill">生成 PIN ➔</span>
           </div>
         </div>
 
-        <div v-if="showDevPwdForm" class="pwd-form-wrap">
-          <div class="dual-pwd-hint">
-            💡 <b>双密码安全隔离说明</b>：此密码仅供现场摄像头工控机接入鉴权，与您的账号主密码完全解耦。现场设备失窃或报废时，在此一键重置即可切断旧设备上传权限。
+        <!-- 条目 2: 边缘设备专属接入密码 (密码 2) -->
+        <div class="menu-cell" @click="openModal('devicePwd')">
+          <div class="cell-left">
+            <span class="cell-icon">🛡️</span>
+            <div class="cell-text">
+              <span class="cell-title">边缘专属设备密码 (密码 2)</span>
+              <span class="cell-sub">编码: {{ pointCredential.pointCode || 'POINT_VK_EAST_01' }} · 与主账号解耦</span>
+            </div>
           </div>
-          <div class="form-item">
-            <span class="f-label">新设备专属密码:</span>
-            <input
-              v-model="newDevicePassword"
-              type="password"
-              placeholder="请输入新设备密码（至少6位）"
-              class="f-input"
-            />
+          <div class="cell-right">
+            <span class="cell-action-pill blue-pill">管理/重置 ➔</span>
           </div>
-          <button class="btn-change-pwd btn-cyan-action" :disabled="devPwdLoading" @click="handleResetDevicePassword">
-            {{ devPwdLoading ? '正在重置凭证...' : '确认重置边缘专属密码 (密码 2)' }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 设置条目 3: 通道客群属性画像 (收纳于设置条目中) -->
-      <div class="settings-card">
-        <div class="card-header" @click="showDemographics = !showDemographics">
-          <div class="header-title-box">
-            <span class="item-icon">👥</span>
-            <span class="item-title">通道客群属性洞察</span>
-          </div>
-          <span class="toggle-btn">{{ showDemographics ? '收起 ▲' : '展开 ▼' }}</span>
         </div>
 
-        <div v-if="showDemographics" class="demo-content">
-          <div class="gender-text-row" v-if="summary.demographics">
-            <span class="text-cyan">👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
-            <span class="text-pink">👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+        <!-- 条目 3: 修改登录密码 -->
+        <div class="menu-cell" @click="openModal('password')">
+          <div class="cell-left">
+            <span class="cell-icon">🔐</span>
+            <div class="cell-text">
+              <span class="cell-title">修改账号登录密码</span>
+              <span class="cell-sub">商户主账号登录与决策中台安全保护</span>
+            </div>
           </div>
-
-          <div class="flat-progress-bar" v-if="summary.demographics">
-            <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
-            <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
-          </div>
-
-          <div class="age-info-row" v-if="summary.demographics">
-            <span class="info-lbl">主力到场客群:</span>
-            <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
-            <span class="conf-lbl">AI 置信度: 94.6%</span>
+          <div class="cell-right">
+            <span class="cell-action-pill gray-pill">修改 ➔</span>
           </div>
         </div>
       </div>
 
-      <!-- 设置条目 3: 通道点位与边缘连接状态 -->
-      <div class="settings-card">
-        <div class="card-header">
-          <div class="header-title-box">
-            <span class="item-icon">📡</span>
-            <span class="item-title">边端连接与通道管理</span>
+      <!-- 设置分组 2: 数据洞察与座舱偏好 -->
+      <div class="group-title">数据洞察与座舱偏好</div>
+      <div class="menu-group">
+        <!-- 条目 4: 通道客群属性洞察画像 -->
+        <div class="menu-cell" @click="openModal('demographics')">
+          <div class="cell-left">
+            <span class="cell-icon">👥</span>
+            <div class="cell-text">
+              <span class="cell-title">通道客群属性洞察画像</span>
+              <span class="cell-sub">AI 年龄段与性别构成 · 商业客群特征</span>
+            </div>
           </div>
-          <span class="point-status-tag" :class="summary.streamStatus === 'ONLINE' ? 'online' : 'offline'">
-            {{ summary.streamStatus === 'ONLINE' ? '🟢 在线' : '🔴 离线' }}
-          </span>
-        </div>
-        <div class="node-meta-list">
-          <div class="meta-row">
-            <span class="m-k">当前点位:</span>
-            <span class="m-v">{{ summary.pointName || '万科西区东门主入口' }} [ID: {{ summary.pointId || 1 }}]</span>
-          </div>
-          <div class="meta-row">
-            <span class="m-k">边端节点:</span>
-            <span class="m-v">{{ summary.clientName || 'FlowSight-Edge-Node-01' }}</span>
-          </div>
-          <div class="meta-row">
-            <span class="m-k">软件版本:</span>
-            <span class="m-v">{{ summary.appVersion || 'v1.2.0' }}</span>
-          </div>
-          <div class="meta-row">
-            <span class="m-k">最近心跳:</span>
-            <span class="m-v">{{ summary.lastHeartbeat || '实时心跳正常' }}</span>
+          <div class="cell-right">
+            <span class="cell-action-pill green-pill">查看洞察 ➔</span>
           </div>
         </div>
-      </div>
 
-      <!-- 设置条目 4: 实时座舱数据刷新频率偏好 -->
-      <div class="settings-card">
-        <div class="card-header">
-          <div class="header-title-box">
-            <span class="item-icon">⏱️</span>
-            <span class="item-title">实时座舱刷新频率</span>
+        <!-- 条目 5: 实时座舱刷新频率 -->
+        <div class="menu-cell" @click="openModal('refreshRate')">
+          <div class="cell-left">
+            <span class="cell-icon">⏱️</span>
+            <div class="cell-text">
+              <span class="cell-title">实时座舱数据刷新频率</span>
+              <span class="cell-sub">流速脉冲曲线与在场滞留步进周期</span>
+            </div>
+          </div>
+          <div class="cell-right">
+            <span class="cell-action-pill purple-pill">{{ activeRate }} 秒 ➔</span>
           </div>
         </div>
-        <div class="rate-select-row">
-          <div
-            v-for="r in refreshRates"
-            :key="r.sec"
-            :class="['rate-pill', activeRate === r.sec ? 'active' : '']"
-            @click="setRefreshRate(r.sec)"
-          >
-            {{ r.label }}
+
+        <!-- 条目 6: 边端通道与设备信息 -->
+        <div class="menu-cell" @click="openModal('deviceInfo')">
+          <div class="cell-left">
+            <span class="cell-icon">📡</span>
+            <div class="cell-text">
+              <span class="cell-title">边端连接与通道管理</span>
+              <span class="cell-sub">{{ summary.pointName || '万科西区东门主入口' }}</span>
+            </div>
+          </div>
+          <div class="cell-right">
+            <span class="cell-action-pill" :class="summary.streamStatus === 'ONLINE' ? 'green-pill' : 'red-pill'">
+              {{ summary.streamStatus === 'ONLINE' ? '● 在线' : '○ 离线' }} ➔
+            </span>
           </div>
         </div>
       </div>
@@ -251,6 +126,277 @@
         </button>
       </div>
     </main>
+
+    <!-- ==================== 统一弹窗对话框区域 (Modal Dialogs) ==================== -->
+
+    <!-- 弹窗 1: 6 位动态配对码 (极速接入) -->
+    <div v-if="activeModal === 'pairing'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">⚡</span>
+            <span class="dh-title">现场设备 6 位动态配对码</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="modal-sub-meta">
+            <span class="msm-k">目标通道:</span>
+            <span class="msm-v cyan-code">{{ pointCredential.pointName || summary.pointName || '当前通道' }} ({{ pointCredential.pointCode || 'POINT_01' }})</span>
+          </div>
+
+          <div v-if="!pairingData" class="pairing-init-box">
+            <p class="modal-desc">
+              无需向施工人员透露账号主密码。点击下方按钮即可生成 5 分钟有效的一次性 6 位数字配对码，工控机输入后即可自动完成身份鉴权与点位绑定。
+            </p>
+            <button class="btn-modal-action btn-cyan-fill" :disabled="pairingLoading" @click="handleGeneratePairingCode">
+              {{ pairingLoading ? '正在生成配对码...' : '⚡ 立即生成 6 位接入配对码' }}
+            </button>
+          </div>
+
+          <div v-else class="pairing-active-box">
+            <div class="pairing-countdown">
+              <span>⏳ 配对码有效期剩余: <b class="text-orange">{{ pairingRemainingSec }}秒</b></span>
+            </div>
+            <!-- 6 位大字号排版卡片 -->
+            <div class="pin-digits-row">
+              <span v-for="(digit, idx) in pairingDigits" :key="idx" class="pin-digit-box">
+                {{ digit }}
+              </span>
+            </div>
+            <div class="pairing-tip">
+              💡 施工人员在工控机客户端「设置 → 云端协同」中输入上述 6 位数字即可 1 秒接入。
+            </div>
+            <div class="modal-action-row">
+              <button class="btn-copy-pin" @click="handleCopyPin">
+                📋 复制 6 位配对码
+              </button>
+              <button class="btn-refresh-pin" :disabled="pairingLoading" @click="handleGeneratePairingCode">
+                🔄 重新生成
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 2: 边缘专属设备密码 (密码 2) -->
+    <div v-if="activeModal === 'devicePwd'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">🛡️</span>
+            <span class="dh-title">边缘专属设备密码 (密码 2)</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="modal-sub-meta">
+            <span class="msm-k">点位唯一编码:</span>
+            <span class="msm-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
+          </div>
+
+          <div class="dual-pwd-hint">
+            💡 <b>双密码安全隔离说明</b>：此密码仅供现场摄像头工控机接入鉴权，与您的商户主账号完全解耦。现场设备报废或移机时，在此重置即可吊销旧凭据。
+          </div>
+
+          <div class="modal-form">
+            <div class="modal-form-item">
+              <label class="mf-label">新设备专属密码:</label>
+              <input
+                v-model="newDevicePassword"
+                type="password"
+                placeholder="请输入新设备密码（至少6位）"
+                class="mf-input"
+              />
+            </div>
+            <button class="btn-modal-action btn-cyan-fill" :disabled="devPwdLoading" @click="handleResetDevicePassword">
+              {{ devPwdLoading ? '正在重置凭证...' : '确认重置边缘专属密码 (密码 2)' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 3: 修改登录密码 -->
+    <div v-if="activeModal === 'password'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">🔐</span>
+            <span class="dh-title">修改账号登录密码</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="modal-form">
+            <div class="modal-form-item">
+              <label class="mf-label">当前原密码:</label>
+              <input
+                v-model="pwdForm.oldPassword"
+                type="password"
+                placeholder="请输入当前原密码"
+                class="mf-input"
+              />
+            </div>
+            <div class="modal-form-item">
+              <label class="mf-label">新密码:</label>
+              <input
+                v-model="pwdForm.newPassword"
+                type="password"
+                placeholder="请输入新密码（至少6位）"
+                class="mf-input"
+              />
+            </div>
+            <div class="modal-form-item">
+              <label class="mf-label">确认新密码:</label>
+              <input
+                v-model="pwdForm.confirmPassword"
+                type="password"
+                placeholder="再次输入新密码"
+                class="mf-input"
+              />
+            </div>
+            <button class="btn-modal-action btn-blue-fill" :disabled="pwdLoading" @click="handleChangePassword">
+              {{ pwdLoading ? '密码验签提交中...' : '确认修改登录密码' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 4: 通道客群属性洞察画像 -->
+    <div v-if="activeModal === 'demographics'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">👥</span>
+            <span class="dh-title">通道客群属性洞察画像</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="demo-modal-content">
+            <div class="gender-text-row" v-if="summary.demographics">
+              <span class="text-cyan">👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
+              <span class="text-pink">👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+            </div>
+
+            <div class="flat-progress-bar" v-if="summary.demographics">
+              <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
+              <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
+            </div>
+
+            <div class="age-info-row" v-if="summary.demographics">
+              <span class="info-lbl">主力到场客群:</span>
+              <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
+            </div>
+
+            <div class="ai-meta-box">
+              <div class="amb-item">
+                <span class="amb-k">AI 多属性识别精度</span>
+                <span class="amb-v text-cyan">94.6% 置信度</span>
+              </div>
+              <div class="amb-item">
+                <span class="amb-k">今日抓拍样本量</span>
+                <span class="amb-v">{{ summary.todayTotal || 0 }} 样本</span>
+              </div>
+              <div class="amb-item">
+                <span class="amb-k">数据模型</span>
+                <span class="amb-v">Edge YOLOv8n + ByteTrack</span>
+              </div>
+            </div>
+
+            <button class="btn-modal-action btn-gray-fill" @click="closeModal">
+              关闭洞察
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 5: 实时座舱数据刷新频率 -->
+    <div v-if="activeModal === 'refreshRate'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">⏱️</span>
+            <span class="dh-title">实时座舱数据刷新频率</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <p class="modal-desc">
+            选择手机端决策座舱近实时同步流速脉冲折线与滞留人数的刷新步进周期：
+          </p>
+          <div class="rate-select-list">
+            <div
+              v-for="r in refreshRates"
+              :key="r.sec"
+              :class="['rate-card', activeRate === r.sec ? 'rate-card-active' : '']"
+              @click="handleSelectRate(r.sec)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ activeRate === r.sec ? '●' : '○' }}</span>
+                <div class="rc-text">
+                  <span class="rc-title">{{ r.label }}</span>
+                  <span class="rc-desc">{{ r.desc }}</span>
+                </div>
+              </div>
+              <span v-if="activeRate === r.sec" class="rc-tag">当前生效</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 6: 边端通道与设备详情 -->
+    <div v-if="activeModal === 'deviceInfo'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">📡</span>
+            <span class="dh-title">边端连接与通道详情</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="node-meta-list">
+            <div class="meta-row">
+              <span class="m-k">当前点位:</span>
+              <span class="m-v">{{ summary.pointName || '万科西区东门主入口' }} [ID: {{ summary.pointId || 1 }}]</span>
+            </div>
+            <div class="meta-row">
+              <span class="m-k">通道编码:</span>
+              <span class="m-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="m-k">边端节点:</span>
+              <span class="m-v">{{ summary.clientName || 'FlowSight-Edge-Node-01' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="m-k">推流状态:</span>
+              <span class="m-v" :class="summary.streamStatus === 'ONLINE' ? 'text-green' : 'text-orange'">
+                {{ summary.streamStatus === 'ONLINE' ? '🟢 ONLINE (正常)' : '🔴 OFFLINE (离线)' }}
+              </span>
+            </div>
+            <div class="meta-row">
+              <span class="m-k">软件版本:</span>
+              <span class="m-v">{{ summary.appVersion || 'v1.2.0' }}</span>
+            </div>
+            <div class="meta-row">
+              <span class="m-k">最近心跳:</span>
+              <span class="m-v">{{ summary.lastHeartbeat || '实时心跳正常' }}</span>
+            </div>
+          </div>
+
+          <button class="btn-modal-action btn-gray-fill" style="margin-top: 14px;" @click="closeModal">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -273,11 +419,17 @@ const userProfile = computed(() => {
   return { phone: '13454118762', companyName: '万科物业服务有限公司(未来城项目)' };
 });
 
-// 折叠状态
-const showPwdForm = ref(false);
-const showPairingCard = ref(true);
-const showDevPwdForm = ref(false);
-const showDemographics = ref(true);
+// 对话框弹窗状态管理 (取代页面内部折叠)
+type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | null;
+const activeModal = ref<ModalType>(null);
+
+const openModal = (type: ModalType) => {
+  activeModal.value = type;
+};
+
+const closeModal = () => {
+  activeModal.value = null;
+};
 
 // ⚡ 6 位动态配对码 (极速接入)
 const pairingLoading = ref(false);
@@ -330,6 +482,40 @@ const pwdForm = ref({
 });
 const pwdLoading = ref(false);
 
+const handleChangePassword = async () => {
+  if (!pwdForm.value.oldPassword) {
+    showToast('请输入当前原密码');
+    return;
+  }
+  if (!pwdForm.value.newPassword || pwdForm.value.newPassword.length < 6) {
+    showToast('新密码长度不能少于6位');
+    return;
+  }
+  if (pwdForm.value.newPassword !== pwdForm.value.confirmPassword) {
+    showToast('两次输入的新密码不一致');
+    return;
+  }
+
+  pwdLoading.value = true;
+  try {
+    await h5Api.changePassword({
+      oldPassword: pwdForm.value.oldPassword,
+      newPassword: pwdForm.value.newPassword
+    });
+    showToast({ message: '密码修改成功，请使用新密码重新登录', position: 'top' });
+    pwdForm.value.oldPassword = '';
+    pwdForm.value.newPassword = '';
+    pwdForm.value.confirmPassword = '';
+    closeModal();
+    setTimeout(() => {
+      handleLogout();
+    }, 1500);
+  } catch (e: any) {
+  } finally {
+    pwdLoading.value = false;
+  }
+};
+
 // 密码 2: 边缘专属设备接入密码表单
 const newDevicePassword = ref('');
 const devPwdLoading = ref(false);
@@ -363,7 +549,7 @@ const handleResetDevicePassword = async () => {
       const res: any = await h5Api.resetDevicePassword(pid, { newDevicePassword: newDevicePassword.value.trim() });
       showToast({ message: '边缘设备专属接入密码已更新！', position: 'top' });
       newDevicePassword.value = '';
-      showDevPwdForm.value = false;
+      closeModal();
       if (res) pointCredential.value = res;
     } catch (e: any) {
     } finally {
@@ -374,16 +560,17 @@ const handleResetDevicePassword = async () => {
 
 // 刷新频率选项
 const refreshRates = [
-  { sec: 5, label: '5 秒 (近实时推荐)' },
-  { sec: 10, label: '10 秒 (标准)' },
-  { sec: 30, label: '30 秒 (省流)' }
+  { sec: 5, label: '5 秒 (近实时推荐)', desc: '动态流速波形每 5 秒刷新，感知极度灵敏' },
+  { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
+  { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
 ];
 const activeRate = ref(Number(localStorage.getItem('flowsight_poll_rate') || 5));
 
-const setRefreshRate = (sec: number) => {
+const handleSelectRate = (sec: number) => {
   activeRate.value = sec;
   localStorage.setItem('flowsight_poll_rate', String(sec));
   showToast({ message: `座舱刷新已设为 ${sec} 秒`, position: 'top', duration: 1000 });
+  closeModal();
 };
 
 // 汇总数据 (包含客群属性)
@@ -418,41 +605,6 @@ const loadSummary = async () => {
       loadPointCredential(pid);
     }
   } catch (e) {}
-};
-
-const handleChangePassword = async () => {
-  if (!pwdForm.value.oldPassword) {
-    showToast('请输入当前原密码');
-    return;
-  }
-  if (!pwdForm.value.newPassword || pwdForm.value.newPassword.length < 6) {
-    showToast('新密码长度不能少于6位');
-    return;
-  }
-  if (pwdForm.value.newPassword !== pwdForm.value.confirmPassword) {
-    showToast('两次输入的新密码不一致');
-    return;
-  }
-
-  pwdLoading.value = true;
-  try {
-    await h5Api.changePassword({
-      oldPassword: pwdForm.value.oldPassword,
-      newPassword: pwdForm.value.newPassword
-    });
-    showToast({ message: '密码修改成功，请使用新密码重新登录', position: 'top' });
-    pwdForm.value.oldPassword = '';
-    pwdForm.value.newPassword = '';
-    pwdForm.value.confirmPassword = '';
-    showPwdForm.value = false;
-    setTimeout(() => {
-      handleLogout();
-    }, 1500);
-  } catch (e: any) {
-    // 错误在拦截器中提示
-  } finally {
-    pwdLoading.value = false;
-  }
 };
 
 const handleLogout = () => {
@@ -515,173 +667,348 @@ onUnmounted(() => {
 }
 
 .header-title {
-  color: #FFFFFF;
   font-size: 14px;
   font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.5px;
 }
 
 .role-badge {
-  background: #182030;
-  color: #00E676;
-  border: 1px solid #2A364F;
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: rgba(0, 210, 255, 0.15);
+  color: #00D2FF;
   font-size: 10px;
   font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 210, 255, 0.3);
 }
 
-/* 内部轻量滚动容器 */
+/* 主体内容滚动区 */
 .settings-scroll-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 10px;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px 24px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   box-sizing: border-box;
 }
 
-/* 商户资料卡片 */
+/* 商户卡片 */
 .profile-card {
   background: #121722;
   border: 1px solid #1E2636;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 12px;
 }
 
 .profile-top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .avatar-box {
-  font-size: 28px;
+  width: 38px;
+  height: 38px;
   background: #182030;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
   border: 1px solid #2A364F;
-  border-radius: 8px;
-  padding: 6px;
+  flex-shrink: 0;
 }
 
 .profile-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .company-name {
   font-size: 13px;
-  font-weight: 800;
-  color: #FFFFFF;
+  font-weight: 700;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .phone-str {
   font-size: 11px;
   color: #94A3B8;
-  font-weight: 600;
+  margin-top: 2px;
 }
 
-/* 设置项通用卡片 */
-.settings-card {
+.auth-pill {
+  font-size: 10px;
+  color: #00E676;
+  background: rgba(0, 230, 118, 0.12);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* 分组标题 */
+.group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  padding-left: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* 纯平菜单列表卡片组 */
+.menu-group {
   background: #121722;
   border: 1px solid #1E2636;
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.menu-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid #1A2230;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.menu-cell:last-child {
+  border-bottom: none;
+}
+.menu-cell:active {
+  background: #182030;
+}
+
+.cell-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cell-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.cell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cell-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #E2E8F0;
+}
+
+.cell-sub {
+  font-size: 10px;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-right {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.cell-action-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.cyan-pill {
+  background: rgba(0, 210, 255, 0.12);
+  color: #00D2FF;
+}
+.blue-pill {
+  background: rgba(31, 111, 235, 0.15);
+  color: #58A6FF;
+}
+.gray-pill {
+  background: #1A2230;
+  color: #94A3B8;
+}
+.green-pill {
+  background: rgba(0, 230, 118, 0.12);
+  color: #00E676;
+}
+.purple-pill {
+  background: rgba(157, 78, 221, 0.15);
+  color: #BC8CFF;
+}
+.red-pill {
+  background: rgba(255, 61, 113, 0.15);
+  color: #FF3D71;
+}
+
+/* 登出按钮 */
+.logout-btn-box {
+  margin-top: 10px;
+}
+
+.btn-logout {
+  width: 100%;
+  height: 40px;
+  background: #182030;
+  border: 1px solid #2A364F;
+  border-radius: 6px;
+  color: #FF3D71;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-logout:active {
+  background: rgba(255, 61, 113, 0.1);
+  border-color: #FF3D71;
+}
+
+/* ================= 统一弹窗模态层 (Modal Overlays) ================= */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.dialog-card {
+  width: 100%;
+  max-width: 440px;
+  background: #111827;
+  border: 1px solid #1F293D;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog-header {
+  height: 44px;
+  background: #182030;
+  border-bottom: 1px solid #1F293D;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.dh-title-box {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
+.dh-icon {
+  font-size: 15px;
 }
 
-.header-title-box {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.item-icon {
+.dh-title {
   font-size: 13px;
-}
-
-.item-title {
-  font-size: 12px;
   font-weight: 700;
-  color: #CBD5E1;
+  color: #F8FAFC;
 }
 
-.toggle-btn {
-  font-size: 11px;
-  color: #00D2FF;
-  font-weight: 600;
+.dh-close {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
 }
 
-/* 双密码体系子信息与提示 */
-.card-sub-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: #0B0E14;
-  border-radius: 4px;
-  padding: 6px 10px;
-  border: 1px solid #1A2230;
+.dialog-body {
+  padding: 16px;
+  box-sizing: border-box;
 }
 
-.sub-meta-row {
+.modal-desc {
+  font-size: 11.5px;
+  color: #94A3B8;
+  line-height: 150%;
+  margin: 0 0 12px 0;
+}
+
+.modal-sub-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #0B0E14;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #1A2230;
+  margin-bottom: 12px;
 }
-
-.sm-k {
+.msm-k {
   font-size: 11px;
   color: #94A3B8;
 }
-
-.sm-v {
+.msm-v {
   font-size: 11px;
   font-weight: 700;
 }
-
 .cyan-code {
   color: #00D2FF;
   font-family: monospace;
 }
 
-.green-status {
-  color: #00E676;
+/* 按钮样式规范 */
+.btn-modal-action {
+  width: 100%;
+  height: 38px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
 }
-
-.dual-pwd-hint {
-  font-size: 10.5px;
-  color: #94A3B8;
+.btn-cyan-fill {
+  background: #00D2FF;
+  color: #0A0D14;
+}
+.btn-cyan-fill:active {
+  transform: scale(0.98);
+}
+.btn-blue-fill {
+  background: #1F6FEB;
+  color: #FFFFFF;
+}
+.btn-gray-fill {
   background: #182030;
-  border-left: 3px solid #00D2FF;
-  padding: 6px 8px;
-  border-radius: 2px;
-  line-height: 145%;
+  color: #CBD5E1;
+  border: 1px solid #2A364F;
 }
 
-/* 6位动态配对码样式 */
-.pairing-box-wrap {
+/* 6 位配对码大字号组件 */
+.pairing-active-box {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid #182030;
-}
-
-.pairing-desc {
-  font-size: 11px;
-  color: #94A3B8;
-  line-height: 150%;
-  margin: 0 0 8px 0;
 }
 
 .pairing-countdown {
@@ -689,7 +1016,6 @@ onUnmounted(() => {
   color: #94A3B8;
   text-align: center;
 }
-
 .text-orange {
   color: #FF9800;
   font-weight: 700;
@@ -700,17 +1026,17 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   gap: 8px;
-  margin: 6px 0;
+  margin: 8px 0;
 }
 
 .pin-digit-box {
-  width: 40px;
-  height: 48px;
-  background: #10192A;
+  width: 42px;
+  height: 50px;
+  background: #0D1424;
   border: 1.5px solid #00D2FF;
   border-radius: 6px;
   color: #00D2FF;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -720,112 +1046,91 @@ onUnmounted(() => {
 }
 
 .pairing-tip {
-  font-size: 10.5px;
+  font-size: 11px;
   color: #64748B;
   text-align: center;
   line-height: 140%;
 }
 
-.pairing-action-row {
+.modal-action-row {
   display: flex;
   gap: 10px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .btn-copy-pin {
   flex: 1;
+  height: 38px;
   background: #00D2FF;
   color: #0A0D14;
   border: none;
   font-size: 12px;
   font-weight: 700;
-  padding: 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-copy-pin:active {
-  transform: scale(0.98);
 }
 
 .btn-refresh-pin {
+  height: 38px;
+  padding: 0 14px;
   background: #182030;
   color: #94A3B8;
   border: 1px solid #2A364F;
   font-size: 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.btn-cyan-action {
-  background: #182030;
-  color: #00D2FF;
-  border: 1px solid #00D2FF;
-}
-.btn-cyan-action:hover {
-  background: #00D2FF;
-  color: #0A0D14;
-}
-
-/* 密码修改表单 */
-.pwd-form-wrap {
+/* 表单输入框 */
+.modal-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #182030;
+  gap: 12px;
 }
 
-.form-item {
+.modal-form-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.f-label {
-  width: 72px;
+.mf-label {
   font-size: 11px;
   color: #94A3B8;
   font-weight: 600;
-  flex-shrink: 0;
 }
 
-.f-input {
-  flex: 1;
-  height: 28px;
-  background: #182030;
+.mf-input {
+  height: 36px;
+  background: #0B0E14;
   border: 1px solid #2A364F;
   border-radius: 4px;
-  padding: 0 8px;
+  padding: 0 10px;
   color: #FFFFFF;
   font-size: 12px;
   outline: none;
+  box-sizing: border-box;
 }
-.f-input:focus {
+.mf-input:focus {
   border-color: #00D2FF;
 }
 
-.btn-change-pwd {
-  margin-top: 4px;
-  height: 30px;
-  background: #00D2FF;
-  color: #0A0D14;
-  font-size: 12px;
-  font-weight: 800;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+.dual-pwd-hint {
+  font-size: 11px;
+  color: #94A3B8;
+  background: #0B0E14;
+  border-left: 3px solid #00D2FF;
+  padding: 8px 10px;
+  border-radius: 2px;
+  line-height: 150%;
+  margin-bottom: 12px;
 }
 
-/* 客群画像折叠项 */
-.demo-content {
+/* 客群画像内容 */
+.demo-modal-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #182030;
+  gap: 12px;
 }
 
 .gender-text-row {
@@ -835,94 +1140,154 @@ onUnmounted(() => {
   font-weight: 700;
 }
 .text-cyan { color: #00D2FF; }
-.text-pink { color: #FF4081; }
+.text-pink { color: #FF3D71; }
+.text-green { color: #00E676; }
 
 .flat-progress-bar {
-  display: flex;
-  height: 6px;
-  border-radius: 3px;
+  width: 100%;
+  height: 8px;
+  background: #0B0E14;
+  border-radius: 4px;
   overflow: hidden;
-  background: #182030;
+  display: flex;
 }
-.bar-cyan { background: #00D2FF; }
-.bar-pink { background: #FF4081; }
+
+.bar-cyan {
+  background: #00D2FF;
+  height: 100%;
+}
+
+.bar-pink {
+  background: #FF3D71;
+  height: 100%;
+}
 
 .age-info-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 11px;
 }
-.info-lbl { color: #94A3B8; }
-.age-pill { background: #182030; color: #00D2FF; font-weight: 700; padding: 1px 6px; border-radius: 3px; font-size: 10px; }
-.conf-lbl { margin-left: auto; color: #64748B; font-size: 10px; }
 
-/* 节点信息 */
-.point-status-tag {
-  font-size: 10px;
-  font-weight: 700;
+.info-lbl {
+  color: #94A3B8;
 }
-.online { color: #00E676; }
-.offline { color: #FF3D71; }
 
+.age-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: #182030;
+  border: 1px solid #2A364F;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ai-meta-box {
+  background: #0B0E14;
+  border: 1px solid #1A2230;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.amb-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+.amb-k { color: #64748B; }
+.amb-v { color: #CBD5E1; font-weight: 600; }
+
+/* 刷新频率选择卡片 */
+.rate-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0B0E14;
+  border: 1px solid #1F293D;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rate-card:active {
+  background: #182030;
+}
+.rate-card-active {
+  border-color: #00D2FF;
+  background: rgba(0, 210, 255, 0.06);
+}
+
+.rc-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rc-radio {
+  color: #00D2FF;
+  font-size: 14px;
+}
+
+.rc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rc-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F8FAFC;
+}
+
+.rc-desc {
+  font-size: 10px;
+  color: #64748B;
+}
+
+.rc-tag {
+  font-size: 9px;
+  color: #00D2FF;
+  background: rgba(0, 210, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+/* 节点详情元数据列表 */
 .node-meta-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
+  gap: 8px;
+  background: #0B0E14;
+  border: 1px solid #1A2230;
+  border-radius: 6px;
+  padding: 10px 12px;
 }
 
 .meta-row {
   display: flex;
   justify-content: space-between;
-}
-.m-k { color: #94A3B8; }
-.m-v { color: #FFFFFF; font-weight: 600; }
-
-/* 刷新频率选择 */
-.rate-select-row {
-  display: flex;
-  gap: 6px;
-}
-
-.rate-pill {
-  flex: 1;
-  height: 28px;
-  line-height: 28px;
-  text-align: center;
-  background: #182030;
-  border: 1px solid #2A364F;
-  border-radius: 4px;
+  align-items: center;
   font-size: 11px;
-  color: #94A3B8;
+}
+
+.m-k {
+  color: #64748B;
+}
+
+.m-v {
+  color: #CBD5E1;
   font-weight: 600;
-  cursor: pointer;
-}
-.rate-pill.active {
-  background: #00D2FF;
-  color: #0A0D14;
-  font-weight: 800;
-  border-color: #00D2FF;
-}
-
-/* 登出按钮 */
-.logout-btn-box {
-  margin-top: 8px;
-  margin-bottom: 8px;
-}
-
-.btn-logout {
-  width: 100%;
-  height: 36px;
-  background: #1E2636;
-  border: 1px solid #2A364F;
-  color: #FF3D71;
-  font-size: 13px;
-  font-weight: 800;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.btn-logout:active {
-  background: rgba(255, 61, 113, 0.15);
 }
 </style>
