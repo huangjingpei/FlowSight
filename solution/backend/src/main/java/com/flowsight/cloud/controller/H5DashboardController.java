@@ -24,6 +24,16 @@ public class H5DashboardController {
     @Autowired
     private EventService eventService;
 
+    private void checkPointOwnership(Long pointId, HttpServletRequest request) {
+        String role = (String) request.getAttribute("role");
+        if ("ROLE_ADMIN".equalsIgnoreCase(role)) return;
+        Long userId = (Long) request.getAttribute("userId");
+        PointVO point = pointService.getPointById(pointId);
+        if (point == null || !userId.equals(point.getUserId())) {
+            throw new IllegalArgumentException("无权查看该监控点位：该点位不属于当前商户客户或已在云端被管理员移除");
+        }
+    }
+
     @GetMapping("/points")
     public Result<List<PointVO>> listMyPoints(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
@@ -32,6 +42,7 @@ public class H5DashboardController {
 
     @GetMapping("/dashboard/summary")
     public Result<DashboardSummaryVO> getDashboardSummary(@RequestParam Long pointId, HttpServletRequest request) {
+        checkPointOwnership(pointId, request);
         return Result.success(eventService.getDashboardSummary(pointId));
     }
 
@@ -40,6 +51,7 @@ public class H5DashboardController {
                                                     @RequestParam(defaultValue = "hour") String dimension,
                                                     @RequestParam(defaultValue = "7") Integer days,
                                                     HttpServletRequest request) {
+        checkPointOwnership(pointId, request);
         return Result.success(eventService.getTrendReport(pointId, dimension, days));
     }
 
@@ -52,6 +64,9 @@ public class H5DashboardController {
                                                 @RequestParam(defaultValue = "10") int size,
                                                 HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
+        if (pointId != null && pointId > 0) {
+            checkPointOwnership(pointId, request);
+        }
         return Result.success(eventService.pageEvents(userId, pointId, startDate, endDate, direction, page, size));
     }
 }
