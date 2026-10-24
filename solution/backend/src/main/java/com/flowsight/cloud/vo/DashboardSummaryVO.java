@@ -15,6 +15,7 @@ public class DashboardSummaryVO {
     private int todayEntry;
     private int todayExit;
     private int todayTotal;
+    private String snapshotUrl;
     private DemographicsVO demographics;
     private List<HourlyStatVO> hourlyChart;
 }

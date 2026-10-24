@@ -174,6 +174,31 @@ void SettingsWidget::setup_ui() {
     cloud_row1->addWidget(cloud_client_name_edit_, 1);
     cloud_layout->addLayout(cloud_row1);
 
+    // 行 1.5: ⚡ 6位数字动态配对码极简秒级接入 (最推荐：手机端一键生成，1秒接入)
+    auto* pairing_box = new QFrame(this);
+    pairing_box->setStyleSheet("QFrame { background: #0c162d; border: 1px solid #1f6feb; border-radius: 6px; padding: 4px; }");
+    auto* pairing_layout = new QHBoxLayout(pairing_box);
+    pairing_layout->setContentsMargins(10, 6, 10, 6);
+    pairing_layout->setSpacing(12);
+
+    auto* lbl_pin_title = new QLabel("⚡ 动态配对 (推荐):", pairing_box);
+    lbl_pin_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 13px;");
+    pairing_layout->addWidget(lbl_pin_title);
+
+    cloud_pairing_code_edit_ = new QLineEdit(pairing_box);
+    cloud_pairing_code_edit_->setMaxLength(6);
+    cloud_pairing_code_edit_->setPlaceholderText("手机端生成的 6 位数字配对码 (如 892411)");
+    cloud_pairing_code_edit_->setStyleSheet("QLineEdit { font-size: 14px; font-weight: bold; letter-spacing: 2px; color: #00D2FF; background: #070d19; border: 1px solid #388bfd; border-radius: 4px; padding: 4px 8px; }");
+    pairing_layout->addWidget(cloud_pairing_code_edit_, 1);
+
+    btn_pair_with_code_ = new QPushButton("🚀 一键秒级配对", pairing_box);
+    btn_pair_with_code_->setStyleSheet(
+        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1f6feb, stop:1 #00D2FF); color: #ffffff; font-weight: bold; font-size: 13px; padding: 6px 16px; border-radius: 4px; border: none; }"
+        "QPushButton:hover { background: #388bfd; }"
+    );
+    pairing_layout->addWidget(btn_pair_with_code_);
+    cloud_layout->addWidget(pairing_box);
+
     // 行 2: 双密码体系 - 边缘设备专属接入认证 (密码 2，推荐生产环境)
     auto* cloud_row2 = new QHBoxLayout();
     cloud_row2->addWidget(new QLabel("点位唯一编码:", this));
@@ -371,6 +396,49 @@ void SettingsWidget::setup_ui() {
     });
 
     // 双密码体系：边缘专属设备接入认证 (密码 2)
+    connect(btn_pair_with_code_, &QPushButton::clicked, this, [this]() {
+        QString url = cloud_url_edit_->text().trimmed();
+        QString pin = cloud_pairing_code_edit_->text().trimmed();
+        QString client_name = cloud_client_name_edit_->text().trimmed();
+
+        if (url.isEmpty()) {
+            QMessageBox::warning(this, "提示", "请输入云端中台 URL！");
+            return;
+        }
+        if (pin.length() != 6) {
+            QMessageBox::warning(this, "提示", "请输入由手机端生成的 6 位数字配对码！");
+            return;
+        }
+
+        btn_pair_with_code_->setEnabled(false);
+        btn_pair_with_code_->setText("配对中...");
+        cloud_status_info_label_->setText("正在验证 6 位配对码并接入云端通道...");
+        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
+
+        EdgeReportManager::instance().pair_with_code(
+            url, pin, client_name,
+            [this](bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token) {
+                btn_pair_with_code_->setEnabled(true);
+                btn_pair_with_code_->setText("🚀 一键秒级配对");
+
+                if (!success) {
+                    cloud_status_info_label_->setText(QString("❌ 配对失败: %1").arg(msg));
+                    cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                    QMessageBox::warning(this, "配对失败", QString("配对码无效或已过期: %1\n请在手机端重新生成！").arg(msg));
+                    return;
+                }
+
+                cloud_status_info_label_->setText(QString("🟢 配对成功！已接入点位: %1 (ID: %2) | 通信凭据: %3...")
+                    .arg(point_name).arg(point_id).arg(point_token.left(16)));
+                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                QMessageBox::information(this, "配对成功", QString("恭喜！工控机已成功配对接入「%1」！\n已自动激活双向安全通信通道。").arg(point_name));
+
+                // 配对成功后自动触发拉取云端 RTSP 流与点位参数
+                btn_sync_config_->click();
+            }
+        );
+    });
+
     connect(btn_device_auth_, &QPushButton::clicked, this, [this]() {
         QString url = cloud_url_edit_->text().trimmed();
         QString point_code = cloud_point_code_edit_->text().trimmed();

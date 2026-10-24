@@ -72,28 +72,66 @@
       </div>
 
       <!-- 行 3: 安全状态指示条 -->
-      <div class="flat-status-bar" :class="summary.currentOccupancy > 30 ? 'status-warn' : 'status-ok'">
-        <span class="status-icon">{{ summary.currentOccupancy > 30 ? '⚠️' : '✓' }}</span>
+      <div class="flat-status-bar" :class="isSurged ? 'status-surged' : (summary.currentOccupancy > 20 ? 'status-warn' : 'status-ok')">
+        <span class="status-icon">{{ isSurged ? '🚨' : (summary.currentOccupancy > 20 ? '⚠️' : '✓') }}</span>
         <span class="status-msg">
-          {{ summary.currentOccupancy > 30 ? '当前人流密度偏高，已触发人流疏导指引' : '通道通行状态感知与安全基线正常' }}
+          {{ isSurged ? `客流超限警戒：瞬时在场达到 ${summary.currentOccupancy} 人 (警戒线: 25人)，流速曲线已切换应急态！` : (summary.currentOccupancy > 20 ? '当前人流密度偏高，已触发人流疏导指引' : '通道通行状态感知与安全基线正常') }}
         </span>
+      </div>
+
+      <!-- 行 3.5: 现场实时画面快照感知条 (60秒自动回传) -->
+      <div v-if="summary.snapshotUrl" class="flat-snapshot-strip" @click="showSnapshotModal = true">
+        <div class="snap-thumb-box">
+          <img :src="summary.snapshotUrl" alt="现场快照" class="snap-thumb-img" />
+          <span class="snap-live-tag">LIVE</span>
+        </div>
+        <div class="snap-info">
+          <div class="snap-info-top">
+            <span class="snap-info-title">现场通道实时画面快照</span>
+            <span class="snap-roi-pill">ROI防区已标定</span>
+          </div>
+          <span class="snap-info-sub">边端自动上报现场视线 · 点击放大查看全景</span>
+        </div>
+        <span class="snap-zoom-icon">🔍</span>
       </div>
 
       <!-- 行 4: 实时动态流速折线图 (5秒近实时刷新动态绘制，自适应填满剩余空间) -->
       <div class="realtime-wave-card">
         <div class="wave-header">
           <div class="wave-title-box">
-            <span class="wave-dot"></span>
+            <span class="wave-dot" :class="{ 'wave-dot-flame': isSurged }"></span>
             <span class="wave-title">通道实时流速脉冲 (5秒步进动态曲线)</span>
           </div>
           <div class="wave-legend">
-            <span class="w-leg-item"><i class="w-dot cyan"></i>进入流速</span>
+            <span class="w-leg-item">
+              <i class="w-dot" :class="isSurged ? 'dot-flame' : 'cyan'"></i>
+              <span :class="{ 'flame-text': isSurged }">{{ isSurged ? '进入流速 (超限警戒)' : '进入流速' }}</span>
+            </span>
             <span class="w-leg-item"><i class="w-dot pink"></i>离开流速</span>
           </div>
         </div>
         <div ref="pulseChartRef" class="pulse-chart-container"></div>
       </div>
     </main>
+
+    <!-- 现场全景快照弹窗 -->
+    <div v-if="showSnapshotModal" class="snapshot-modal-overlay" @click.self="showSnapshotModal = false">
+      <div class="snapshot-modal-card">
+        <div class="smc-header">
+          <div class="smc-title-box">
+            <span class="live-dot-red"></span>
+            <span class="smc-title">{{ summary.pointName || '通道' }} - 现场实时画面快照</span>
+          </div>
+          <button class="smc-close" @click="showSnapshotModal = false">✕</button>
+        </div>
+        <div class="smc-body">
+          <img :src="summary.snapshotUrl" alt="现场快照大图" class="modal-large-img" />
+        </div>
+        <div class="smc-footer">
+          <span class="smc-tip">● 绊线检测区与防区标定由边端 AI 动态合成并加密同步</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -128,6 +166,7 @@ const summary = ref<DashboardSummaryVO>({
   todayEntry: 0,
   todayExit: 0,
   todayTotal: 0,
+  snapshotUrl: '',
   demographics: {
     maleCount: 0,
     femaleCount: 0,
@@ -137,6 +176,9 @@ const summary = ref<DashboardSummaryVO>({
   },
   hourlyChart: []
 });
+
+const showSnapshotModal = ref(false);
+const isSurged = computed(() => (summary.value.currentOccupancy || 0) >= 25);
 
 // 实时 5 秒动态波形数据
 const pulseChartRef = ref<HTMLDivElement | null>(null);
@@ -282,18 +324,23 @@ const renderPulseChart = () => {
     },
     series: [
       {
-        name: '进入流速',
+        name: isSurged.value ? '进入流速 (超限警戒)' : '进入流速',
         type: 'line',
         smooth: 0.35,
         symbol: 'circle',
-        symbolSize: 5,
-        itemStyle: { color: '#00D2FF' },
-        lineStyle: { width: 2.5 },
+        symbolSize: isSurged.value ? 6 : 5,
+        itemStyle: { color: isSurged.value ? '#FF5722' : '#00D2FF' },
+        lineStyle: { width: isSurged.value ? 2.8 : 2.5, color: isSurged.value ? '#FF5722' : '#00D2FF' },
         areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(0, 210, 255, 0.3)' },
-            { offset: 1, color: 'rgba(0, 210, 255, 0.0)' }
-          ])
+          color: isSurged.value
+            ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(255, 87, 34, 0.45)' },
+                { offset: 1, color: 'rgba(255, 87, 34, 0.0)' }
+              ])
+            : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: 'rgba(0, 210, 255, 0.3)' },
+                { offset: 1, color: 'rgba(0, 210, 255, 0.0)' }
+              ])
         },
         data: waveEntryDelta.value
       },
@@ -585,9 +632,185 @@ onUnmounted(() => {
   color: #FF9100;
   border: 1px solid rgba(255, 145, 0, 0.2);
 }
+.status-surged {
+  background: rgba(255, 87, 34, 0.18);
+  color: #FF5722;
+  border: 1px solid #FF5722;
+  animation: pulse-border 1.5s infinite;
+}
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.45); }
+  70% { box-shadow: 0 0 0 6px rgba(255, 87, 34, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0); }
+}
 
 .status-icon {
   font-weight: 800;
+}
+
+/* 行 3.5: 现场实时快照条 */
+.flat-snapshot-strip {
+  flex-shrink: 0;
+  height: 38px;
+  background: #111827;
+  border: 1px solid #1F2937;
+  border-radius: 4px;
+  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.flat-snapshot-strip:hover {
+  border-color: #00D2FF;
+}
+
+.snap-thumb-box {
+  position: relative;
+  width: 52px;
+  height: 32px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #000;
+  flex-shrink: 0;
+}
+.snap-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.snap-live-tag {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  background: rgba(255, 0, 0, 0.85);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+.snap-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.snap-info-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.snap-info-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #E2E8F0;
+}
+.snap-roi-pill {
+  font-size: 9px;
+  font-weight: 600;
+  color: #00D2FF;
+  background: rgba(0, 210, 255, 0.12);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.snap-info-sub {
+  font-size: 9.5px;
+  color: #64748B;
+}
+.snap-zoom-icon {
+  font-size: 13px;
+  color: #94A3B8;
+}
+
+/* 现场快照大图弹窗 */
+.snapshot-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+.snapshot-modal-card {
+  background: #111827;
+  border: 1px solid #2A364F;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.smc-header {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  background: #182030;
+  border-bottom: 1px solid #2A364F;
+}
+.smc-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.live-dot-red {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FF3D71;
+}
+.smc-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F8FAFC;
+}
+.smc-close {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 14px;
+  cursor: pointer;
+}
+.smc-body {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-large-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.smc-footer {
+  padding: 6px 12px;
+  background: #182030;
+  font-size: 10px;
+  color: #94A3B8;
+}
+
+.wave-dot-flame {
+  background: #FF5722 !important;
+  box-shadow: 0 0 6px #FF5722;
+}
+.w-dot.dot-flame {
+  background: #FF5722;
+  box-shadow: 0 0 6px #FF5722;
+}
+.flame-text {
+  color: #FF5722 !important;
+  font-weight: 700;
 }
 
 /* 行 4: 实时动态波形卡片 (填满下方剩余全部高度) */

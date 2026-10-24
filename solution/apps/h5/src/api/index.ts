@@ -56,6 +56,36 @@ export interface EventQueryParams {
   size?: number;
 }
 
+export interface DashboardSummaryVO {
+  pointId: number;
+  pointName: string;
+  clientName: string;
+  appVersion: string;
+  lastHeartbeat: string;
+  streamStatus: string;
+  currentOccupancy: number;
+  todayEntry: number;
+  todayExit: number;
+  todayTotal: number;
+  snapshotUrl?: string;
+  demographics: {
+    maleCount: number;
+    femaleCount: number;
+    maleRatio: number;
+    femaleRatio: number;
+    topAgeGroup: string;
+  };
+  hourlyChart: any[];
+}
+
+export interface PairingCodeVO {
+  pointId: number;
+  pointName: string;
+  pairingCode: string;
+  expiresInSeconds: number;
+  expireAtMs: number;
+}
+
 export const h5Api = {
   getMyPoints: () => api.get('/h5/points'),
   getDashboardSummary: (pointId: number) => api.get('/h5/dashboard/summary', { params: { pointId } }),
@@ -68,5 +98,6 @@ export const h5Api = {
   },
   changePassword: (data: { oldPassword: string; newPassword: string }) => api.post('/h5/user/password', data),
   getPointCredential: (pointId: number) => api.get(`/h5/points/${pointId}/credential`),
-  resetDevicePassword: (pointId: number, data: { newDevicePassword: string }) => api.post(`/h5/points/${pointId}/device-password`, data)
+  resetDevicePassword: (pointId: number, data: { newDevicePassword: string }) => api.post(`/h5/points/${pointId}/device-password`, data),
+  generatePairingCode: (pointId: number) => api.post(`/h5/points/${pointId}/pairing-code`)
 };

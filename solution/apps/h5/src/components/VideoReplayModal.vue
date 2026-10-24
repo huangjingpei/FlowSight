@@ -61,6 +61,21 @@
         </div>
       </div>
 
+      <!-- 播放节奏控制条 -->
+      <div v-if="playUrl && !videoError" class="speed-control-row">
+        <span class="speed-label">🎥 播放节奏:</span>
+        <div class="speed-pills">
+          <span
+            v-for="s in [0.5, 1.0, 1.5]"
+            :key="s"
+            :class="['speed-pill', playbackRate === s ? 'active' : '']"
+            @click="setPlaybackRate(s)"
+          >
+            {{ s === 1.0 ? '1.0x 原速' : s === 0.5 ? '0.5x 慢速复核' : '1.5x 快速' }}
+          </span>
+        </div>
+      </div>
+
       <div class="footer-tip">
         <van-icon name="info-o" />
         <span>切片存储于云端对象存储，播放时点位流切换已自动锁定保护</span>
@@ -95,6 +110,14 @@ const videoRef = ref<HTMLVideoElement | null>(null);
 
 const isBuffering = ref(true);
 const videoError = ref(false);
+const playbackRate = ref(1.0);
+
+const setPlaybackRate = (rate: number) => {
+  playbackRate.value = rate;
+  if (videoRef.value) {
+    videoRef.value.playbackRate = rate;
+  }
+};
 
 const currentEvent = computed(() => props.eventData || props.eventInfo);
 
@@ -109,6 +132,10 @@ watch(() => props.modelValue, (val) => {
 watch(() => props.playUrl, () => {
   videoError.value = false;
   isBuffering.value = true;
+  playbackRate.value = 1.0;
+  if (videoRef.value) {
+    videoRef.value.playbackRate = 1.0;
+  }
 });
 
 const onCanPlay = () => {
@@ -284,6 +311,45 @@ const handleClosed = () => {
 
 .btn-retry:active {
   transform: scale(0.97);
+}
+
+.speed-control-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #111624;
+  border-radius: 6px;
+  border: 1px solid #1F293D;
+}
+
+.speed-label {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 600;
+}
+
+.speed-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.speed-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #182030;
+  color: #94A3B8;
+  border: 1px solid #2A364F;
+  cursor: pointer;
+}
+
+.speed-pill.active {
+  background: #00D2FF;
+  color: #0A0D14;
+  font-weight: 800;
+  border-color: #00D2FF;
 }
 
 .footer-tip {

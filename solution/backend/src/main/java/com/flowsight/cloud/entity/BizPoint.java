@@ -23,6 +23,7 @@ public class BizPoint implements Serializable {
     private String streamStatus; // ONLINE, OFFLINE, ALERT
     private String pointToken;
     private String devicePasswordHash;
+    private String snapshotUrl;
     
     @TableLogic
     private Integer isDeleted;

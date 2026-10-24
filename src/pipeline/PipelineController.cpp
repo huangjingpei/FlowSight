@@ -563,7 +563,8 @@ public slots:
                 if (ev.direction == PassageDirection::ENTRY) today_entry_++;
                 else if (ev.direction == PassageDirection::EXIT) today_exit_++;
 
-                int clip_fps = (current_fps > 5.0f) ? static_cast<int>(std::round(current_fps)) : static_cast<int>(std::round(video_fps));
+                // 严格以摄像头/视频源原生帧率 (video_fps) 编码，杜绝因 CPU 推理快慢导致的时间尺度失真
+                int clip_fps = (video_fps >= 10.0 && video_fps <= 60.0) ? static_cast<int>(std::round(video_fps)) : 25;
                 std::string clip = clip_recorder_->save_clip_async("clips", ev.track_id, ev.timestamp_ms, clip_fps);
                 ev.clip_path = clip;
                 DatabaseManager::instance().insert_events({ev});

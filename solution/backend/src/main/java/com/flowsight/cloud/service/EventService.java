@@ -13,6 +13,7 @@ public interface EventService {
     void recordEdgeEvent(Long pointId, EdgeEventDTO dto);
     void recordEdgeBatchReport(Long pointId, EdgeBatchReportDTO dto);
     String uploadEdgeClip(Long pointId, Integer trackId, Long timestamp, MultipartFile file);
+    String uploadEdgeSnapshot(Long pointId, MultipartFile file);
     void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto);
     DashboardSummaryVO getDashboardSummary(Long pointId);
     TrendReportVO getTrendReport(Long pointId, String dimension, Integer days);

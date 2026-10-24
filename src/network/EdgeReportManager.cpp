@@ -158,6 +158,51 @@ void EdgeReportManager::login_with_device_credentials(const QString& base_url, c
     });
 }
 
+void EdgeReportManager::pair_with_code(const QString& base_url, const QString& pairing_code, const QString& client_name, PairingCallback callback) {
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    QUrl pair_url(base_url.trimmed() + "/api/v1/edge/auth/pair-with-code");
+    QNetworkRequest request(pair_url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject obj;
+    obj["pairingCode"] = pairing_code.trimmed();
+    obj["clientName"] = client_name.trimmed().isEmpty() ? "FlowSight-Node-1" : client_name.trimmed();
+    QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+
+    QNetworkReply* reply = nam_->post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, base_url, client_name, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            if (callback) callback(false, QString("配对网络异常: %1").arg(reply->errorString()), 0, "", "");
+            return;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonObject root = doc.object();
+        int code = root["code"].toInt();
+        if (code != 200) {
+            if (callback) callback(false, root["message"].toString("6位配对码无效或已过期"), 0, "", "");
+            return;
+        }
+
+        QJsonObject data = root["data"].toObject();
+        qint64 pid = data["pointId"].toInteger();
+        QString pname = data["pointName"].toString();
+        QString ptoken = data["pointToken"].toString();
+        QString pcode = data["pointCode"].toString();
+
+        // 自动完成绑定与持久化
+        auto& cfg = ConfigManager::instance();
+        if (!pcode.isEmpty()) {
+            cfg.set_cloud_point_code(pcode);
+        }
+        bind_point(base_url, pid, pname, ptoken, client_name);
+
+        if (callback) callback(true, "6位配对码接入成功！通道已绑定并上线。", pid, pname, ptoken);
+    });
+}
+
 void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name) {
     cloud_base_url_ = base_url.trimmed();
     bound_point_id_ = point_id;
@@ -712,3 +757,35 @@ void EdgeReportManager::process_clip_upload_queue() {
         }
     });
 }
+
+void EdgeReportManager::upload_snapshot(const QByteArray& jpeg_data) {
+    if (jpeg_data.isEmpty()) return;
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
+    if (is_point_deactivated_) return;
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    QUrl snap_url(cloud_base_url_.trimmed() + "/api/v1/edge/snapshot");
+    QNetworkRequest request(snap_url);
+    request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
+
+    QHttpMultiPart* multi_part = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart file_part;
+    file_part.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/jpeg"));
+    file_part.setHeader(QNetworkRequest::ContentDispositionHeader,
+        QVariant("form-data; name=\"file\"; filename=\"snapshot.jpg\""));
+    file_part.setBody(jpeg_data);
+    multi_part->append(file_part);
+
+    QNetworkReply* reply = nam_->post(request, multi_part);
+    multi_part->setParent(reply);
+    connect(reply, &QNetworkReply::finished, reply, [reply]() {
+        reply->deleteLater();
+        if (reply->error() == QNetworkReply::NoError) {
+            qDebug() << "[EdgeReportManager] Live camera snapshot uploaded successfully.";
+        } else {
+            qWarning() << "[EdgeReportManager] Snapshot upload failed:" << reply->errorString();
+        }
+    });
+}
+

@@ -18,6 +18,8 @@
 #include <QApplication>
 #include <QPainter>
 #include <QCloseEvent>
+#include <QBuffer>
+#include <QDateTime>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("FlowSight 智能客流分析系统 v1.2");
@@ -85,6 +87,52 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // 绑定数据流到各个独立视图与网络推送
     connect(pipeline_.get(), &PipelineController::frame_ready, view_monitor_, &MonitorWidget::update_frame);
     connect(pipeline_.get(), &PipelineController::frame_ready, view_studio_, &StudioWidget::update_frame);
+
+    // 现场快照预览：每 60 秒 (或首帧起动) 自动捕获当前带 ROI 绊线的水印快照上报云端
+    auto last_snapshot_time = std::make_shared<qint64>(0);
+    connect(pipeline_.get(), &PipelineController::frame_ready, this, [this, last_snapshot_time](const QImage& frame, const std::vector<TrackObject>& tracks) {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - *last_snapshot_time < 60000 && *last_snapshot_time > 0) {
+            return;
+        }
+        if (frame.isNull() || !EdgeReportManager::instance().is_cloud_online()) {
+            return;
+        }
+        *last_snapshot_time = now;
+
+        // 缩放并绘制轻量快照 (640x360 压缩到 ~30KB)
+        QImage snap = frame.scaled(640, 360, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        {
+            QPainter p(&snap);
+            p.setRenderHint(QPainter::Antialiasing);
+
+            auto rois = pipeline_->get_current_rois();
+            float sx = static_cast<float>(snap.width()) / frame.width();
+            float sy = static_cast<float>(snap.height()) / frame.height();
+            for (const auto& roi : rois) {
+                if (roi.vertices.size() >= 2) {
+                    QPolygonF poly;
+                    for (const auto& pt : roi.vertices) {
+                        poly << QPointF(pt.x * sx, pt.y * sy);
+                    }
+                    p.setPen(QPen(QColor(0, 210, 255, 220), 2, Qt::SolidLine));
+                    p.setBrush(QColor(0, 210, 255, 40));
+                    p.drawPolygon(poly);
+                }
+            }
+
+            p.setPen(QPen(QColor(0, 255, 128, 220)));
+            p.setFont(QFont("Microsoft YaHei", 9, QFont::Bold));
+            p.drawText(snap.rect().adjusted(0, 8, -10, 0), Qt::AlignRight | Qt::AlignTop, "● LIVE SNAPSHOT");
+        }
+
+        QByteArray bytes;
+        QBuffer buf(&bytes);
+        buf.open(QIODevice::WriteOnly);
+        snap.save(&buf, "JPG", 75);
+
+        EdgeReportManager::instance().upload_snapshot(bytes);
+    });
     connect(pipeline_.get(), &PipelineController::stats_updated, view_monitor_, &MonitorWidget::update_stats);
     connect(pipeline_.get(), &PipelineController::stats_updated, this, &MainWindow::on_stats_updated);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);

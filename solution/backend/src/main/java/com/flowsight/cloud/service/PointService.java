@@ -2,11 +2,13 @@ package com.flowsight.cloud.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.dto.DeviceLoginDTO;
+import com.flowsight.cloud.dto.PairingRequestDTO;
 import com.flowsight.cloud.dto.PointCreateDTO;
 import com.flowsight.cloud.dto.PointUpdateDTO;
 import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.vo.DeviceLoginVO;
+import com.flowsight.cloud.vo.PairingCodeVO;
 import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 
@@ -26,4 +28,8 @@ public interface PointService {
     DeviceLoginVO loginWithDeviceCredentials(DeviceLoginDTO dto);
     PointCredentialVO getPointCredential(Long pointId, Long userId);
     PointCredentialVO resetDevicePassword(Long pointId, Long userId, ResetDevicePasswordDTO dto);
+
+    // 极简 6 位动态配对码接口
+    PairingCodeVO generatePairingCode(Long pointId, Long userId);
+    DeviceLoginVO pairWithCode(PairingRequestDTO dto);
 }

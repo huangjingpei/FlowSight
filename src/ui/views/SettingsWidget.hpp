@@ -45,6 +45,10 @@ private:
     QLineEdit* cloud_url_edit_ = nullptr;
     QLineEdit* cloud_client_name_edit_ = nullptr;
 
+    // 6 位动态数字配对码极简秒级接入 (推荐)
+    QLineEdit* cloud_pairing_code_edit_ = nullptr;
+    QPushButton* btn_pair_with_code_ = nullptr;
+
     // 双密码体系：边缘设备专属接入认证 (密码 2)
     QLineEdit* cloud_point_code_edit_ = nullptr;
     QLineEdit* cloud_device_pwd_edit_ = nullptr;

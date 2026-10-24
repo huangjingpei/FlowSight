@@ -5,6 +5,7 @@ import com.flowsight.cloud.dto.DeviceLoginDTO;
 import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
+import com.flowsight.cloud.dto.PairingRequestDTO;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
@@ -24,6 +25,14 @@ public class EdgeIngestController {
 
     @Autowired
     private EventService eventService;
+
+    /**
+     * 极简接入：边缘工控机凭 6 位配对码一键接入并换取长效 Token
+     */
+    @PostMapping("/auth/pair-with-code")
+    public Result<DeviceLoginVO> pairWithCode(@Valid @RequestBody PairingRequestDTO dto) {
+        return Result.success("配对成功，已激活点位", pointService.pairWithCode(dto));
+    }
 
     /**
      * 双密码体系：边缘设备专属身份接入认证 (密码 2)
@@ -68,6 +77,17 @@ public class EdgeIngestController {
         BizPoint point = authenticateEdge(token);
         String clipUrl = eventService.uploadEdgeClip(point.getId(), trackId, timestamp, file);
         return Result.success("切片上传就绪", clipUrl);
+    }
+
+    /**
+     * 现场快照预览：边缘上传当前带 ROI 绊线的现场缩略图
+     */
+    @PostMapping("/snapshot")
+    public Result<String> uploadSnapshot(@RequestHeader(value = "X-Point-Token", required = false) String token,
+                                         @RequestParam("file") MultipartFile file) {
+        BizPoint point = authenticateEdge(token);
+        String snapshotUrl = eventService.uploadEdgeSnapshot(point.getId(), file);
+        return Result.success("现场快照已更新", snapshotUrl);
     }
 
     @PostMapping("/heartbeat")

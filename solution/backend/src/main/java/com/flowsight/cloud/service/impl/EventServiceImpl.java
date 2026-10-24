@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -266,6 +267,28 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    public String uploadEdgeSnapshot(Long pointId, MultipartFile file) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) throw new IllegalArgumentException("点位不存在: " + pointId);
+
+        try {
+            File dir = new File("uploads/snapshots").getAbsoluteFile();
+            if (!dir.exists()) dir.mkdirs();
+
+            String filename = "snapshot_p" + pointId + ".jpg";
+            File dest = new File(dir, filename).getAbsoluteFile();
+            file.transferTo(dest);
+
+            String url = "/api/v1/snapshots/" + filename + "?t=" + System.currentTimeMillis();
+            point.setSnapshotUrl(url);
+            pointMapper.updateById(point);
+            return url;
+        } catch (Exception e) {
+            throw new RuntimeException("快照保存失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto) {
         BizPoint point = pointMapper.selectById(pointId);
         if (point == null) return;
@@ -378,6 +401,7 @@ public class EventServiceImpl implements EventService {
         vo.setTodayEntry(todayIn);
         vo.setTodayExit(todayOut);
         vo.setTodayTotal(todayIn + todayOut);
+        vo.setSnapshotUrl(point.getSnapshotUrl() != null ? point.getSnapshotUrl() : "");
         vo.setDemographics(demo);
         vo.setHourlyChart(new ArrayList<>(hourMap.values()));
         vo.getHourlyChart().sort(Comparator.comparingInt(HourlyStatVO::getHour));

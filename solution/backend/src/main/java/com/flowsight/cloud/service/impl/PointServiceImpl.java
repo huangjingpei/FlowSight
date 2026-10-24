@@ -3,6 +3,7 @@ package com.flowsight.cloud.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.dto.DeviceLoginDTO;
+import com.flowsight.cloud.dto.PairingRequestDTO;
 import com.flowsight.cloud.dto.PointCreateDTO;
 import com.flowsight.cloud.dto.PointUpdateDTO;
 import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
@@ -15,6 +16,7 @@ import com.flowsight.cloud.mapper.*;
 import com.flowsight.cloud.service.MinioService;
 import com.flowsight.cloud.service.PointService;
 import com.flowsight.cloud.vo.DeviceLoginVO;
+import com.flowsight.cloud.vo.PairingCodeVO;
 import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -283,6 +287,87 @@ public class PointServiceImpl implements PointService {
                 .pointToken(newToken)
                 .hasDevicePassword(true)
                 .devicePasswordMasked("******")
+                .build();
+    }
+
+    private static class PairingSession {
+        Long pointId;
+        Long userId;
+        long expireAt;
+
+        PairingSession(Long pointId, Long userId, long expireAt) {
+            this.pointId = pointId;
+            this.userId = userId;
+            this.expireAt = expireAt;
+        }
+    }
+
+    private final Map<String, PairingSession> pairingCodeStore = new ConcurrentHashMap<>();
+
+    @Override
+    public PairingCodeVO generatePairingCode(Long pointId, Long userId) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) throw new IllegalArgumentException("点位不存在");
+        if (userId != null && !userId.equals(point.getUserId())) {
+            SysUser user = userMapper.selectById(userId);
+            if (user == null || !"ROLE_ADMIN".equals(user.getRole())) {
+                throw new IllegalArgumentException("无权为该点位生成配对码");
+            }
+        }
+
+        // 生成 6 位随机数字码 (100000 - 999999)
+        int randomCode = 100000 + new java.security.SecureRandom().nextInt(900000);
+        String code = String.valueOf(randomCode);
+
+        // 5 分钟 (300秒) 有效期
+        long expireAt = System.currentTimeMillis() + 300 * 1000L;
+        pairingCodeStore.put(code, new PairingSession(pointId, userId, expireAt));
+
+        return PairingCodeVO.builder()
+                .pairingCode(code)
+                .pointId(point.getId())
+                .pointName(point.getPointName())
+                .expiresInSeconds(300)
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeviceLoginVO pairWithCode(PairingRequestDTO dto) {
+        String code = dto.getPairingCode() != null ? dto.getPairingCode().trim().replace(" ", "") : "";
+        if (code.length() != 6) {
+            throw new IllegalArgumentException("配对码必须为 6 位数字");
+        }
+
+        PairingSession session = pairingCodeStore.get(code);
+        if (session == null || System.currentTimeMillis() > session.expireAt) {
+            pairingCodeStore.remove(code);
+            throw new IllegalArgumentException("该 6 位配对码不存在或已过期，请在手机端重新生成！");
+        }
+
+        // 一次性消费配对码
+        pairingCodeStore.remove(code);
+
+        BizPoint point = pointMapper.selectById(session.pointId);
+        if (point == null) {
+            throw new IllegalArgumentException("配对码关联点位已不存在");
+        }
+
+        if (point.getPointToken() == null || point.getPointToken().trim().isEmpty()) {
+            point.setPointToken("ptk_" + UUID.randomUUID().toString().replace("-", ""));
+        }
+        point.setStreamStatus("ONLINE");
+        pointMapper.updateById(point);
+
+        return DeviceLoginVO.builder()
+                .pointId(point.getId())
+                .userId(point.getUserId())
+                .pointCode(point.getPointCode())
+                .pointName(point.getPointName())
+                .pointToken(point.getPointToken())
+                .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
+                .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
+                .clientName(dto.getClientName() != null ? dto.getClientName() : "FlowSight-Node")
                 .build();
     }
 

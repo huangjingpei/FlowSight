@@ -38,6 +38,13 @@ public:
     using DeviceLoginCallback = std::function<void(bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token)>;
     void login_with_device_credentials(const QString& base_url, const QString& point_code, const QString& device_password, const QString& client_name, DeviceLoginCallback callback);
 
+    // 动态配对体系：6 位数字动态 PIN 码极简秒级接入 (一次性消费)
+    using PairingCallback = std::function<void(bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token)>;
+    void pair_with_code(const QString& base_url, const QString& pairing_code, const QString& client_name, PairingCallback callback);
+
+    // 现场快照预览上传 (JPEG)
+    void upload_snapshot(const QByteArray& jpeg_data);
+
     // 绑定选中的云端点位
     void bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name = "");
 

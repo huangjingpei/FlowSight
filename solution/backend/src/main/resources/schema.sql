@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     `stream_status` VARCHAR(20) NOT NULL DEFAULT 'OFFLINE' COMMENT '状态: ONLINE-在线, OFFLINE-离线, ALERT-异常',
     `point_token` VARCHAR(64) NOT NULL COMMENT '边缘采集端专用对接认证Token',
     `device_password_hash` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '边缘专属设备接入密码(BCrypt散列)',
+    `snapshot_url` VARCHAR(512) DEFAULT '' COMMENT '现场实时画面快照预览地址',
     `is_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标记: 0-正常, 1-已删除',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置更新时间',

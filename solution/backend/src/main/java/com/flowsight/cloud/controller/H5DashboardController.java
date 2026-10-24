@@ -9,6 +9,7 @@ import com.flowsight.cloud.service.PointService;
 import com.flowsight.cloud.service.UserService;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
+import com.flowsight.cloud.vo.PairingCodeVO;
 import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 import com.flowsight.cloud.vo.TrendReportVO;
@@ -93,6 +94,16 @@ public class H5DashboardController {
         checkPointOwnership(pointId, request);
         Long userId = (Long) request.getAttribute("userId");
         return Result.success(pointService.getPointCredential(pointId, userId));
+    }
+
+    /**
+     * 极简接入：商户在移动端一键生成 6 位临时配对码 (5分钟有效)
+     */
+    @PostMapping("/points/{pointId}/pairing-code")
+    public Result<PairingCodeVO> generatePairingCode(@PathVariable Long pointId, HttpServletRequest request) {
+        checkPointOwnership(pointId, request);
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.success("配对码已生成，请在现场工控机输入", pointService.generatePairingCode(pointId, userId));
     }
 
     /**

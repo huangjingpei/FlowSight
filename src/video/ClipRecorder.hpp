@@ -47,22 +47,13 @@ public:
     }
 
     // 触发进出事件时调用：将切片投递到任务队列，由后台独立线程平滑排队编码保存
-    // 关键优化: 依据缓冲池帧到达的实际物理时间跨度精确自适应计算 FPS，根治回放“快进感”
-    std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int fallback_fps = 25) {
+    // 关键物理校准: 视频切片编码封装严格与摄像头原生采集帧率 (stream_fps, 默认25) 1:1 等速对齐，彻底根除回放“快进感”
+    std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int stream_fps = 25) {
         std::vector<cv::Mat> snapshot;
-        int actual_fps = fallback_fps;
+        int actual_fps = (stream_fps >= 10 && stream_fps <= 60) ? stream_fps : 25;
         {
             std::lock_guard<std::mutex> lock(mtx_);
             if (frame_buffer_.empty()) return "";
-
-            // 依据首尾帧的真实物理流逝时间 (ms)，动态精确计算该切片的实际帧率
-            if (frame_buffer_.size() >= 2) {
-                int64_t delta_ms = frame_buffer_.back().timestamp_ms - frame_buffer_.front().timestamp_ms;
-                if (delta_ms >= 200) {
-                    double calc = (frame_buffer_.size() - 1) * 1000.0 / static_cast<double>(delta_ms);
-                    actual_fps = std::clamp(static_cast<int>(std::round(calc)), 5, 60);
-                }
-            }
 
             snapshot.reserve(frame_buffer_.size());
             for (const auto& bf : frame_buffer_) {

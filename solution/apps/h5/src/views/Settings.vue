@@ -68,7 +68,63 @@
         </div>
       </div>
 
-      <!-- 设置条目 2: 双密码体系 - 边缘设备专用接入密钥 (密码 2) -->
+      <!-- 设置条目 2: ⚡ 6位动态配对码 (极速秒连) -->
+      <div class="settings-card">
+        <div class="card-header" @click="showPairingCard = !showPairingCard">
+          <div class="header-title-box">
+            <span class="item-icon">⚡</span>
+            <span class="item-title">现场设备 6 位动态配对码 (极速接入)</span>
+          </div>
+          <span class="toggle-btn">{{ showPairingCard ? '收起 ▲' : '生成配对码 ▼' }}</span>
+        </div>
+
+        <div class="card-sub-info">
+          <div class="sub-meta-row">
+            <span class="sm-k">目标通道:</span>
+            <span class="sm-v cyan-code">{{ pointCredential.pointName || summary.pointName || '当前通道' }} ({{ pointCredential.pointCode || 'POINT_01' }})</span>
+          </div>
+          <div class="sub-meta-row">
+            <span class="sm-k">极简接入:</span>
+            <span class="sm-v green-status">无需复杂输入，工控机输入 6 位数字即可 1 秒配对接入</span>
+          </div>
+        </div>
+
+        <div v-if="showPairingCard" class="pairing-box-wrap">
+          <div v-if="!pairingData" class="pairing-init">
+            <p class="pairing-desc">
+              无需向施工人员透露账号主密码。点击下方按钮即可生成 5 分钟有效的一次性 6 位数字配对码，工控机输入后即可自动完成身份鉴权与点位绑定。
+            </p>
+            <button class="btn-change-pwd btn-cyan-action" :disabled="pairingLoading" @click="handleGeneratePairingCode">
+              {{ pairingLoading ? '正在生成配对码...' : '⚡ 立即生成 6 位接入配对码' }}
+            </button>
+          </div>
+
+          <div v-else class="pairing-active">
+            <div class="pairing-countdown">
+              <span>⏳ 配对码有效期剩余: <b class="text-orange">{{ pairingRemainingSec }}秒</b></span>
+            </div>
+            <!-- 6 位大字号排版卡片 -->
+            <div class="pin-digits-row">
+              <span v-for="(digit, idx) in pairingDigits" :key="idx" class="pin-digit-box">
+                {{ digit }}
+              </span>
+            </div>
+            <div class="pairing-tip">
+              💡 施工人员在工控机客户端「设置 → 云端协同」中输入上述 6 位数字即可自动同步。
+            </div>
+            <div class="pairing-action-row">
+              <button class="btn-copy-pin" @click="handleCopyPin">
+                📋 复制 6 位配对码
+              </button>
+              <button class="btn-refresh-pin" :disabled="pairingLoading" @click="handleGeneratePairingCode">
+                🔄 重新生成
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 设置条目 3: 双密码体系 - 边缘设备专用接入密钥 (密码 2) -->
       <div class="settings-card">
         <div class="card-header" @click="showDevPwdForm = !showDevPwdForm">
           <div class="header-title-box">
@@ -199,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showDialog } from 'vant';
 import { h5Api, DashboardSummaryVO } from '../api';
@@ -219,8 +275,52 @@ const userProfile = computed(() => {
 
 // 折叠状态
 const showPwdForm = ref(false);
+const showPairingCard = ref(true);
 const showDevPwdForm = ref(false);
 const showDemographics = ref(true);
+
+// ⚡ 6 位动态配对码 (极速接入)
+const pairingLoading = ref(false);
+const pairingData = ref<any>(null);
+const pairingRemainingSec = ref(0);
+let pairingTimer: any = null;
+
+const pairingDigits = computed(() => {
+  if (!pairingData.value || !pairingData.value.pairingCode) return ['-', '-', '-', '-', '-', '-'];
+  return String(pairingData.value.pairingCode).split('');
+});
+
+const handleGeneratePairingCode = async () => {
+  const pid = summary.value.pointId || 1;
+  pairingLoading.value = true;
+  try {
+    const res: any = await h5Api.generatePairingCode(pid);
+    if (res) {
+      pairingData.value = res;
+      pairingRemainingSec.value = res.expiresInSeconds || 300;
+      if (pairingTimer) clearInterval(pairingTimer);
+      pairingTimer = setInterval(() => {
+        if (pairingRemainingSec.value > 0) {
+          pairingRemainingSec.value--;
+        } else {
+          clearInterval(pairingTimer);
+          pairingData.value = null;
+        }
+      }, 1000);
+      showToast({ message: '6 位配对码已生成，5 分钟内有效', position: 'top' });
+    }
+  } catch (e: any) {
+    showToast(e.message || '生成失败');
+  } finally {
+    pairingLoading.value = false;
+  }
+};
+
+const handleCopyPin = () => {
+  if (!pairingData.value || !pairingData.value.pairingCode) return;
+  navigator.clipboard.writeText(String(pairingData.value.pairingCode));
+  showToast({ message: '配对码已复制到剪贴板', position: 'top' });
+};
 
 // 密码 1: 商户账号登录密码表单
 const pwdForm = ref({
@@ -370,6 +470,10 @@ const handleLogout = () => {
 
 onMounted(() => {
   loadSummary();
+});
+
+onUnmounted(() => {
+  if (pairingTimer) clearInterval(pairingTimer);
 });
 </script>
 
@@ -562,6 +666,97 @@ onMounted(() => {
   padding: 6px 8px;
   border-radius: 2px;
   line-height: 145%;
+}
+
+/* 6位动态配对码样式 */
+.pairing-box-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #182030;
+}
+
+.pairing-desc {
+  font-size: 11px;
+  color: #94A3B8;
+  line-height: 150%;
+  margin: 0 0 8px 0;
+}
+
+.pairing-countdown {
+  font-size: 11px;
+  color: #94A3B8;
+  text-align: center;
+}
+
+.text-orange {
+  color: #FF9800;
+  font-weight: 700;
+}
+
+.pin-digits-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.pin-digit-box {
+  width: 40px;
+  height: 48px;
+  background: #10192A;
+  border: 1.5px solid #00D2FF;
+  border-radius: 6px;
+  color: #00D2FF;
+  font-size: 22px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 12px rgba(0, 210, 255, 0.25);
+  font-family: monospace;
+}
+
+.pairing-tip {
+  font-size: 10.5px;
+  color: #64748B;
+  text-align: center;
+  line-height: 140%;
+}
+
+.pairing-action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-copy-pin {
+  flex: 1;
+  background: #00D2FF;
+  color: #0A0D14;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-copy-pin:active {
+  transform: scale(0.98);
+}
+
+.btn-refresh-pin {
+  background: #182030;
+  color: #94A3B8;
+  border: 1px solid #2A364F;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .btn-cyan-action {

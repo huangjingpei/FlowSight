@@ -33,6 +33,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/v1/auth/**",      // 登录、扫码放行
                         "/api/v1/edge/**",      // 边缘采集端(使用 X-Point-Token 独立鉴权)
                         "/api/v1/clips/**",     // 本地切片回放静态资源直接放行 (用于 MinIO 降级服务)
+                        "/api/v1/snapshots/**", // 现场快照缩略图静态放行
                         "/error"
                 );
     }
@@ -49,5 +50,16 @@ public class WebMvcConfig implements WebMvcConfigurer {
         }
         registry.addResourceHandler("/api/v1/clips/**")
                 .addResourceLocations("file:" + absPath, "file:./uploads/clips/", "file:../uploads/clips/");
+
+        File snapDir = new File("uploads/snapshots");
+        if (!snapDir.exists()) {
+            snapDir.mkdirs();
+        }
+        String snapAbs = snapDir.getAbsolutePath().replace("\\", "/");
+        if (!snapAbs.endsWith("/")) {
+            snapAbs += "/";
+        }
+        registry.addResourceHandler("/api/v1/snapshots/**")
+                .addResourceLocations("file:" + snapAbs, "file:./uploads/snapshots/", "file:../uploads/snapshots/");
     }
 }
