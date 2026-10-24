@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -55,6 +56,9 @@ public class EventServiceImpl implements EventService {
 
     @Autowired
     private MinioService minioService;
+
+    // 待绑定切片池: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
+    private final Map<String, String> pendingClipUrlCache = new ConcurrentHashMap<>();
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -153,6 +157,13 @@ public class EventServiceImpl implements EventService {
                 event.setAgeGroup(ageGroup);
                 event.setTimestampMs(evTs);
                 event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
+
+                // 检查待绑定切片池 (若切片先行上传到达)
+                String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + event.getTrackId());
+                if (pendingUrl != null) {
+                    event.setClipUrl(pendingUrl);
+                }
+
                 eventMapper.insert(event);
             }
         }
@@ -230,19 +241,27 @@ public class EventServiceImpl implements EventService {
         String clipUrl = minioService.uploadClip(pointId, trackId, timestamp, file);
 
         // 回填到最新的事件记录中 (如果已入库)
+        boolean matched = false;
         if (trackId != null && timestamp != null) {
             List<BizPassageEvent> list = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
                     .eq(BizPassageEvent::getPointId, pointId)
                     .eq(BizPassageEvent::getTrackId, trackId)
-                    .ge(BizPassageEvent::getTimestampMs, timestamp - 10000)
-                    .le(BizPassageEvent::getTimestampMs, timestamp + 10000)
+                    .ge(BizPassageEvent::getTimestampMs, timestamp - 60000)
+                    .le(BizPassageEvent::getTimestampMs, timestamp + 60000)
                     .orderByDesc(BizPassageEvent::getId));
             if (!list.isEmpty()) {
                 BizPassageEvent ev = list.get(0);
                 ev.setClipUrl(clipUrl);
                 eventMapper.updateById(ev);
+                matched = true;
             }
         }
+
+        // 若事件记录尚未批量上报到达，暂存至待绑定池
+        if (!matched && trackId != null) {
+            pendingClipUrlCache.put(pointId + "_" + trackId, clipUrl);
+        }
+
         return clipUrl;
     }
 

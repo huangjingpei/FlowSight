@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <functional>
 #include <vector>
+#include <deque>
 #include "common/Types.hpp"
 
 /**
@@ -83,9 +84,24 @@ private:
     // 离线队列排空引擎
     void drain_offline_queue();
 
+    // MinIO 短视频切片异步上云引擎
+    struct PendingClip {
+        QString local_path;
+        int track_id = -1;
+        qint64 timestamp_ms = 0;
+        int retry_count = 0;
+    };
+    void enqueue_clip_upload(const QString& clip_path, int track_id, qint64 timestamp_ms);
+    void process_clip_upload_queue();
+
     QNetworkAccessManager* nam_ = nullptr;
     QTimer* batch_timer_ = nullptr;
     QTimer* watchdog_timer_ = nullptr;
+    QTimer* clip_upload_timer_ = nullptr;
+
+    std::deque<PendingClip> pending_clips_;
+    QMutex clip_mutex_;
+    bool is_uploading_clip_ = false;
 
     QMutex mutex_;
     // 内存聚合池

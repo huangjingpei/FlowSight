@@ -7,6 +7,10 @@
 #include <QElapsedTimer>
 #include <QDebug>
 #include <QSysInfo>
+#include <QHttpMultiPart>
+#include <QHttpPart>
+#include <QFileInfo>
+#include <QFile>
 
 EdgeReportManager& EdgeReportManager::instance() {
     static EdgeReportManager inst;
@@ -43,6 +47,12 @@ void EdgeReportManager::init(QObject* parent) {
         watchdog_timer_ = new QTimer(this);
         connect(watchdog_timer_, &QTimer::timeout, this, &EdgeReportManager::on_watchdog_timer_timeout);
         watchdog_timer_->start(15000); // 每 15 秒探活一次
+    }
+
+    if (!clip_upload_timer_) {
+        clip_upload_timer_ = new QTimer(this);
+        connect(clip_upload_timer_, &QTimer::timeout, this, &EdgeReportManager::process_clip_upload_queue);
+        clip_upload_timer_->start(2000); // 每 2 秒轮询切片上云队列
     }
 
     window_start_ts_ = QDateTime::currentMSecsSinceEpoch();
@@ -218,6 +228,11 @@ void EdgeReportManager::record_passage(const PassageEvent& event) {
     else adult_count_++;
 
     batch_events_.push_back(event);
+
+    // 若事件生成了视频切片，投递至异步上传队列
+    if (!event.clip_path.empty()) {
+        enqueue_clip_upload(QString::fromStdString(event.clip_path), event.track_id, event.timestamp_ms);
+    }
 
     // 内存缓冲达到阈值 (50 条) 立即提前刷新
     if (batch_events_.size() >= 50) {
@@ -429,4 +444,98 @@ void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_
 
 int EdgeReportManager::get_offline_queue_count() const {
     return DatabaseManager::instance().get_pending_offline_count();
+}
+
+void EdgeReportManager::enqueue_clip_upload(const QString& clip_path, int track_id, qint64 timestamp_ms) {
+    if (clip_path.trimmed().isEmpty()) return;
+    QMutexLocker locker(&clip_mutex_);
+    if (pending_clips_.size() >= 50) {
+        // 队列超载保护: 剔除最旧待上传任务
+        pending_clips_.pop_front();
+    }
+    pending_clips_.push_back({clip_path.trimmed(), track_id, timestamp_ms, 0});
+}
+
+void EdgeReportManager::process_clip_upload_queue() {
+    if (is_uploading_clip_) return;
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
+
+    PendingClip task;
+    {
+        QMutexLocker locker(&clip_mutex_);
+        if (pending_clips_.empty()) return;
+        task = pending_clips_.front();
+    }
+
+    QFileInfo fi(task.local_path);
+    // 检查切片文件是否存在且已由 ClipRecorder 完成编码 (> 1KB)
+    if (!fi.exists() || fi.size() < 1024) {
+        QMutexLocker locker(&clip_mutex_);
+        if (!pending_clips_.empty()) {
+            pending_clips_.front().retry_count++;
+            if (pending_clips_.front().retry_count > 10) {
+                // 等待 20 秒仍未生成完整切片，安全放弃该任务
+                pending_clips_.pop_front();
+            }
+        }
+        return;
+    }
+
+    is_uploading_clip_ = true;
+
+    QHttpMultiPart* multi_part = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart file_part;
+    file_part.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("video/mp4"));
+    file_part.setHeader(QNetworkRequest::ContentDispositionHeader,
+        QVariant(QString("form-data; name=\"file\"; filename=\"%1\"").arg(fi.fileName())));
+
+    QFile* file = new QFile(task.local_path);
+    if (!file->open(QIODevice::ReadOnly)) {
+        delete file;
+        delete multi_part;
+        is_uploading_clip_ = false;
+        QMutexLocker locker(&clip_mutex_);
+        if (!pending_clips_.empty()) pending_clips_.pop_front();
+        return;
+    }
+    file_part.setBodyDevice(file);
+    file->setParent(multi_part);
+    multi_part->append(file_part);
+
+    QString endpoint = QString("%1/api/v1/edge/clip/upload?trackId=%2&timestamp=%3")
+        .arg(cloud_base_url_.trimmed())
+        .arg(task.track_id)
+        .arg(task.timestamp_ms);
+
+    QUrl upload_url(endpoint);
+    QNetworkRequest request(upload_url);
+    request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
+
+    QNetworkReply* reply = nam_->post(request, multi_part);
+    multi_part->setParent(reply);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, task]() {
+        reply->deleteLater();
+        is_uploading_clip_ = false;
+
+        int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError && (http_status == 200 || http_status == 201)) {
+            QByteArray res_bytes = reply->readAll();
+            qInfo() << "[EdgeReportManager] Video clip uploaded to MinIO successfully:" << task.local_path << res_bytes;
+            QMutexLocker locker(&clip_mutex_);
+            if (!pending_clips_.empty() && pending_clips_.front().local_path == task.local_path) {
+                pending_clips_.pop_front();
+            }
+        } else {
+            qWarning() << "[EdgeReportManager] Video clip upload failed (HTTP" << http_status << "):" << reply->errorString();
+            QMutexLocker locker(&clip_mutex_);
+            if (!pending_clips_.empty() && pending_clips_.front().local_path == task.local_path) {
+                pending_clips_.front().retry_count++;
+                if (pending_clips_.front().retry_count > 5) {
+                    pending_clips_.pop_front();
+                }
+            }
+        }
+    });
 }
