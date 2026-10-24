@@ -27,8 +27,11 @@ void EdgeReportManager::init(QObject* parent) {
     }
 
     auto& cfg = ConfigManager::instance();
-    cloud_base_url_ = cfg.get_webhook_url();
-    bound_point_token_ = cfg.get_webhook_token();
+    cloud_base_url_ = cfg.get_cloud_server_url();
+    bound_point_id_ = cfg.get_cloud_point_id();
+    bound_point_name_ = cfg.get_cloud_point_name();
+    bound_point_token_ = cfg.get_cloud_point_token();
+    client_name_ = cfg.get_cloud_client_name();
 
     if (!batch_timer_) {
         batch_timer_ = new QTimer(this);
@@ -43,6 +46,11 @@ void EdgeReportManager::init(QObject* parent) {
     }
 
     window_start_ts_ = QDateTime::currentMSecsSinceEpoch();
+
+    if (!cloud_base_url_.trimmed().isEmpty() && !bound_point_token_.trimmed().isEmpty()) {
+        is_online_ = true;
+        emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+    }
 }
 
 void EdgeReportManager::login_with_credentials(const QString& base_url, const QString& phone, const QString& password, LoginCallback callback) {
@@ -106,13 +114,92 @@ void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, con
     }
 
     auto& cfg = ConfigManager::instance();
-    cfg.set_webhook_url(cloud_base_url_);
-    cfg.set_webhook_token(bound_point_token_);
-    cfg.set_webhook_enabled(true);
+    cfg.set_cloud_server_url(cloud_base_url_);
+    cfg.set_cloud_point_id(bound_point_id_);
+    cfg.set_cloud_point_name(bound_point_name_);
+    cfg.set_cloud_point_token(bound_point_token_);
+    cfg.set_cloud_client_name(client_name_);
+    cfg.set_cloud_sync_enabled(true);
     cfg.save();
 
     is_online_ = true;
     emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+
+    // 绑定生效后立即发送一次心跳同步状态
+    send_heartbeat(30.0f, 15.0f, current_occupancy_, "CPU");
+}
+
+void EdgeReportManager::send_test_batch(std::function<void(bool success, const QString& msg, qint64 latency_ms)> callback) {
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) {
+        if (callback) callback(false, "未配置云端地址或未绑定有效点位 Token", 0);
+        return;
+    }
+
+    qint64 now_ts = QDateTime::currentMSecsSinceEpoch();
+    QString batch_uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    QJsonObject root;
+    root["batchUuid"] = batch_uuid;
+    root["clientName"] = client_name_;
+    root["appVersion"] = "v1.2.0";
+    root["pointId"] = bound_point_id_;
+    root["startTimeMs"] = now_ts - 5000;
+    root["endTimeMs"] = now_ts;
+
+    QJsonObject headcount;
+    headcount["inIncrement"] = 1;
+    headcount["outIncrement"] = 0;
+    headcount["currentOccupancy"] = current_occupancy_ + 1;
+    root["headcount"] = headcount;
+
+    QJsonObject demographics;
+    demographics["maleCount"] = 1;
+    demographics["femaleCount"] = 0;
+    demographics["childCount"] = 0;
+    demographics["adultCount"] = 1;
+    demographics["seniorCount"] = 0;
+    root["demographics"] = demographics;
+
+    QJsonObject telemetry;
+    telemetry["fps"] = 30.0;
+    telemetry["inferLatencyMs"] = 14.5;
+    telemetry["hardwareBackend"] = "CPU";
+    telemetry["pendingOfflineQueue"] = DatabaseManager::instance().get_pending_offline_count();
+    root["telemetry"] = telemetry;
+
+    QJsonArray events_arr;
+    QJsonObject ev_obj;
+    ev_obj["trackId"] = 999;
+    ev_obj["direction"] = "ENTRY";
+    ev_obj["confidence"] = 0.95;
+    ev_obj["timestamp"] = now_ts;
+    ev_obj["clipPath"] = "";
+    QJsonObject attrs;
+    attrs["gender"] = "男";
+    attrs["age_group"] = "青年(18-35)";
+    ev_obj["attributes"] = attrs;
+    events_arr.append(ev_obj);
+    root["events"] = events_arr;
+
+    QByteArray raw_json = QJsonDocument(root).toJson(QJsonDocument::Compact);
+    QByteArray compressed_blob = compress_data(raw_json);
+
+    QUrl upload_url(cloud_base_url_.trimmed() + "/api/v1/edge/metrics/batch");
+    auto* start_timer = new QElapsedTimer();
+    start_timer->start();
+
+    post_compressed_json(upload_url, bound_point_token_, compressed_blob, batch_uuid,
+        [this, start_timer, callback](bool success, int code, const QString& err) {
+            qint64 latency = start_timer->elapsed();
+            delete start_timer;
+            if (success) {
+                is_online_ = true;
+                emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+                if (callback) callback(true, QString("测试聚合包上报成功 (HTTP %1)").arg(code), latency);
+            } else {
+                if (callback) callback(false, QString("测试上报失败: HTTP %1 (%2)").arg(code).arg(err), latency);
+            }
+        });
 }
 
 void EdgeReportManager::record_passage(const PassageEvent& event) {

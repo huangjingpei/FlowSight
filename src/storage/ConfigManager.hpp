@@ -55,6 +55,28 @@ public:
     int get_webhook_timeout_ms() const { return webhook_timeout_ms_; }
     void set_webhook_timeout_ms(int val) { webhook_timeout_ms_ = val; }
 
+    // 云端协同中台配置 (Edge-Cloud SaaS Platform)
+    QString get_cloud_server_url() const { return cloud_server_url_; }
+    void set_cloud_server_url(const QString& val) { cloud_server_url_ = val; }
+
+    QString get_cloud_client_name() const { return cloud_client_name_; }
+    void set_cloud_client_name(const QString& val) { cloud_client_name_ = val; }
+
+    QString get_cloud_user_phone() const { return cloud_user_phone_; }
+    void set_cloud_user_phone(const QString& val) { cloud_user_phone_ = val; }
+
+    qint64 get_cloud_point_id() const { return cloud_point_id_; }
+    void set_cloud_point_id(qint64 val) { cloud_point_id_ = val; }
+
+    QString get_cloud_point_name() const { return cloud_point_name_; }
+    void set_cloud_point_name(const QString& val) { cloud_point_name_ = val; }
+
+    QString get_cloud_point_token() const { return cloud_point_token_; }
+    void set_cloud_point_token(const QString& val) { cloud_point_token_ = val; }
+
+    bool get_cloud_sync_enabled() const { return cloud_sync_enabled_; }
+    void set_cloud_sync_enabled(bool val) { cloud_sync_enabled_ = val; }
+
 signals:
     void config_changed();
 
@@ -79,4 +101,13 @@ private:
     QString webhook_url_ = "http://127.0.0.1:8088/api/v1/events";
     QString webhook_token_ = "";
     int webhook_timeout_ms_ = 3000;
+
+    // 云端中台持久化配置
+    QString cloud_server_url_ = "http://localhost:8080";
+    QString cloud_client_name_ = "FlowSight-Node-1";
+    QString cloud_user_phone_ = "13800000000";
+    qint64 cloud_point_id_ = 1;
+    QString cloud_point_name_ = "主控通道";
+    QString cloud_point_token_ = "ptk_c7c51284a35c43f5a5292927b9baea07";
+    bool cloud_sync_enabled_ = true;
 };

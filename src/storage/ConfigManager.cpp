@@ -38,6 +38,14 @@ void ConfigManager::load(const QString& ini_path) {
     webhook_url_ = settings.value("Webhook/Url", "http://127.0.0.1:8088/api/v1/events").toString();
     webhook_token_ = settings.value("Webhook/Token", "").toString();
     webhook_timeout_ms_ = settings.value("Webhook/TimeoutMs", 3000).toInt();
+
+    cloud_server_url_ = settings.value("Cloud/ServerUrl", "http://localhost:8080").toString();
+    cloud_client_name_ = settings.value("Cloud/ClientName", "FlowSight-Node-1").toString();
+    cloud_user_phone_ = settings.value("Cloud/UserPhone", "13800000000").toString();
+    cloud_point_id_ = settings.value("Cloud/PointId", 1).toLongLong();
+    cloud_point_name_ = settings.value("Cloud/PointName", "主控通道").toString();
+    cloud_point_token_ = settings.value("Cloud/PointToken", "ptk_c7c51284a35c43f5a5292927b9baea07").toString();
+    cloud_sync_enabled_ = settings.value("Cloud/SyncEnabled", true).toBool();
 }
 
 void ConfigManager::save() {
@@ -64,6 +72,14 @@ void ConfigManager::save() {
     settings.setValue("Webhook/Url", webhook_url_);
     settings.setValue("Webhook/Token", webhook_token_);
     settings.setValue("Webhook/TimeoutMs", webhook_timeout_ms_);
+
+    settings.setValue("Cloud/ServerUrl", cloud_server_url_);
+    settings.setValue("Cloud/ClientName", cloud_client_name_);
+    settings.setValue("Cloud/UserPhone", cloud_user_phone_);
+    settings.setValue("Cloud/PointId", cloud_point_id_);
+    settings.setValue("Cloud/PointName", cloud_point_name_);
+    settings.setValue("Cloud/PointToken", cloud_point_token_);
+    settings.setValue("Cloud/SyncEnabled", cloud_sync_enabled_);
     settings.sync();
 
     emit config_changed();

@@ -151,7 +151,110 @@ void SettingsWidget::setup_ui() {
 
     main_layout->addWidget(webhook_group);
 
-    // 5. AI 硬件信息
+    // 5. 云端协同与中台设备绑定 (Cloud SaaS & Device Binding)
+    auto* cloud_group = new QGroupBox("云端协同与中台设备绑定 (Cloud SaaS & Device Binding)", this);
+    cloud_group->setStyleSheet(
+        "QGroupBox { font-weight: bold; border: 1px solid #1f6feb; border-radius: 4px; margin-top: 10px; padding-top: 10px; } "
+        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; color: #58a6ff; }"
+    );
+    auto* cloud_layout = new QVBoxLayout(cloud_group);
+    cloud_layout->setSpacing(10);
+
+    // 行 1: 云端服务地址与客户端节点名称
+    auto* cloud_row1 = new QHBoxLayout();
+    cloud_row1->addWidget(new QLabel("云端中台 URL:", this));
+    cloud_url_edit_ = new QLineEdit(cfg.get_cloud_server_url(), this);
+    cloud_url_edit_->setPlaceholderText("例如: http://localhost:8080");
+    cloud_row1->addWidget(cloud_url_edit_, 1);
+
+    cloud_row1->addSpacing(16);
+    cloud_row1->addWidget(new QLabel("本节点名称:", this));
+    cloud_client_name_edit_ = new QLineEdit(cfg.get_cloud_client_name(), this);
+    cloud_client_name_edit_->setPlaceholderText("例如: FlowSight-Node-1");
+    cloud_row1->addWidget(cloud_client_name_edit_, 1);
+    cloud_layout->addLayout(cloud_row1);
+
+    // 行 2: 手机号与密码登录
+    auto* cloud_row2 = new QHBoxLayout();
+    cloud_row2->addWidget(new QLabel("管理手机号:", this));
+    cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
+    cloud_phone_edit_->setPlaceholderText("手机号 (如 13800000000)");
+    cloud_row2->addWidget(cloud_phone_edit_, 1);
+
+    cloud_row2->addSpacing(16);
+    cloud_row2->addWidget(new QLabel("登录密码:", this));
+    cloud_password_edit_ = new QLineEdit(this);
+    cloud_password_edit_->setEchoMode(QLineEdit::Password);
+    cloud_password_edit_->setPlaceholderText("默认与手机号同号或管理密码");
+    cloud_password_edit_->setText(cfg.get_cloud_user_phone());
+    cloud_row2->addWidget(cloud_password_edit_, 1);
+
+    btn_cloud_login_ = new QPushButton("🔐 登录并拉取点位", this);
+    btn_cloud_login_->setStyleSheet(
+        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #2ea043; }"
+        "QPushButton:hover { background: #2ea043; }"
+    );
+    cloud_row2->addWidget(btn_cloud_login_);
+    cloud_layout->addLayout(cloud_row2);
+
+    // 行 3: 监控点位选择与绑定确认
+    auto* cloud_row3 = new QHBoxLayout();
+    cloud_row3->addWidget(new QLabel("所属监控点位:", this));
+    cloud_point_combo_ = new QComboBox(this);
+    cloud_point_combo_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    // 预填当前已绑定的点位
+    if (cfg.get_cloud_point_id() > 0) {
+        QVariantMap pdata;
+        pdata["id"] = cfg.get_cloud_point_id();
+        pdata["name"] = cfg.get_cloud_point_name();
+        pdata["token"] = cfg.get_cloud_point_token();
+        cloud_point_combo_->addItem(QString("[%1] %2 (已绑定)").arg(cfg.get_cloud_point_id()).arg(cfg.get_cloud_point_name()), pdata);
+    }
+    cloud_row3->addWidget(cloud_point_combo_, 1);
+
+    btn_bind_point_ = new QPushButton("🔗 确认绑定此点位", this);
+    btn_bind_point_->setStyleSheet(
+        "QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #388bfd; }"
+        "QPushButton:hover { background: #388bfd; }"
+    );
+    cloud_row3->addWidget(btn_bind_point_);
+
+    btn_test_report_ = new QPushButton("⚡ 立即上报测试包", this);
+    btn_test_report_->setStyleSheet(
+        "QPushButton { background: #8957e5; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #a371f7; }"
+        "QPushButton:hover { background: #a371f7; }"
+    );
+    cloud_row3->addWidget(btn_test_report_);
+    cloud_layout->addLayout(cloud_row3);
+
+    // 状态提示条
+    cloud_status_info_label_ = new QLabel(this);
+    cloud_status_info_label_->setStyleSheet("color: #8b949e; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #21262d;");
+    if (cfg.get_cloud_point_id() > 0 && !cfg.get_cloud_point_token().isEmpty()) {
+        cloud_status_info_label_->setText(QString("🟢 当前绑定: %1 (ID: %2) | 节点名: %3 | Token: %4...")
+            .arg(cfg.get_cloud_point_name())
+            .arg(cfg.get_cloud_point_id())
+            .arg(cfg.get_cloud_client_name())
+            .arg(cfg.get_cloud_point_token().left(16)));
+        cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: 500; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+    } else {
+        cloud_status_info_label_->setText("⚪ 尚未绑定云端点位 - 请输入管理员手机号和密码后点击「登录并拉取点位」");
+    }
+    cloud_layout->addWidget(cloud_status_info_label_);
+
+    auto* cloud_hint = new QLabel(
+        "• 业务闭环: FlowSight 边端客户端通过手机号登录云端 SaaS，选择对应监控通道点位即可完成一键绑定；\n"
+        "• 智能节流: 客流识别数据将按 10 秒时间窗口聚合并经 GZIP 高效压缩后异步上报，断网自动转存本地离线队列；\n"
+        "• 实时联动: 边端绑定的点位数据将实时推送到手机端 H5 决策看板 (包含日/周/月/季度多维报表)。",
+        this
+    );
+    cloud_hint->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 2px;");
+    cloud_layout->addWidget(cloud_hint);
+
+    main_layout->addWidget(cloud_group);
+
+    // 6. AI 硬件信息
     auto* hw_group = new QGroupBox("AI 推理硬件环境", this);
     auto* hw_layout = new QVBoxLayout(hw_group);
 
@@ -240,6 +343,92 @@ void SettingsWidget::setup_ui() {
             }
         });
     });
+
+    connect(btn_cloud_login_, &QPushButton::clicked, this, [this]() {
+        QString url = cloud_url_edit_->text().trimmed();
+        QString phone = cloud_phone_edit_->text().trimmed();
+        QString pwd = cloud_password_edit_->text().trimmed();
+
+        if (url.isEmpty() || phone.isEmpty() || pwd.isEmpty()) {
+            QMessageBox::warning(this, "提示", "请填写完整的云端中台 URL、手机号及登录密码！");
+            return;
+        }
+
+        btn_cloud_login_->setEnabled(false);
+        btn_cloud_login_->setText("正在验证...");
+        cloud_status_info_label_->setText("正在向云端认证账号凭证并拉取资产点位...");
+        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
+
+        EdgeReportManager::instance().login_with_credentials(url, phone, pwd, [this, phone](bool success, const QString& msg, const QJsonArray& points) {
+            btn_cloud_login_->setEnabled(true);
+            btn_cloud_login_->setText("🔐 登录并拉取点位");
+
+            if (!success) {
+                cloud_status_info_label_->setText(QString("❌ 登录失败: %1").arg(msg));
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                return;
+            }
+
+            cloud_point_combo_->clear();
+            for (const auto& val : points) {
+                QJsonObject p = val.toObject();
+                qint64 pid = p["id"].toInteger();
+                QString pname = p["pointName"].toString();
+                QString pcode = p["pointCode"].toString();
+                QString ptoken = p["pointToken"].toString();
+
+                QVariantMap map;
+                map["id"] = pid;
+                map["name"] = pname;
+                map["token"] = ptoken;
+
+                cloud_point_combo_->addItem(QString("[%1] %2 (%3)").arg(pid).arg(pname).arg(pcode), map);
+            }
+
+            cloud_status_info_label_->setText(QString("✅ 登录成功！手机号 %1 获取到 %2 个监控点位，请选择并绑定。").arg(phone).arg(points.size()));
+            cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+        });
+    });
+
+    connect(btn_bind_point_, &QPushButton::clicked, this, [this]() {
+        if (cloud_point_combo_->count() == 0) {
+            QMessageBox::warning(this, "提示", "请先登录云端拉取点位列表！");
+            return;
+        }
+
+        QVariantMap map = cloud_point_combo_->currentData().toMap();
+        qint64 pid = map["id"].toLongLong();
+        QString pname = map["name"].toString();
+        QString ptoken = map["token"].toString();
+        QString url = cloud_url_edit_->text().trimmed();
+        QString client_name = cloud_client_name_edit_->text().trimmed();
+
+        if (client_name.isEmpty()) client_name = "FlowSight-Node-1";
+
+        EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name);
+
+        cloud_status_info_label_->setText(QString("🟢 绑定成功！已接入云端点位: %1 (ID: %2) | 节点: %3").arg(pname).arg(pid).arg(client_name));
+        cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+        QMessageBox::information(this, "绑定成功", QString("客户端已成功与云端点位「%1」建立关联！\n数据将自动聚合压缩上报。").arg(pname));
+    });
+
+    connect(btn_test_report_, &QPushButton::clicked, this, [this]() {
+        btn_test_report_->setEnabled(false);
+        btn_test_report_->setText("正在上传...");
+        cloud_status_info_label_->setText("正在向云端提交测试指标聚合包 (GZIP 压缩)...");
+
+        EdgeReportManager::instance().send_test_batch([this](bool success, const QString& msg, qint64 latency) {
+            btn_test_report_->setEnabled(true);
+            btn_test_report_->setText("⚡ 立即上报测试包");
+            if (success) {
+                cloud_status_info_label_->setText(QString("✅ 测试聚合包上报成功！%1 (耗时: %2 ms)").arg(msg).arg(latency));
+                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+            } else {
+                cloud_status_info_label_->setText(QString("❌ 上报测试包失败: %1 (耗时: %2 ms)").arg(msg).arg(latency));
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+            }
+        });
+    });
 }
 
 void SettingsWidget::on_btn_browse() {
@@ -262,6 +451,10 @@ void SettingsWidget::on_btn_save() {
     cfg.set_webhook_url(webhook_url_edit_->text());
     cfg.set_webhook_token(webhook_token_edit_->text());
     cfg.set_webhook_timeout_ms(webhook_timeout_spin_->value());
+
+    cfg.set_cloud_server_url(cloud_url_edit_->text().trimmed());
+    cfg.set_cloud_client_name(cloud_client_name_edit_->text().trimmed());
+    cfg.set_cloud_user_phone(cloud_phone_edit_->text().trimmed());
 
     cfg.save();
 

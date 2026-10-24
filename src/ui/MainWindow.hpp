@@ -44,5 +44,8 @@ private:
     QLabel* status_fps_label_ = nullptr;
     QLabel* gpu_badge_label_ = nullptr;
 
+    StatisticsSnapshot latest_stats_;
+    QTimer* cloud_heartbeat_timer_ = nullptr;
+
     std::unique_ptr<PipelineController> pipeline_;
 };

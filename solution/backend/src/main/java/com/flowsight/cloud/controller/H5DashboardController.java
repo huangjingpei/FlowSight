@@ -44,10 +44,14 @@ public class H5DashboardController {
     }
 
     @GetMapping("/events")
-    public Result<Page<EventItemVO>> listEvents(@RequestParam Long pointId,
+    public Result<Page<EventItemVO>> listEvents(@RequestParam(required = false) Long pointId,
+                                                @RequestParam(required = false) String startDate,
+                                                @RequestParam(required = false) String endDate,
+                                                @RequestParam(required = false) String direction,
                                                 @RequestParam(defaultValue = "1") int page,
-                                                @RequestParam(defaultValue = "20") int size,
+                                                @RequestParam(defaultValue = "10") int size,
                                                 HttpServletRequest request) {
-        return Result.success(eventService.pageEvents(pointId, page, size));
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.success(eventService.pageEvents(userId, pointId, startDate, endDate, direction, page, size));
     }
 }

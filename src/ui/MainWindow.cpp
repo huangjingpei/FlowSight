@@ -49,6 +49,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
     prune_timer->start(6 * 3600 * 1000);
 
+    // 启动云端协同定时心跳: 每 5 秒向云端上报一次设备在线与遥测指标
+    cloud_heartbeat_timer_ = new QTimer(this);
+    connect(cloud_heartbeat_timer_, &QTimer::timeout, this, [this]() {
+        EdgeReportManager::instance().send_heartbeat(
+            latest_stats_.fps,
+            latest_stats_.infer_ms,
+            latest_stats_.current_occupancy,
+            QString::fromStdString(latest_stats_.backend_name.empty() ? "CPU" : latest_stats_.backend_name)
+        );
+    });
+    cloud_heartbeat_timer_->start(5000);
+
     setup_ui();
     setup_connections();
 
@@ -316,6 +328,7 @@ void MainWindow::on_rois_calibrated(const std::vector<RoiConfig>& new_rois) {
 }
 
 void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {
+    latest_stats_ = stats;
     QString backend_str = QString::fromStdString(stats.backend_name);
     status_infer_label_->setText(QString("⚡ 推理: %1 ms (%2)")
         .arg(QString::number(stats.infer_ms, 'f', 1))

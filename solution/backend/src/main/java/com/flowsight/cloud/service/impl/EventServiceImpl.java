@@ -9,10 +9,12 @@ import com.flowsight.cloud.entity.BizDeviceHeartbeat;
 import com.flowsight.cloud.entity.BizPassageEvent;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.entity.BizStatsHourly;
+import com.flowsight.cloud.entity.SysUser;
 import com.flowsight.cloud.mapper.BizDeviceHeartbeatMapper;
 import com.flowsight.cloud.mapper.BizPassageEventMapper;
 import com.flowsight.cloud.mapper.BizPointMapper;
 import com.flowsight.cloud.mapper.BizStatsHourlyMapper;
+import com.flowsight.cloud.mapper.SysUserMapper;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.MinioService;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
@@ -47,6 +49,9 @@ public class EventServiceImpl implements EventService {
 
     @Autowired
     private BizDeviceHeartbeatMapper heartbeatMapper;
+
+    @Autowired
+    private SysUserMapper userMapper;
 
     @Autowired
     private MinioService minioService;
@@ -253,6 +258,9 @@ public class EventServiceImpl implements EventService {
             hb.setPointId(pointId);
         }
         hb.setClientVersion(dto.getClientVersion() != null ? dto.getClientVersion() : "v1.2.0");
+        if (dto.getClientName() != null && !dto.getClientName().trim().isEmpty()) {
+            hb.setClientName(dto.getClientName().trim());
+        }
         hb.setCurrentFps(dto.getFps() != null ? dto.getFps() : 0.0f);
         hb.setInferLatencyMs(dto.getInferLatencyMs() != null ? dto.getInferLatencyMs() : 0.0f);
         hb.setHardwareBackend(dto.getHardwareBackend() != null ? dto.getHardwareBackend() : "CPU");
@@ -479,19 +487,61 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public Page<EventItemVO> pageEvents(Long pointId, int page, int size) {
+    public Page<EventItemVO> pageEvents(Long userId, Long pointId, String startDate, String endDate, String direction, int page, int size) {
         Page<BizPassageEvent> eventPage = new Page<>(page, size);
-        LambdaQueryWrapper<BizPassageEvent> wrapper = new LambdaQueryWrapper<BizPassageEvent>()
-                .eq(BizPassageEvent::getPointId, pointId)
-                .orderByDesc(BizPassageEvent::getTimestampMs);
+        LambdaQueryWrapper<BizPassageEvent> wrapper = new LambdaQueryWrapper<>();
+
+        if (pointId != null && pointId > 0) {
+            wrapper.eq(BizPassageEvent::getPointId, pointId);
+        } else if (userId != null) {
+            SysUser user = userMapper.selectById(userId);
+            if (user != null && !"ROLE_ADMIN".equals(user.getRole())) {
+                List<BizPoint> points = pointMapper.selectList(new LambdaQueryWrapper<BizPoint>().eq(BizPoint::getUserId, userId));
+                if (points.isEmpty()) {
+                    return new Page<>(page, size, 0);
+                }
+                List<Long> pids = points.stream().map(BizPoint::getId).collect(Collectors.toList());
+                wrapper.in(BizPassageEvent::getPointId, pids);
+            }
+        }
+
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            try {
+                LocalDate sDate = LocalDate.parse(startDate.trim());
+                long startMs = sDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                wrapper.ge(BizPassageEvent::getTimestampMs, startMs);
+            } catch (Exception ignored) {}
+        }
+        if (endDate != null && !endDate.trim().isEmpty()) {
+            try {
+                LocalDate eDate = LocalDate.parse(endDate.trim());
+                long endMs = eDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1;
+                wrapper.le(BizPassageEvent::getTimestampMs, endMs);
+            } catch (Exception ignored) {}
+        }
+
+        if (direction != null && !direction.trim().isEmpty() && !"ALL".equalsIgnoreCase(direction)) {
+            wrapper.eq(BizPassageEvent::getDirection, direction.trim().toUpperCase());
+        }
+
+        wrapper.orderByDesc(BizPassageEvent::getTimestampMs);
 
         Page<BizPassageEvent> res = eventMapper.selectPage(eventPage, wrapper);
         Page<EventItemVO> voPage = new Page<>(res.getCurrent(), res.getSize(), res.getTotal());
+
+        Map<Long, String> pointNameMap = new HashMap<>();
 
         voPage.setRecords(res.getRecords().stream().map(e -> {
             EventItemVO vo = new EventItemVO();
             vo.setId(e.getId());
             vo.setPointId(e.getPointId());
+
+            String pName = pointNameMap.computeIfAbsent(e.getPointId(), pid -> {
+                BizPoint p = pointMapper.selectById(pid);
+                return p != null ? p.getPointName() : ("通道-" + pid);
+            });
+            vo.setPointName(pName);
+
             vo.setTrackId(e.getTrackId());
             vo.setDirection(e.getDirection());
             vo.setConfidence(e.getConfidence());
@@ -502,7 +552,6 @@ public class EventServiceImpl implements EventService {
             LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(e.getTimestampMs()), ZoneId.systemDefault());
             vo.setDatetime(ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
 
-            // 生成带签名的可播放直链
             vo.setPlayUrl(minioService.getPresignedPlayUrl(e.getClipUrl()));
             return vo;
         }).collect(Collectors.toList()));

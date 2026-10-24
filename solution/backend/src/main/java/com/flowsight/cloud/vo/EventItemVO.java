@@ -6,6 +6,7 @@ import lombok.Data;
 public class EventItemVO {
     private Long id;
     private Long pointId;
+    private String pointName;
     private Integer trackId;
     private String direction;
     private Float confidence;

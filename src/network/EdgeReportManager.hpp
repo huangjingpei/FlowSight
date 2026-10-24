@@ -45,11 +45,20 @@ public:
     // 3. 硬件与性能遥测心跳上报
     void send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend = "CPU");
 
+    // 4. 手动发送测试聚合上报包 (用于设置界面联调验证)
+    void send_test_batch(std::function<void(bool success, const QString& msg, qint64 latency_ms)> callback);
+
     // 获取离线积压队列数量
     int get_offline_queue_count() const;
 
     // 当前是否在线
     bool is_cloud_online() const { return is_online_; }
+
+    QString get_cloud_base_url() const { return cloud_base_url_; }
+    qint64 get_bound_point_id() const { return bound_point_id_; }
+    QString get_bound_point_name() const { return bound_point_name_; }
+    QString get_bound_point_token() const { return bound_point_token_; }
+    QString get_client_name() const { return client_name_; }
 
 signals:
     void cloud_status_changed(bool is_online, const QString& status_text);

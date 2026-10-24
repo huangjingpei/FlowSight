@@ -16,5 +16,5 @@ public interface EventService {
     void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto);
     DashboardSummaryVO getDashboardSummary(Long pointId);
     TrendReportVO getTrendReport(Long pointId, String dimension, Integer days);
-    Page<EventItemVO> pageEvents(Long pointId, int page, int size);
+    Page<EventItemVO> pageEvents(Long userId, Long pointId, String startDate, String endDate, String direction, int page, int size);
 }

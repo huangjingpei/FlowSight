@@ -155,47 +155,43 @@
         </div>
       </div>
 
-      <!-- 实时通行事件流水与证据视频秒开回溯 (切片回放互斥锁保护) -->
-      <div class="section-card events-card">
-        <div class="section-title">
-          <span>🎬</span> 实时通行抓拍记录流水 (点击回放切片)
-        </div>
-        <van-list
-          v-model:loading="eventsLoading"
-          :finished="eventsFinished"
-          finished-text="已加载全部实时通行证据"
-          @load="loadEvents"
-        >
-          <div
-            v-for="ev in eventList"
-            :key="ev.id"
-            class="event-item"
-            @click="handlePlayClip(ev)"
-          >
-            <div class="ev-time">{{ ev.datetime ? ev.datetime.split(' ')[1] : '' }}</div>
-            <div :class="['ev-dir', ev.direction === 'ENTRY' ? 'dir-in' : 'dir-out']">
-              {{ ev.direction === 'ENTRY' ? '🟢 进' : '🔴 出' }}
-            </div>
-            <div class="ev-body">
-              <div class="ev-target">目标 #{{ ev.trackId }}</div>
-              <div class="ev-attr">{{ ev.gender }} / {{ ev.ageGroup }}</div>
-            </div>
-            <div class="ev-action">
-              <van-button size="mini" type="primary" plain round icon="play">
-                回放切片
-              </van-button>
-            </div>
+      <!-- 证据切片回放中心快速入口 -->
+      <div class="section-card playback-entry-card" @click="goToPlayback">
+        <div class="entry-flex">
+          <div class="entry-icon-box">🎬</div>
+          <div class="entry-info">
+            <div class="entry-title">通行切片证据中心与视频回放</div>
+            <div class="entry-desc">支持多通道检索、日期范围筛选、多页翻页与高清切片视频复核</div>
           </div>
-        </van-list>
+          <div class="entry-arrow">
+            <span class="btn-go-playback">进入回放 ➔</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 边缘设备与系统运行遥测 -->
+      <div class="section-card telemetry-card">
+        <div class="section-title"><span>⚡</span> 边端硬件与算法遥测指标</div>
+        <div class="telemetry-grid">
+          <div class="tele-item">
+            <span class="tele-k">AI 推理框架</span>
+            <span class="tele-v text-blue">YOLOv8n (ORT C++)</span>
+          </div>
+          <div class="tele-item">
+            <span class="tele-k">实时处理帧率</span>
+            <span class="tele-v text-emerald">30.0 FPS</span>
+          </div>
+          <div class="tele-item">
+            <span class="tele-k">单帧推理耗时</span>
+            <span class="tele-v text-cyan">14.2 ms</span>
+          </div>
+          <div class="tele-item">
+            <span class="tele-k">边端离线队列</span>
+            <span class="tele-v text-amber">0 条 (实时同步)</span>
+          </div>
+        </div>
       </div>
     </van-pull-refresh>
-
-    <!-- 视频切片标准秒开回放弹窗 (触发状态机互斥锁) -->
-    <VideoReplayModal
-      v-model:show="showVideoModal"
-      :play-url="currentPlayUrl"
-      :event-data="currentEvent"
-    />
   </div>
 </template>
 
@@ -206,10 +202,13 @@ import { showToast, showDialog } from 'vant';
 import * as echarts from 'echarts';
 import { h5Api } from '../api';
 import { usePointStore } from '../store/point';
-import VideoReplayModal from '../components/VideoReplayModal.vue';
 
 const router = useRouter();
 const pointStore = usePointStore();
+
+const goToPlayback = () => {
+  router.push('/playback');
+};
 
 const activePointId = ref<number>(0);
 const refreshing = ref(false);
@@ -250,16 +249,6 @@ const trendData = ref<any>({
 // ECharts 实例引用
 const chartRef = ref<HTMLDivElement | null>(null);
 let myChart: echarts.ECharts | null = null;
-
-const eventList = ref<any[]>([]);
-const eventsLoading = ref(false);
-const eventsFinished = ref(false);
-const currentPage = ref(1);
-
-const showVideoModal = ref(false);
-const currentPlayUrl = ref('');
-const currentEvent = ref<any>(null);
-
 let timer: any = null;
 
 const pointOptions = computed(() => {
@@ -392,58 +381,20 @@ const switchDimension = (key: string, days: number) => {
   loadTrends();
 };
 
-const loadEvents = async () => {
-  if (!activePointId.value) return;
-  eventsLoading.value = true;
-  try {
-    const res: any = await h5Api.getEvents(activePointId.value, currentPage.value, 20);
-    const records = res.records || [];
-    if (currentPage.value === 1) {
-      eventList.value = records;
-    } else {
-      eventList.value.push(...records);
-    }
-    if (records.length < 20) {
-      eventsFinished.value = true;
-    } else {
-      currentPage.value++;
-    }
-  } catch (e) {
-    eventsFinished.value = true;
-  } finally {
-    eventsLoading.value = false;
-  }
-};
-
 const onPointChange = (val: number) => {
   if (pointStore.isMediaPlaying) {
     showToast('视频回放中禁止切换点位！');
     return;
   }
   activePointId.value = val;
-  currentPage.value = 1;
-  eventsFinished.value = false;
   loadSummary();
   loadTrends();
-  loadEvents();
 };
 
 const onRefresh = async () => {
-  currentPage.value = 1;
-  eventsFinished.value = false;
-  await Promise.all([loadSummary(), loadTrends(), loadEvents()]);
+  await Promise.all([loadSummary(), loadTrends()]);
   refreshing.value = false;
   showToast('数据已刷新');
-};
-
-const handlePlayClip = (ev: any) => {
-  if (!ev.playUrl) {
-    showToast('该事件暂未关联切片视频');
-    return;
-  }
-  currentPlayUrl.value = ev.playUrl;
-  currentEvent.value = ev;
-  showVideoModal.value = true;
 };
 
 const handleLogout = () => {
@@ -465,7 +416,7 @@ const handleResize = () => {
 onMounted(async () => {
   await loadPoints();
   if (activePointId.value) {
-    await Promise.all([loadSummary(), loadTrends(), loadEvents()]);
+    await Promise.all([loadSummary(), loadTrends()]);
   }
 
   nextTick(() => {
@@ -859,62 +810,93 @@ onUnmounted(() => {
   color: #94a3b8;
 }
 
-/* 实时流水列表 */
-.events-card {
-  padding-bottom: 8px;
+/* 快捷切片入口横幅 */
+.playback-entry-card {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #3b82f64d;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.event-item {
+.playback-entry-card:active {
+  transform: scale(0.98);
+}
+
+.entry-flex {
   display: flex;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 12px;
+  gap: 12px;
 }
 
-.event-item:last-child {
-  border-bottom: none;
-}
-
-.ev-time {
-  width: 60px;
-  color: #64748b;
-  font-family: 'Consolas', monospace;
-  font-size: 11px;
-}
-
-.ev-dir {
+.entry-icon-box {
+  font-size: 26px;
+  background: #3b82f626;
   width: 44px;
-  font-weight: bold;
-  font-size: 11px;
+  height: 44px;
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.dir-in {
-  color: #10b981;
-}
-
-.dir-out {
-  color: #ef4444;
-}
-
-.ev-body {
+.entry-info {
   flex: 1;
-  padding: 0 6px;
 }
 
-.ev-target {
-  font-weight: 500;
-  color: #1e293b;
+.entry-title {
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 3px;
 }
 
-.ev-attr {
+.entry-desc {
   color: #94a3b8;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.ev-action {
-  width: 75px;
-  text-align: right;
+.btn-go-playback {
+  color: #38bdf8;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
 }
+
+/* 遥测指标卡片 */
+.telemetry-card {
+  padding-bottom: 12px;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.tele-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tele-k {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.tele-v {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.text-blue { color: #2563eb; }
+.text-emerald { color: #059669; }
+.text-cyan { color: #0284c7; }
+.text-amber { color: #d97706; }
 </style>

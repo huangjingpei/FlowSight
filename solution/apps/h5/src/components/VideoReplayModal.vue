@@ -11,12 +11,13 @@
     <div class="video-modal-container">
       <div class="video-modal-header">
         <div class="title">🎬 通行事件切片复核</div>
-        <div class="meta" v-if="eventInfo">
-          <span>目标 #{{ eventInfo.trackId }}</span>
-          <span :class="eventInfo.direction === 'ENTRY' ? 'tag-entry' : 'tag-exit'">
-            {{ eventInfo.direction === 'ENTRY' ? '🟢 进入' : '🔴 离开' }}
+        <div class="meta" v-if="currentEvent">
+          <span class="point-badge" v-if="currentEvent.pointName">📍 {{ currentEvent.pointName }}</span>
+          <span>目标 #{{ currentEvent.trackId }}</span>
+          <span :class="currentEvent.direction === 'ENTRY' ? 'tag-entry' : 'tag-exit'">
+            {{ currentEvent.direction === 'ENTRY' ? '🟢 进入' : '🔴 离开' }}
           </span>
-          <span>{{ eventInfo.gender }} / {{ eventInfo.ageGroup }}</span>
+          <span>{{ currentEvent.gender || '未知' }} / {{ currentEvent.ageGroup || '未知' }}</span>
         </div>
       </div>
 
@@ -45,20 +46,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { usePointStore } from '../store/point';
 
-const props = defineProps<{
-  modelValue: boolean;
-  playUrl: string;
-  eventInfo: any;
-}>();
+const props = withDefaults(defineProps<{
+  modelValue?: boolean;
+  show?: boolean;
+  playUrl?: string;
+  eventInfo?: any;
+  eventData?: any;
+}>(), {
+  modelValue: false,
+  show: false,
+  playUrl: '',
+  eventInfo: null,
+  eventData: null
+});
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'update:show']);
 
 const pointStore = usePointStore();
-const visible = ref(props.modelValue);
+const visible = ref(props.show || props.modelValue);
 const videoRef = ref<HTMLVideoElement | null>(null);
+
+const currentEvent = computed(() => props.eventData || props.eventInfo);
+
+watch(() => props.show, (val) => {
+  visible.value = val;
+});
 
 watch(() => props.modelValue, (val) => {
   visible.value = val;
@@ -73,9 +88,9 @@ const handleClosed = () => {
   if (videoRef.value) {
     videoRef.value.pause();
   }
-  // 解锁点位切换
   pointStore.setMediaPlaying(false);
   emit('update:modelValue', false);
+  emit('update:show', false);
 };
 </script>
 

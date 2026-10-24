@@ -47,9 +47,23 @@ export const authApi = {
   login: (data: LoginParams) => api.post('/auth/login', { ...data, clientType: 'H5' })
 };
 
+export interface EventQueryParams {
+  pointId?: number | null;
+  startDate?: string;
+  endDate?: string;
+  direction?: string;
+  page?: number;
+  size?: number;
+}
+
 export const h5Api = {
   getMyPoints: () => api.get('/h5/points'),
   getDashboardSummary: (pointId: number) => api.get('/h5/dashboard/summary', { params: { pointId } }),
   getTrends: (pointId: number, dimension = 'hour', days = 7) => api.get('/h5/dashboard/trends', { params: { pointId, dimension, days } }),
-  getEvents: (pointId: number, page = 1, size = 20) => api.get('/h5/events', { params: { pointId, page, size } })
+  getEvents: (paramsOrPointId: number | EventQueryParams, page = 1, size = 10) => {
+    if (typeof paramsOrPointId === 'object') {
+      return api.get('/h5/events', { params: paramsOrPointId });
+    }
+    return api.get('/h5/events', { params: { pointId: paramsOrPointId, page, size } });
+  }
 };
