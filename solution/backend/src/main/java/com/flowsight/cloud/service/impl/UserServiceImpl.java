@@ -17,6 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -40,7 +41,9 @@ public class UserServiceImpl implements UserService {
         LambdaQueryWrapper<SysUser> wrapper = new LambdaQueryWrapper<SysUser>()
                 .and(keyword != null && !keyword.trim().isEmpty(), w -> w
                         .like(SysUser::getPhone, keyword)
-                        .or().like(SysUser::getNickname, keyword))
+                        .or().like(SysUser::getNickname, keyword)
+                        .or().like(SysUser::getCompanyName, keyword)
+                        .or().like(SysUser::getContactPerson, keyword))
                 .orderByDesc(SysUser::getId);
 
         Page<SysUser> res = userMapper.selectPage(userPage, wrapper);
@@ -66,7 +69,15 @@ public class UserServiceImpl implements UserService {
         user.setPhone(phone);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         user.setRole("ROLE_USER");
-        user.setNickname(dto.getNickname() != null && !dto.getNickname().trim().isEmpty() ? dto.getNickname() : "商户_" + phone.substring(Math.max(0, phone.length() - 4)));
+        user.setNickname(dto.getNickname() != null && !dto.getNickname().trim().isEmpty() 
+                ? dto.getNickname().trim() 
+                : "商户_" + phone.substring(Math.max(0, phone.length() - 4)));
+        user.setCompanyName(dto.getCompanyName() != null && !dto.getCompanyName().trim().isEmpty() 
+                ? dto.getCompanyName().trim() 
+                : user.getNickname());
+        user.setContactPerson(dto.getContactPerson() != null ? dto.getContactPerson().trim() : "");
+        user.setPointQuota(dto.getPointQuota() != null && dto.getPointQuota() > 0 ? dto.getPointQuota() : 5);
+        user.setExpireTime(dto.getExpireTime() != null ? dto.getExpireTime() : LocalDateTime.now().plusYears(1));
         user.setStatus(1);
 
         userMapper.insert(user);
@@ -76,7 +87,7 @@ public class UserServiceImpl implements UserService {
             PointCreateDTO pointDTO = new PointCreateDTO();
             pointDTO.setUserId(user.getId());
             pointDTO.setPointName(dto.getInitialPointName().trim());
-            pointDTO.setAddress("默认门店");
+            pointDTO.setAddress(user.getCompanyName() + " 主入口");
             pointService.createPoint(pointDTO);
         }
 
@@ -90,6 +101,10 @@ public class UserServiceImpl implements UserService {
             throw new IllegalArgumentException("用户不存在");
         }
         if (dto.getNickname() != null) user.setNickname(dto.getNickname());
+        if (dto.getCompanyName() != null) user.setCompanyName(dto.getCompanyName());
+        if (dto.getContactPerson() != null) user.setContactPerson(dto.getContactPerson());
+        if (dto.getPointQuota() != null && dto.getPointQuota() > 0) user.setPointQuota(dto.getPointQuota());
+        if (dto.getExpireTime() != null) user.setExpireTime(dto.getExpireTime());
         if (dto.getStatus() != null) user.setStatus(dto.getStatus());
         if (dto.getPassword() != null && !dto.getPassword().trim().isEmpty()) {
             user.setPasswordHash(passwordEncoder.encode(dto.getPassword().trim()));
@@ -125,6 +140,10 @@ public class UserServiceImpl implements UserService {
         vo.setPhone(u.getPhone());
         vo.setRole(u.getRole());
         vo.setNickname(u.getNickname());
+        vo.setCompanyName(u.getCompanyName());
+        vo.setContactPerson(u.getContactPerson());
+        vo.setPointQuota(u.getPointQuota());
+        vo.setExpireTime(u.getExpireTime());
         vo.setAvatar(u.getAvatar());
         vo.setStatus(u.getStatus());
         vo.setCreateTime(u.getCreateTime());

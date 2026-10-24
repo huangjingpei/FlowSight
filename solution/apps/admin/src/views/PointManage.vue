@@ -3,7 +3,7 @@
     <el-card shadow="never">
       <div class="filter-header" v-if="filteredPhone">
         <el-alert
-          :title="`正在查看商户【${filteredPhone}】名下的点位列表`"
+          :title="`正在查看商户客户【${filteredPhone}】名下的点位列表`"
           type="info"
           show-icon
           closable
@@ -15,8 +15,8 @@
         <div class="toolbar-left">
           <el-input
             v-model="keyword"
-            placeholder="搜索点位名称/地址/编码"
-            style="width: 260px;"
+            placeholder="搜索点位名称 / 物理地址 / 点位编码"
+            style="width: 280px;"
             clearable
             @clear="fetchPoints"
             @keyup.enter="fetchPoints"
@@ -36,11 +36,20 @@
         <el-table-column prop="id" label="点位ID" width="80" />
         <el-table-column prop="pointName" label="点位名称" width="160">
           <template #default="{ row }">
-            <span style="font-weight: 600;">{{ row.pointName }}</span>
+            <span style="font-weight: 600; color: #303133;">{{ row.pointName }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="userPhone" label="归属商户手机号" width="150" />
-        <el-table-column prop="address" label="物理地址" min-width="160" />
+        <el-table-column label="归属客户 / 商户" width="180">
+          <template #default="{ row }">
+            <div style="font-weight: 600; color: #1989fa;">
+              {{ row.companyName || row.userNickname || '商户客户' }}
+            </div>
+            <div style="font-size: 12px; color: #909399;">
+              {{ row.userPhone }}
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="address" label="物理安装地址" min-width="160" />
         <el-table-column prop="cameraRtsp" label="摄像头 RTSP 地址" min-width="220" show-overflow-tooltip />
         <el-table-column prop="resolution" label="分辨率" width="120" />
         <el-table-column prop="streamStatus" label="实时状态" width="100">
@@ -84,14 +93,14 @@
     </el-card>
 
     <!-- 新增点位对话框 -->
-    <el-dialog v-model="createVisible" title="新增监控点位" width="520px">
-      <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="110px">
-        <el-form-item label="归属商户" prop="userId">
-          <el-select v-model="createForm.userId" placeholder="选择归属商户" style="width: 100%;">
+    <el-dialog v-model="createVisible" title="新增监控点位 (将受商户配额约束)" width="540px">
+      <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="120px">
+        <el-form-item label="归属商户客户" prop="userId">
+          <el-select v-model="createForm.userId" placeholder="选择归属商户企业客户" style="width: 100%;">
             <el-option
               v-for="u in userOptions"
               :key="u.id"
-              :label="`${u.phone} (${u.nickname})`"
+              :label="`${u.companyName ? u.companyName + ' - ' : ''}${u.phone} (${u.nickname || '无简称'}) [已用: ${u.pointCount}/${u.pointQuota || 5}]`"
               :value="u.id"
             />
           </el-select>
@@ -180,7 +189,7 @@ const createForm = reactive({
 });
 
 const createRules = {
-  userId: [{ required: true, message: '请选择归属商户', trigger: 'change' }],
+  userId: [{ required: true, message: '请选择归属商户客户', trigger: 'change' }],
   pointName: [{ required: true, message: '请输入点位名称', trigger: 'blur' }]
 };
 

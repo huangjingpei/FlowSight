@@ -72,6 +72,17 @@ public class PointServiceImpl implements PointService {
 
     @Override
     public PointVO createPoint(PointCreateDTO dto) {
+        SysUser user = userMapper.selectById(dto.getUserId());
+        if (user == null) {
+            throw new IllegalArgumentException("所属商户客户不存在");
+        }
+        Long existingCount = pointMapper.selectCount(new LambdaQueryWrapper<BizPoint>().eq(BizPoint::getUserId, dto.getUserId()));
+        int quota = user.getPointQuota() != null ? user.getPointQuota() : 5;
+        if (existingCount >= quota) {
+            String clientName = user.getCompanyName() != null && !user.getCompanyName().isEmpty() ? user.getCompanyName() : user.getNickname();
+            throw new IllegalArgumentException("客户【" + clientName + "】名下点位数已达配额上限 (" + quota + " 个)，无法继续新增！");
+        }
+
         BizPoint point = new BizPoint();
         point.setUserId(dto.getUserId());
         point.setPointName(dto.getPointName());
@@ -160,10 +171,12 @@ public class PointServiceImpl implements PointService {
         vo.setPointToken(p.getPointToken());
         vo.setCreateTime(p.getCreateTime());
 
-        // 查询属主手机号
+        // 查询属主客户信息
         SysUser user = userMapper.selectById(p.getUserId());
         if (user != null) {
             vo.setUserPhone(user.getPhone());
+            vo.setUserNickname(user.getNickname());
+            vo.setCompanyName(user.getCompanyName());
         }
 
         // 查询实时心跳

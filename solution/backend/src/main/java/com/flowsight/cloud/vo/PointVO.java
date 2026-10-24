@@ -8,6 +8,8 @@ public class PointVO {
     private Long id;
     private Long userId;
     private String userPhone;
+    private String userNickname;
+    private String companyName;
     private String pointName;
     private String pointCode;
     private String address;

@@ -17,6 +17,10 @@ public class SysUser implements Serializable {
     private String passwordHash;
     private String role; // ROLE_ADMIN, ROLE_USER
     private String nickname;
+    private String companyName;
+    private String contactPerson;
+    private Integer pointQuota;
+    private LocalDateTime expireTime;
     private String avatar;
     private Integer status; // 1-正常, 0-禁用
     private LocalDateTime createTime;

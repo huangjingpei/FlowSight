@@ -1,29 +1,45 @@
 -- FlowSight Cloud Backend Database Initialization Script (MySQL 8.0)
+-- B2B 多租户边云协同智能客流 SaaS 平台数据定义与种子初始化
 
--- 1. 用户认证与租户表
+-- 1. 用户认证与多租户客户表
 CREATE TABLE IF NOT EXISTS `sys_user` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '用户主键ID',
     `phone` VARCHAR(20) NOT NULL COMMENT '登录手机号码(唯一凭证)',
     `password_hash` VARCHAR(128) NOT NULL COMMENT 'BCrypt 加密密码散列',
-    `role` VARCHAR(20) NOT NULL DEFAULT 'ROLE_USER' COMMENT '角色标识: ROLE_ADMIN / ROLE_USER',
-    `nickname` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '用户或商户展示名称',
+    `role` VARCHAR(20) NOT NULL DEFAULT 'ROLE_USER' COMMENT '角色标识: ROLE_ADMIN(平台超管) / ROLE_USER(商户客户)',
+    `nickname` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '用户或商户简称',
+    `company_name` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '商户单位/企业客户全称',
+    `contact_person` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '客户责任联系人姓名',
+    `point_quota` INT NOT NULL DEFAULT 5 COMMENT '允许开通监控点位配额上限',
+    `expire_time` DATETIME DEFAULT NULL COMMENT 'SaaS订阅授权到期时间',
     `avatar` VARCHAR(255) DEFAULT '' COMMENT '用户头像地址',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '账号状态: 1-正常, 0-禁用',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '注册创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_phone` (`phone`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与租户基础表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与多租户商户基础表';
 
--- 预置超级管理员账号 (手机号: 13800000000, 密码与手机同号: 13800000000, BCrypt hash)
-INSERT INTO `sys_user` (`phone`, `password_hash`, `role`, `nickname`) 
-VALUES ('13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '系统总管理员')
-ON DUPLICATE KEY UPDATE `id`=`id`;
+-- 预置种子账号: 超级管理员与两大标杆试点商户客户
+-- 1. 超级管理员 (手机号: 13800000000, 密码同号, BCrypt hash)
+INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
+VALUES (1, '13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '平台总管', 'FlowSight SaaS 运营指挥中心', '系统运维部', 999, '2099-12-31 23:59:59')
+ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
+
+-- 2. 商户客户 A: 万科物业 (手机号: 13454118762, 密码同号, BCrypt hash)
+INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
+VALUES (2, '13454118762', '$2a$10$pTPz9/fScp/.t97liVhJ.OmlqXEEVyhlZ/rbqFuu.IRFdtY5N73wK', 'ROLE_USER', '万科物业', '万科物业服务有限公司(未来城项目)', '刘经理', 10, '2028-12-31 23:59:59')
+ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
+
+-- 3. 商户客户 B: 滨江政务中心 (手机号: 13900000002, 密码同号, BCrypt hash)
+INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
+VALUES (3, '13900000002', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_USER', '滨江政务', '滨江区政务服务中心办事大厅', '张主任', 5, '2028-12-31 23:59:59')
+ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
 
 -- 2. 点位资产配置表
 CREATE TABLE IF NOT EXISTS `biz_point` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '点位主键ID',
-    `user_id` BIGINT NOT NULL COMMENT '所属商户用户ID',
+    `user_id` BIGINT NOT NULL COMMENT '所属商户客户ID',
     `point_name` VARCHAR(100) NOT NULL COMMENT '点位名称(例如: A门主入口)',
     `point_code` VARCHAR(64) NOT NULL COMMENT '点位唯一编码',
     `address` VARCHAR(255) DEFAULT '' COMMENT '物理安装具体位置/门店地址',
@@ -39,6 +55,19 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     KEY `idx_user_id` (`user_id`),
     KEY `idx_token` (`point_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='监控分析点位资产表';
+
+-- 预置商户点位资产数据: 万科名下 2 点位 + 滨江政务名下 1 点位
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
+VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`);
+
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
+VALUES (2, 2, '万科西区地库人行道', 'POINT_VK_BASE_02', 'B1层地下车库进出通道', '', '1920x1080', 'OFFLINE', 'ptk_vanke_base_002')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`);
+
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
+VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'ONLINE', 'ptk_gov_south_003')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `point_token`=VALUES(`point_token`);
 
 -- 3. 人流通行结构化事件流水明细表
 CREATE TABLE IF NOT EXISTS `biz_passage_event` (
@@ -90,5 +119,11 @@ CREATE TABLE IF NOT EXISTS `biz_device_heartbeat` (
     PRIMARY KEY (`point_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='边缘设备健康心跳表';
 
--- 增量平滑迁移补丁: 若历史已有表缺少 client_name 字段则自动补齐 (配合 continue-on-error: true 幂等执行)
-ALTER TABLE `biz_device_heartbeat` ADD COLUMN `client_name` VARCHAR(64) DEFAULT 'FlowSight-Node';
+-- 预置点位 1 与点位 3 的初始实时心跳
+INSERT INTO `biz_device_heartbeat` (`point_id`, `client_name`, `client_version`, `current_fps`, `infer_latency_ms`, `hardware_backend`, `current_occupancy`)
+VALUES (1, 'FlowSight-Node-1', 'v1.2.0', 30.0, 14.5, 'CPU', 3)
+ON DUPLICATE KEY UPDATE `client_name`=VALUES(`client_name`), `current_fps`=VALUES(`current_fps`);
+
+INSERT INTO `biz_device_heartbeat` (`point_id`, `client_name`, `client_version`, `current_fps`, `infer_latency_ms`, `hardware_backend`, `current_occupancy`)
+VALUES (3, 'FlowSight-Gov-Box', 'v1.2.0', 25.0, 18.2, 'CUDA', 8)
+ON DUPLICATE KEY UPDATE `client_name`=VALUES(`client_name`), `current_fps`=VALUES(`current_fps`);

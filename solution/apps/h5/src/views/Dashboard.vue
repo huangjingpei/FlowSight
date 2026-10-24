@@ -5,7 +5,7 @@
       <template #left>
         <div class="nav-brand">
           <span class="brand-logo">👁️</span>
-          <span class="brand-title">FlowSight 智慧客流决策中心</span>
+          <span class="brand-title">{{ currentCompanyName }}</span>
         </div>
       </template>
       <template #right>
@@ -205,6 +205,9 @@ import { usePointStore } from '../store/point';
 
 const router = useRouter();
 const pointStore = usePointStore();
+
+const currentUser = JSON.parse(localStorage.getItem('flowsight_user') || '{}');
+const currentCompanyName = ref(currentUser.companyName || currentUser.nickname || 'FlowSight 决策中心');
 
 const goToPlayback = () => {
   router.push('/playback');

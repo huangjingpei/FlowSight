@@ -9,6 +9,10 @@ public class UserVO {
     private String phone;
     private String role;
     private String nickname;
+    private String companyName;
+    private String contactPerson;
+    private Integer pointQuota;
+    private LocalDateTime expireTime;
     private String avatar;
     private Integer status;
     private Integer pointCount;

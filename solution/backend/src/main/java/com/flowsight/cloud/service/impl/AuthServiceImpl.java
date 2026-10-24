@@ -13,6 +13,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,6 +48,9 @@ public class AuthServiceImpl implements AuthService {
         if (user.getStatus() != null && user.getStatus() == 0) {
             throw new IllegalArgumentException("该账号已被管理员禁用");
         }
+        if (user.getExpireTime() != null && user.getExpireTime().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("该商户账号 SaaS 订阅服务已到期，请联系平台管理员续约");
+        }
 
         // 密码校验 (同时支持 BCrypt 散列与与手机号同号的明文比对兼容)
         boolean match = passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())
@@ -65,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
         vo.setRole(user.getRole());
         vo.setPhone(user.getPhone());
         vo.setNickname(user.getNickname());
+        vo.setCompanyName(user.getCompanyName());
         vo.setAvatar(user.getAvatar());
         return vo;
     }

@@ -9,5 +9,6 @@ public class LoginVO {
     private String role;
     private String phone;
     private String nickname;
+    private String companyName;
     private String avatar;
 }
