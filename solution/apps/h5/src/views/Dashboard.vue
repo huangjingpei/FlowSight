@@ -1,13 +1,19 @@
 <template>
   <div class="dashboard-page">
-    <!-- 顶部导航与多点位流切换组件 (核心约束: 视频播放时 Disable 锁定禁止切换) -->
-    <van-nav-bar title="FlowSight 运营看板" fixed placeholder>
+    <!-- 顶部政务物业决策大屏导航 -->
+    <van-nav-bar fixed placeholder class="gov-nav-bar">
+      <template #left>
+        <div class="nav-brand">
+          <span class="brand-logo">👁️</span>
+          <span class="brand-title">FlowSight 智慧客流决策中心</span>
+        </div>
+      </template>
       <template #right>
-        <van-icon name="revoke" size="18" @click="handleLogout" />
+        <van-icon name="revoke" size="18" class="logout-icon" @click="handleLogout" />
       </template>
     </van-nav-bar>
 
-    <!-- 顶部点位选择器: 视频播放中禁止切换 -->
+    <!-- 顶部点位选择器: 视频播放中硬锁定禁止切换 -->
     <div class="point-switcher-bar">
       <van-dropdown-menu :disabled="pointStore.isMediaPlaying">
         <van-dropdown-item
@@ -22,74 +28,142 @@
       </div>
     </div>
 
+    <!-- 客户端节点身份与健康状态铭牌 -->
+    <div class="client-meta-bar" v-if="summary.pointId">
+      <div class="client-info">
+        <span class="client-icon">💻</span>
+        <span class="client-name">{{ summary.clientName || ('FlowSight-Node-' + summary.pointId) }}</span>
+        <span class="client-version">Ver: {{ summary.appVersion || 'v1.2.0' }}</span>
+      </div>
+      <div class="client-status">
+        <span :class="['status-dot', summary.streamStatus === 'ONLINE' ? 'online' : 'offline']"></span>
+        <span class="status-text">{{ summary.streamStatus === 'ONLINE' ? '实时在线' : '离线' }}</span>
+        <span class="last-hb" v-if="summary.lastHeartbeat">· {{ summary.lastHeartbeat.split(' ')[1] || summary.lastHeartbeat }}</span>
+      </div>
+    </div>
+
+    <!-- 承载安全与超载防聚集监测条 -->
+    <div :class="['safety-banner', summary.currentOccupancy > 30 ? 'safety-warning' : 'safety-normal']">
+      <span class="safety-icon">{{ summary.currentOccupancy > 30 ? '⚠️' : '🛡️' }}</span>
+      <span class="safety-text">
+        {{ summary.currentOccupancy > 30 ? '当前区域人员聚集密度较高，请关注通道畅通度与安全疏导' : '当前区域人流承载与通行状态正常' }}
+      </span>
+    </div>
+
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- 4 大核心客流数显矩阵 -->
       <div class="kpi-grid">
         <div class="kpi-card card-blue">
-          <div class="kpi-label">当前区域滞留</div>
+          <div class="kpi-header">
+            <span class="kpi-label">当前区域滞留</span>
+            <span class="kpi-badge">● 实时在场</span>
+          </div>
           <div class="kpi-value">{{ summary.currentOccupancy }} <span class="unit">人</span></div>
-          <div class="kpi-sub">● 瞬时在场感知</div>
+          <div class="kpi-sub">瞬时在场感知与安全基线</div>
         </div>
-        <div class="kpi-card card-green">
-          <div class="kpi-label">今日累计进入 (In)</div>
+        <div class="kpi-card card-emerald">
+          <div class="kpi-header">
+            <span class="kpi-label">今日累计进入 (In)</span>
+            <span class="kpi-badge">↑ 通行增量</span>
+          </div>
           <div class="kpi-value">{{ summary.todayEntry }} <span class="unit">人次</span></div>
-          <div class="kpi-sub">↑ 进门通行累计</div>
+          <div class="kpi-sub">主入口进门累计总人次</div>
         </div>
-        <div class="kpi-card card-red">
-          <div class="kpi-label">今日累计离开 (Out)</div>
+        <div class="kpi-card card-amber">
+          <div class="kpi-header">
+            <span class="kpi-label">今日累计离开 (Out)</span>
+            <span class="kpi-badge">↓ 出门离场</span>
+          </div>
           <div class="kpi-value">{{ summary.todayExit }} <span class="unit">人次</span></div>
-          <div class="kpi-sub">↓ 出门通行累计</div>
+          <div class="kpi-sub">出口闸道离开累计总人次</div>
         </div>
-        <div class="kpi-card card-orange">
-          <div class="kpi-label">全天通行总客流</div>
+        <div class="kpi-card card-indigo">
+          <div class="kpi-header">
+            <span class="kpi-label">全天通行总人流</span>
+            <span class="kpi-badge">∑ 双向汇总</span>
+          </div>
           <div class="kpi-value">{{ summary.todayTotal }} <span class="unit">人次</span></div>
-          <div class="kpi-sub">∑ 进出双向汇总</div>
+          <div class="kpi-sub">全天双向吞吐客流总量</div>
         </div>
       </div>
 
-      <!-- 客群画像模块: 性别比例与主要年龄段 -->
+      <!-- 核心多维统计报表模块 (按小时、按天、按月、按季度) -->
+      <div class="section-card trend-section">
+        <div class="section-header">
+          <div class="section-title">
+            <span>📈</span> 客流趋势全景分析与决策曲线
+          </div>
+        </div>
+
+        <!-- 统计粒度切换标签 -->
+        <div class="dimension-segmented">
+          <div
+            v-for="dim in dimensionOptions"
+            :key="dim.key"
+            :class="['seg-item', currentDimension === dim.key ? 'active' : '']"
+            @click="switchDimension(dim.key, dim.days)"
+          >
+            {{ dim.label }}
+          </div>
+        </div>
+
+        <!-- 统计核心指标摘要药丸 -->
+        <div class="trend-summary-pills">
+          <div class="pill-item">
+            <span class="pill-lbl">周期总客流</span>
+            <span class="pill-val">{{ trendData.totalPeriodCount || summary.todayTotal }}</span>
+          </div>
+          <div class="pill-item">
+            <span class="pill-lbl">峰值时段</span>
+            <span class="pill-val peak-highlight">{{ trendData.peakTime }} ({{ trendData.peakValue }}人)</span>
+          </div>
+          <div class="pill-item">
+            <span class="pill-lbl">区间均值</span>
+            <span class="pill-val">{{ trendData.averageCount || '-' }}</span>
+          </div>
+        </div>
+
+        <!-- 高保真交互曲线图容器 -->
+        <div ref="chartRef" class="echarts-container"></div>
+      </div>
+
+      <!-- 客群属性画像模块: 性别比例与主要年龄段 -->
       <div class="section-card">
-        <div class="section-title">👥 客群画像与年龄分布</div>
+        <div class="section-title"><span>👥</span> 客群画像与结构特征</div>
         <div class="demo-box" v-if="summary.demographics">
           <div class="gender-bar-wrapper">
             <div class="gender-header">
-              <span>男: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
-              <span>女: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+              <span class="gender-male-text">
+                👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)
+              </span>
+              <span class="gender-female-text">
+                👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)
+              </span>
             </div>
             <div class="gender-bar">
               <div class="gender-male" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
               <div class="gender-female" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
             </div>
           </div>
-          <div class="age-tag-box">
-            <span class="age-label">主要到店客群年龄:</span>
-            <van-tag type="primary" size="medium">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</van-tag>
+          <div class="age-distribution-row">
+            <div class="age-tag-box">
+              <span class="age-label">主要到场客群年龄:</span>
+              <van-tag type="primary" size="medium" class="age-tag">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</van-tag>
+            </div>
+            <div class="tag-hint">基于边缘 NPU 属性多目标智能分析</div>
           </div>
         </div>
       </div>
 
-      <!-- 24小时通行趋势小图表 -->
-      <div class="section-card">
-        <div class="section-title">📊 今日通行时段走势</div>
-        <div class="hourly-bars">
-          <div
-            v-for="item in activeHourly"
-            :key="item.hour"
-            class="hourly-col"
-          >
-            <div class="bar-fill" :style="{ height: Math.min(100, (item.entry + item.exit) * 5 + 4) + 'px' }"></div>
-            <span class="col-label">{{ item.hour }}h</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 实时通行事件流水与证据视频回溯 -->
+      <!-- 实时通行事件流水与证据视频秒开回溯 (切片回放互斥锁保护) -->
       <div class="section-card events-card">
-        <div class="section-title">🎬 实时通行抓拍记录流水 (点击回放切片)</div>
+        <div class="section-title">
+          <span>🎬</span> 实时通行抓拍记录流水 (点击回放切片)
+        </div>
         <van-list
           v-model:loading="eventsLoading"
           :finished="eventsFinished"
-          finished-text="没有更多了"
+          finished-text="已加载全部实时通行证据"
           @load="loadEvents"
         >
           <div
@@ -116,19 +190,20 @@
       </div>
     </van-pull-refresh>
 
-    <!-- 视频切片回放弹窗组件 -->
+    <!-- 视频切片标准秒开回放弹窗 (触发状态机互斥锁) -->
     <VideoReplayModal
-      v-model="showVideoModal"
+      v-model:show="showVideoModal"
       :play-url="currentPlayUrl"
-      :event-info="currentEvent"
+      :event-data="currentEvent"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showDialog } from 'vant';
+import * as echarts from 'echarts';
 import { h5Api } from '../api';
 import { usePointStore } from '../store/point';
 import VideoReplayModal from '../components/VideoReplayModal.vue';
@@ -143,9 +218,38 @@ const summary = ref<any>({
   todayEntry: 0,
   todayExit: 0,
   todayTotal: 0,
-  demographics: { maleRatio: 0.5, femaleRatio: 0.5, maleCount: 0, femaleCount: 0, topAgeGroup: '青年(18-35)' },
-  hourlyChart: []
+  clientName: '',
+  appVersion: '',
+  lastHeartbeat: '',
+  demographics: { maleRatio: 0.5, femaleRatio: 0.5, maleCount: 0, femaleCount: 0, topAgeGroup: '青年(18-35)' }
 });
+
+// 多粒度趋势维度选择
+const dimensionOptions = [
+  { key: 'hour', label: '24小时逐时', days: 1 },
+  { key: 'day_7', label: '近7天走势', days: 7 },
+  { key: 'day_30', label: '近30天走势', days: 30 },
+  { key: 'quarter', label: '季度宏观走势', days: 90 }
+];
+const currentDimension = ref('hour');
+const currentDays = ref(1);
+
+const trendData = ref<any>({
+  dimension: 'hour',
+  title: '今日 24 小时逐时客流分布曲线',
+  categories: [],
+  entryList: [],
+  exitList: [],
+  totalList: [],
+  peakValue: 0,
+  peakTime: '-',
+  totalPeriodCount: 0,
+  averageCount: 0.0
+});
+
+// ECharts 实例引用
+const chartRef = ref<HTMLDivElement | null>(null);
+let myChart: echarts.ECharts | null = null;
 
 const eventList = ref<any[]>([]);
 const eventsLoading = ref(false);
@@ -163,13 +267,6 @@ const pointOptions = computed(() => {
     text: `${p.pointName} (${p.streamStatus === 'ONLINE' ? '在线' : '离线'})`,
     value: p.id
   }));
-});
-
-const activeHourly = computed(() => {
-  if (!summary.value.hourlyChart || summary.value.hourlyChart.length === 0) {
-    return [];
-  }
-  return summary.value.hourlyChart.filter((h: any) => h.hour >= 8 && h.hour <= 22);
 });
 
 const loadPoints = async () => {
@@ -192,6 +289,107 @@ const loadSummary = async () => {
   } catch (e) {
     //
   }
+};
+
+const loadTrends = async () => {
+  if (!activePointId.value) return;
+  try {
+    const dim = currentDimension.value === 'quarter' ? 'quarter' : (currentDimension.value.startsWith('day') ? 'day' : 'hour');
+    const data: any = await h5Api.getTrends(activePointId.value, dim, currentDays.value);
+    trendData.value = data;
+    renderECharts();
+  } catch (e) {
+    //
+  }
+};
+
+const renderECharts = () => {
+  if (!chartRef.value) return;
+  if (!myChart) {
+    myChart = echarts.init(chartRef.value);
+  }
+
+  const isBar = currentDimension.value === 'quarter';
+  const categories = trendData.value.categories || [];
+  const entryData = trendData.value.entryList || [];
+  const exitData = trendData.value.exitList || [];
+
+  const option: echarts.EChartsOption = {
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.9)',
+      borderColor: '#38bdf8',
+      textStyle: { color: '#f8fafc', fontSize: 12 },
+      axisPointer: { type: isBar ? 'shadow' : 'line', lineStyle: { color: '#38bdf8', type: 'dashed' } }
+    },
+    legend: {
+      data: ['进入人次 (In)', '离开人次 (Out)'],
+      bottom: 0,
+      icon: 'circle',
+      textStyle: { color: '#64748b', fontSize: 11 }
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      top: '12%',
+      bottom: '15%',
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: categories,
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
+      axisLabel: { color: '#64748b', fontSize: 10, interval: categories.length > 15 ? 2 : 0 }
+    },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+      axisLabel: { color: '#94a3b8', fontSize: 10 }
+    },
+    series: [
+      {
+        name: '进入人次 (In)',
+        type: isBar ? 'bar' : 'line',
+        smooth: true,
+        showSymbol: false,
+        itemStyle: { color: '#2563eb' },
+        areaStyle: isBar ? undefined : {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(37, 99, 235, 0.35)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0.02)' }
+          ])
+        },
+        data: entryData,
+        markPoint: !isBar ? {
+          data: [{ type: 'max', name: '最高峰值' }],
+          symbolSize: 45,
+          label: { fontSize: 9 }
+        } : undefined
+      },
+      {
+        name: '离开人次 (Out)',
+        type: isBar ? 'bar' : 'line',
+        smooth: true,
+        showSymbol: false,
+        itemStyle: { color: '#f59e0b' },
+        areaStyle: isBar ? undefined : {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: 'rgba(245, 158, 11, 0.30)' },
+            { offset: 1, color: 'rgba(245, 158, 11, 0.02)' }
+          ])
+        },
+        data: exitData
+      }
+    ]
+  };
+
+  myChart.setOption(option, true);
+};
+
+const switchDimension = (key: string, days: number) => {
+  currentDimension.value = key;
+  currentDays.value = days;
+  loadTrends();
 };
 
 const loadEvents = async () => {
@@ -226,13 +424,14 @@ const onPointChange = (val: number) => {
   currentPage.value = 1;
   eventsFinished.value = false;
   loadSummary();
+  loadTrends();
   loadEvents();
 };
 
 const onRefresh = async () => {
   currentPage.value = 1;
   eventsFinished.value = false;
-  await Promise.all([loadSummary(), loadEvents()]);
+  await Promise.all([loadSummary(), loadTrends(), loadEvents()]);
   refreshing.value = false;
   showToast('数据已刷新');
 };
@@ -250,227 +449,472 @@ const handlePlayClip = (ev: any) => {
 const handleLogout = () => {
   showDialog({
     title: '提示',
-    message: '确认退出当前账号吗？',
+    message: '确认安全退出当前商户账号？',
     showCancelButton: true
   }).then(() => {
     localStorage.removeItem('flowsight_token');
-    router.push('/login');
+    localStorage.removeItem('flowsight_user');
+    router.replace('/login');
   });
+};
+
+const handleResize = () => {
+  if (myChart) myChart.resize();
 };
 
 onMounted(async () => {
   await loadPoints();
   if (activePointId.value) {
-    loadSummary();
-    loadEvents();
+    await Promise.all([loadSummary(), loadTrends(), loadEvents()]);
   }
-  // 每 15 秒定时轮询 (视频播放中由状态机互斥跳过)
+
+  nextTick(() => {
+    window.addEventListener('resize', handleResize);
+  });
+
+  // 15 秒定时轮询最新数据
   timer = setInterval(() => {
     if (!pointStore.isMediaPlaying && activePointId.value) {
       loadSummary();
+      loadTrends();
     }
   }, 15000);
 });
 
 onUnmounted(() => {
   if (timer) clearInterval(timer);
+  window.removeEventListener('resize', handleResize);
+  if (myChart) {
+    myChart.dispose();
+    myChart = null;
+  }
 });
 </script>
 
 <style scoped>
 .dashboard-page {
-  padding-bottom: 24px;
-  background-color: #f7f8fa;
+  padding-bottom: 30px;
+  background-color: #f8fafc;
   min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* 顶部政务导航 */
+.gov-nav-bar {
+  background: #0f172a !important;
+  color: #fff !important;
+}
+
+:deep(.van-nav-bar__content) {
+  background: #0f172a;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-logo {
+  font-size: 18px;
+}
+
+.brand-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+}
+
+.logout-icon {
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+/* 顶部点位选择器 */
 .point-switcher-bar {
   background: #fff;
-  border-bottom: 1px solid #ebedf0;
+  border-bottom: 1px solid #e2e8f0;
   position: relative;
 }
 
 .locked-tip {
-  padding: 4px 16px;
+  padding: 5px 16px;
   font-size: 11px;
-  color: #ff976a;
-  background-color: #fffbe8;
+  color: #d97706;
+  background-color: #fffbeb;
   display: flex;
   align-items: center;
 }
 
+/* 客户端节点身份铭牌 */
+.client-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background-color: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.client-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+}
+
+.client-name {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.client-version {
+  font-size: 10px;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.client-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.status-dot.offline {
+  background-color: #94a3b8;
+}
+
+.status-text {
+  color: #475569;
+}
+
+.last-hb {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+/* 安全承载状态条 */
+.safety-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 2px 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.safety-normal {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.safety-warning {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-weight: 500;
+}
+
+/* KPI 4 格数显卡片矩阵 */
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px 12px;
 }
 
 .kpi-card {
-  border-radius: 8px;
-  padding: 14px 12px;
+  border-radius: 10px;
+  padding: 12px 12px;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
 }
 
 .card-blue {
-  background: linear-gradient(135deg, #1989fa, #0570db);
+  background: linear-gradient(135deg, #1e40af, #2563eb);
 }
-.card-green {
-  background: linear-gradient(135deg, #07c160, #049f4e);
+.card-emerald {
+  background: linear-gradient(135deg, #065f46, #059669);
 }
-.card-red {
-  background: linear-gradient(135deg, #ee0a24, #c8081e);
+.card-amber {
+  background: linear-gradient(135deg, #b45309, #d97706);
 }
-.card-orange {
-  background: linear-gradient(135deg, #ff976a, #ed6a0c);
+.card-indigo {
+  background: linear-gradient(135deg, #3730a3, #4f46e5);
+}
+
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .kpi-label {
-  font-size: 12px;
+  font-size: 11px;
   opacity: 0.9;
-  margin-bottom: 4px;
+}
+
+.kpi-badge {
+  font-size: 9px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .kpi-value {
-  font-size: 26px;
-  font-weight: bold;
+  font-size: 24px;
+  font-weight: 700;
   font-family: 'Consolas', monospace;
+  line-height: 1.2;
 }
 
 .kpi-value .unit {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: normal;
 }
 
 .kpi-sub {
-  font-size: 11px;
+  font-size: 10px;
   opacity: 0.8;
   margin-top: 4px;
 }
 
+/* 核心模块卡片通用规范 */
 .section-card {
   background: #fff;
-  margin: 0 12px 12px 12px;
-  border-radius: 8px;
-  padding: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 14px 14px;
+  margin: 10px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 多粒度分段切换组件 */
+.dimension-segmented {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background-color: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
   margin-bottom: 12px;
 }
 
+.seg-item {
+  text-align: center;
+  padding: 6px 0;
+  font-size: 11px;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.seg-item.active {
+  background-color: #fff;
+  color: #1e40af;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* 趋势摘要药丸 */
+.trend-summary-pills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  background-color: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+}
+
+.pill-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.pill-lbl {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.pill-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-top: 2px;
+}
+
+.peak-highlight {
+  color: #2563eb;
+}
+
+.echarts-container {
+  width: 100%;
+  height: 240px;
+}
+
+/* 客群画像 */
 .gender-bar-wrapper {
-  margin-bottom: 12px;
+  margin-top: 8px;
 }
 
 .gender-header {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  color: #666;
+  font-size: 11px;
   margin-bottom: 6px;
 }
 
+.gender-male-text {
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.gender-female-text {
+  color: #f43f5e;
+  font-weight: 500;
+}
+
 .gender-bar {
+  display: flex;
   height: 10px;
   border-radius: 5px;
-  display: flex;
   overflow: hidden;
-  background-color: #ebedf0;
+  background-color: #e2e8f0;
 }
 
 .gender-male {
-  background-color: #1989fa;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
 }
 
 .gender-female {
-  background-color: #ee0a24;
+  background: linear-gradient(90deg, #fb7185, #f43f5e);
+}
+
+.age-distribution-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #f1f5f9;
 }
 
 .age-tag-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: #555;
 }
 
-.hourly-bars {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  height: 120px;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
+.age-label {
+  font-size: 12px;
+  color: #475569;
 }
 
-.hourly-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1;
+.age-tag {
+  font-size: 11px;
 }
 
-.bar-fill {
-  width: 8px;
-  background: linear-gradient(180deg, #1989fa, #a0cfff);
-  border-radius: 4px 4px 0 0;
-  min-height: 4px;
+.tag-hint {
+  font-size: 10px;
+  color: #94a3b8;
 }
 
-.col-label {
-  font-size: 9px;
-  color: #999;
-  margin-top: 4px;
+/* 实时流水列表 */
+.events-card {
+  padding-bottom: 8px;
 }
 
 .event-item {
   display: flex;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid #f2f3f5;
-  font-size: 13px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+}
+
+.event-item:last-child {
+  border-bottom: none;
 }
 
 .ev-time {
-  font-family: monospace;
-  color: #999;
-  width: 65px;
+  width: 60px;
+  color: #64748b;
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
 }
 
 .ev-dir {
-  width: 45px;
-  font-weight: 600;
+  width: 44px;
+  font-weight: bold;
+  font-size: 11px;
 }
 
 .dir-in {
-  color: #07c160;
+  color: #10b981;
 }
 
 .dir-out {
-  color: #ee0a24;
+  color: #ef4444;
 }
 
 .ev-body {
   flex: 1;
+  padding: 0 6px;
 }
 
 .ev-target {
   font-weight: 500;
-  color: #333;
+  color: #1e293b;
 }
 
 .ev-attr {
-  font-size: 11px;
-  color: #888;
+  color: #94a3b8;
+  font-size: 10px;
+  margin-top: 2px;
 }
 
 .ev-action {
-  margin-left: 8px;
+  width: 75px;
+  text-align: right;
 }
 </style>

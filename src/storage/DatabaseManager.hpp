@@ -32,6 +32,21 @@ public:
     // 一键清空系统全部历史记录与预聚合数据
     bool clear_all_history_data(bool reset_roi_configs = false, int* out_deleted_events = nullptr);
 
+    // 离线断网缓存队列 (Offline Report Queue)
+    struct OfflineReportItem {
+        int64_t queue_id = 0;
+        QString batch_uuid;
+        QString report_type;
+        QByteArray payload_blob;
+        int retry_count = 0;
+    };
+
+    bool enqueue_offline_report(const QString& batch_uuid, const QString& report_type, const QByteArray& payload_blob);
+    std::vector<OfflineReportItem> fetch_pending_offline_reports(int limit = 5);
+    bool remove_offline_report(int64_t queue_id);
+    bool increment_offline_retry(int64_t queue_id);
+    int get_pending_offline_count();
+
 private:
     DatabaseManager() = default;
     ~DatabaseManager() = default;

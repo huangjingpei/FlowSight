@@ -7,6 +7,9 @@ import java.util.List;
 public class DashboardSummaryVO {
     private Long pointId;
     private String pointName;
+    private String clientName;
+    private String appVersion;
+    private String lastHeartbeat;
     private String streamStatus;
     private int currentOccupancy;
     private int todayEntry;

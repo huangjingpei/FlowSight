@@ -5,6 +5,7 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QCheckBox>
+#include <QComboBox>
 
 class SettingsWidget : public QWidget {
     Q_OBJECT
@@ -39,6 +40,15 @@ private:
     QSpinBox* webhook_timeout_spin_ = nullptr;
     QPushButton* btn_test_ping_ = nullptr;
     QLabel* webhook_status_label_ = nullptr;
+
+    // 云端中台手机号密码登录与点位绑定
+    QLineEdit* cloud_url_edit_ = nullptr;
+    QLineEdit* cloud_phone_edit_ = nullptr;
+    QLineEdit* cloud_password_edit_ = nullptr;
+    QPushButton* btn_cloud_login_ = nullptr;
+    QComboBox* cloud_point_combo_ = nullptr;
+    QPushButton* btn_bind_point_ = nullptr;
+    QLabel* cloud_status_info_label_ = nullptr;
 
     QLabel* hardware_info_label_ = nullptr;
     QPushButton* btn_save_ = nullptr;

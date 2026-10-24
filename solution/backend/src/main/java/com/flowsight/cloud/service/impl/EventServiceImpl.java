@@ -2,6 +2,7 @@ package com.flowsight.cloud.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
 import com.flowsight.cloud.entity.BizDeviceHeartbeat;
@@ -18,6 +19,7 @@ import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.DemographicsVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.HourlyStatVO;
+import com.flowsight.cloud.vo.TrendReportVO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,6 +82,108 @@ public class EventServiceImpl implements EventService {
 
         // 更新小时预聚合统计 (stats_hourly)
         updateHourlyStat(pointId, point.getUserId(), ts, event.getDirection(), gender);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordEdgeBatchReport(Long pointId, EdgeBatchReportDTO dto) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) {
+            throw new IllegalArgumentException("点位不存在: " + pointId);
+        }
+
+        long endTs = dto.getEndTimeMs() != null ? dto.getEndTimeMs() : System.currentTimeMillis();
+        LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(endTs), ZoneId.systemDefault());
+        LocalDate date = ldt.toLocalDate();
+        int hour = ldt.getHour();
+
+        // 1. 原子累加小时聚合表指标
+        int inInc = (dto.getHeadcount() != null && dto.getHeadcount().getInIncrement() != null) ? dto.getHeadcount().getInIncrement() : 0;
+        int outInc = (dto.getHeadcount() != null && dto.getHeadcount().getOutIncrement() != null) ? dto.getHeadcount().getOutIncrement() : 0;
+        int maleInc = (dto.getDemographics() != null && dto.getDemographics().getMaleCount() != null) ? dto.getDemographics().getMaleCount() : 0;
+        int femaleInc = (dto.getDemographics() != null && dto.getDemographics().getFemaleCount() != null) ? dto.getDemographics().getFemaleCount() : 0;
+
+        BizStatsHourly stat = statsMapper.selectOne(new LambdaQueryWrapper<BizStatsHourly>()
+                .eq(BizStatsHourly::getPointId, pointId)
+                .eq(BizStatsHourly::getStatDate, date)
+                .eq(BizStatsHourly::getStatHour, hour));
+
+        if (stat == null) {
+            stat = new BizStatsHourly();
+            stat.setPointId(pointId);
+            stat.setUserId(point.getUserId());
+            stat.setStatDate(date);
+            stat.setStatHour(hour);
+            stat.setEntryCount(inInc);
+            stat.setExitCount(outInc);
+            stat.setMaleCount(maleInc);
+            stat.setFemaleCount(femaleInc);
+            statsMapper.insert(stat);
+        } else {
+            stat.setEntryCount(stat.getEntryCount() + inInc);
+            stat.setExitCount(stat.getExitCount() + outInc);
+            stat.setMaleCount(stat.getMaleCount() + maleInc);
+            stat.setFemaleCount(stat.getFemaleCount() + femaleInc);
+            statsMapper.updateById(stat);
+        }
+
+        // 2. 批量存储精简事件明细 (如果客户端附带了 events)
+        if (dto.getEvents() != null && !dto.getEvents().isEmpty()) {
+            for (EdgeEventDTO evDto : dto.getEvents()) {
+                long evTs = evDto.getTimestamp() != null ? evDto.getTimestamp() : endTs;
+                String gender = "未知";
+                String ageGroup = "未知";
+                if (evDto.getAttributes() != null) {
+                    gender = evDto.getAttributes().getOrDefault("gender", "未知");
+                    ageGroup = evDto.getAttributes().getOrDefault("age_group", "未知");
+                }
+
+                BizPassageEvent event = new BizPassageEvent();
+                event.setPointId(pointId);
+                event.setUserId(point.getUserId());
+                event.setTrackId(evDto.getTrackId() != null ? evDto.getTrackId() : 0);
+                event.setDirection(evDto.getDirection() != null ? evDto.getDirection() : "ENTRY");
+                event.setConfidence(evDto.getConfidence() != null ? evDto.getConfidence() : 0.85f);
+                event.setGender(gender);
+                event.setAgeGroup(ageGroup);
+                event.setTimestampMs(evTs);
+                event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
+                eventMapper.insert(event);
+            }
+        }
+
+        // 3. 更新设备心跳与健康遥测状态
+        BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
+        boolean isNew = (hb == null);
+        if (isNew) {
+            hb = new BizDeviceHeartbeat();
+            hb.setPointId(pointId);
+        }
+        if (dto.getClientName() != null && !dto.getClientName().trim().isEmpty()) {
+            hb.setClientName(dto.getClientName());
+        }
+        if (dto.getAppVersion() != null && !dto.getAppVersion().trim().isEmpty()) {
+            hb.setClientVersion(dto.getAppVersion());
+        }
+        if (dto.getTelemetry() != null) {
+            hb.setCurrentFps(dto.getTelemetry().getFps() != null ? dto.getTelemetry().getFps() : 0.0f);
+            hb.setInferLatencyMs(dto.getTelemetry().getInferLatencyMs() != null ? dto.getTelemetry().getInferLatencyMs() : 0.0f);
+            hb.setHardwareBackend(dto.getTelemetry().getHardwareBackend() != null ? dto.getTelemetry().getHardwareBackend() : "CPU");
+        }
+        if (dto.getHeadcount() != null && dto.getHeadcount().getCurrentOccupancy() != null) {
+            hb.setCurrentOccupancy(dto.getHeadcount().getCurrentOccupancy());
+        }
+        hb.setLastHeartbeat(LocalDateTime.now());
+
+        if (isNew) {
+            heartbeatMapper.insert(hb);
+        } else {
+            heartbeatMapper.updateById(hb);
+        }
+
+        // 点位状态在线
+        point.setStreamStatus("ONLINE");
+        pointMapper.updateById(point);
     }
 
     private void updateHourlyStat(Long pointId, Long userId, long ts, String direction, String gender) {
@@ -235,6 +339,13 @@ public class EventServiceImpl implements EventService {
         DashboardSummaryVO vo = new DashboardSummaryVO();
         vo.setPointId(point.getId());
         vo.setPointName(point.getPointName());
+        vo.setClientName(hb != null && hb.getClientName() != null ? hb.getClientName() : ("FlowSight-Node-" + point.getId()));
+        vo.setAppVersion(hb != null && hb.getClientVersion() != null ? hb.getClientVersion() : "v1.2.0");
+        if (hb != null && hb.getLastHeartbeat() != null) {
+            vo.setLastHeartbeat(hb.getLastHeartbeat().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        } else {
+            vo.setLastHeartbeat("暂无上报记录");
+        }
         vo.setStreamStatus(point.getStreamStatus());
         vo.setCurrentOccupancy(occupancy);
         vo.setTodayEntry(todayIn);
@@ -243,6 +354,126 @@ public class EventServiceImpl implements EventService {
         vo.setDemographics(demo);
         vo.setHourlyChart(new ArrayList<>(hourMap.values()));
         vo.getHourlyChart().sort(Comparator.comparingInt(HourlyStatVO::getHour));
+
+        return vo;
+    }
+
+    @Override
+    public TrendReportVO getTrendReport(Long pointId, String dimension, Integer days) {
+        if (dimension == null || dimension.trim().isEmpty()) {
+            dimension = "hour";
+        }
+        TrendReportVO vo = new TrendReportVO();
+        vo.setDimension(dimension);
+
+        List<String> categories = new ArrayList<>();
+        List<Integer> entryList = new ArrayList<>();
+        List<Integer> exitList = new ArrayList<>();
+        List<Integer> totalList = new ArrayList<>();
+        int peak = 0;
+        String peakTime = "-";
+        int totalPeriod = 0;
+
+        if ("hour".equalsIgnoreCase(dimension)) {
+            vo.setTitle("今日 24 小时逐时客流分布曲线");
+            LocalDate today = LocalDate.now();
+            List<BizStatsHourly> list = statsMapper.selectList(new LambdaQueryWrapper<BizStatsHourly>()
+                    .eq(BizStatsHourly::getPointId, pointId)
+                    .eq(BizStatsHourly::getStatDate, today));
+
+            Map<Integer, BizStatsHourly> map = list.stream()
+                    .collect(Collectors.toMap(BizStatsHourly::getStatHour, s -> s, (s1, s2) -> s1));
+
+            for (int h = 0; h < 24; h++) {
+                categories.add(String.format("%02d:00", h));
+                BizStatsHourly s = map.get(h);
+                int in = s != null ? s.getEntryCount() : 0;
+                int out = s != null ? s.getExitCount() : 0;
+                int tot = in + out;
+                entryList.add(in);
+                exitList.add(out);
+                totalList.add(tot);
+                totalPeriod += tot;
+                if (tot > peak) {
+                    peak = tot;
+                    peakTime = String.format("%02d:00", h);
+                }
+            }
+            vo.setAverageCount(Math.round((double) totalPeriod / 24 * 10.0) / 10.0);
+
+        } else if ("day".equalsIgnoreCase(dimension)) {
+            int d = (days != null && days > 0) ? days : 7;
+            vo.setTitle(String.format("近 %d 天逐日客流走势曲线", d));
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = endDate.minusDays(d - 1);
+
+            List<Map<String, Object>> rows = statsMapper.selectDailyStats(pointId, startDate, endDate);
+            Map<String, Map<String, Object>> dateMap = new HashMap<>();
+            if (rows != null) {
+                for (Map<String, Object> r : rows) {
+                    Object dt = r.get("statDate");
+                    if (dt != null) dateMap.put(dt.toString(), r);
+                }
+            }
+
+            for (int i = 0; i < d; i++) {
+                LocalDate cur = startDate.plusDays(i);
+                String dtStr = cur.toString();
+                String label = cur.format(DateTimeFormatter.ofPattern("MM-dd"));
+                categories.add(label);
+
+                Map<String, Object> r = dateMap.get(dtStr);
+                int in = r != null && r.get("entryCount") != null ? ((Number) r.get("entryCount")).intValue() : 0;
+                int out = r != null && r.get("exitCount") != null ? ((Number) r.get("exitCount")).intValue() : 0;
+                int tot = in + out;
+
+                entryList.add(in);
+                exitList.add(out);
+                totalList.add(tot);
+                totalPeriod += tot;
+                if (tot > peak) {
+                    peak = tot;
+                    peakTime = label;
+                }
+            }
+            vo.setAverageCount(Math.round((double) totalPeriod / d * 10.0) / 10.0);
+
+        } else if ("quarter".equalsIgnoreCase(dimension)) {
+            vo.setTitle("年度季度客流走势曲线");
+            List<Map<String, Object>> rows = statsMapper.selectQuarterlyStats(pointId);
+            if (rows != null && !rows.isEmpty()) {
+                for (Map<String, Object> r : rows) {
+                    String qName = r.get("quarterName") != null ? r.get("quarterName").toString() : "-";
+                    int in = r.get("entryCount") != null ? ((Number) r.get("entryCount")).intValue() : 0;
+                    int out = r.get("exitCount") != null ? ((Number) r.get("exitCount")).intValue() : 0;
+                    int tot = in + out;
+
+                    categories.add(qName);
+                    entryList.add(in);
+                    exitList.add(out);
+                    totalList.add(tot);
+                    totalPeriod += tot;
+                    if (tot > peak) {
+                        peak = tot;
+                        peakTime = qName;
+                    }
+                }
+            } else {
+                categories.addAll(Arrays.asList("Q1", "Q2", "Q3", "Q4"));
+                entryList.addAll(Arrays.asList(0, 0, 0, 0));
+                exitList.addAll(Arrays.asList(0, 0, 0, 0));
+                totalList.addAll(Arrays.asList(0, 0, 0, 0));
+            }
+            vo.setAverageCount(categories.isEmpty() ? 0.0 : Math.round((double) totalPeriod / categories.size() * 10.0) / 10.0);
+        }
+
+        vo.setCategories(categories);
+        vo.setEntryList(entryList);
+        vo.setExitList(exitList);
+        vo.setTotalList(totalList);
+        vo.setPeakValue(peak);
+        vo.setPeakTime(peakTime);
+        vo.setTotalPeriodCount(totalPeriod);
 
         return vo;
     }

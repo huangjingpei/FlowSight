@@ -1,6 +1,7 @@
 package com.flowsight.cloud.controller;
 
 import com.flowsight.cloud.common.Result;
+import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
 import com.flowsight.cloud.entity.BizPoint;
@@ -38,6 +39,14 @@ public class EdgeIngestController {
         BizPoint point = authenticateEdge(token);
         eventService.recordEdgeEvent(point.getId(), dto);
         return Result.success(null);
+    }
+
+    @PostMapping("/metrics/batch")
+    public Result<String> ingestBatchMetrics(@RequestHeader(value = "X-Point-Token", required = false) String token,
+                                             @RequestBody EdgeBatchReportDTO dto) {
+        BizPoint point = authenticateEdge(token);
+        eventService.recordEdgeBatchReport(point.getId(), dto);
+        return Result.success("批量指标归档成功", dto.getBatchUuid());
     }
 
     @PostMapping("/clip/upload")

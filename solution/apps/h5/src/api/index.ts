@@ -50,5 +50,6 @@ export const authApi = {
 export const h5Api = {
   getMyPoints: () => api.get('/h5/points'),
   getDashboardSummary: (pointId: number) => api.get('/h5/dashboard/summary', { params: { pointId } }),
+  getTrends: (pointId: number, dimension = 'hour', days = 7) => api.get('/h5/dashboard/trends', { params: { pointId, dimension, days } }),
   getEvents: (pointId: number, page = 1, size = 20) => api.get('/h5/events', { params: { pointId, page, size } })
 };

@@ -3,6 +3,9 @@
 #include "storage/DatabaseManager.hpp"
 #include "storage/StoragePruner.hpp"
 #include "network/WebhookPusher.hpp"
+#include "network/EdgeReportManager.hpp"
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>

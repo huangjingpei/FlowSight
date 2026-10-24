@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS `biz_stats_hourly` (
 -- 5. 边缘设备心跳与分析健康状态表
 CREATE TABLE IF NOT EXISTS `biz_device_heartbeat` (
     `point_id` BIGINT NOT NULL COMMENT '关联点位ID',
+    `client_name` VARCHAR(64) DEFAULT 'FlowSight-Node' COMMENT '采集端节点/机器名称',
     `client_version` VARCHAR(32) NOT NULL DEFAULT 'v1.2.0' COMMENT '采集端核心软件版本',
     `current_fps` FLOAT NOT NULL DEFAULT 0.0 COMMENT '边缘当前处理帧率',
     `infer_latency_ms` FLOAT NOT NULL DEFAULT 0.0 COMMENT '单帧平均推理延迟毫秒',

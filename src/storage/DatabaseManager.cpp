@@ -10,6 +10,7 @@
 
 #include <QThread>
 #include <QFileInfo>
+#include <QDateTime>
 #include <QCoreApplication>
 
 DatabaseManager& DatabaseManager::instance() {
@@ -115,6 +116,22 @@ bool DatabaseManager::init_database(const QString& db_path) {
     );
     q.exec("CREATE INDEX IF NOT EXISTS idx_stats_hourly_date ON stats_hourly(date);");
     q.exec("CREATE INDEX IF NOT EXISTS idx_stats_hourly_hour ON stats_hourly(hour);");
+
+    // 4. 离线断网缓存队列表
+    q.exec(
+        "CREATE TABLE IF NOT EXISTS offline_report_queue ("
+        "  queue_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  batch_uuid TEXT NOT NULL UNIQUE,"
+        "  report_type TEXT NOT NULL,"
+        "  payload_blob BLOB NOT NULL,"
+        "  is_compressed INTEGER DEFAULT 1,"
+        "  retry_count INTEGER DEFAULT 0,"
+        "  next_retry_ts INTEGER NOT NULL,"
+        "  status INTEGER DEFAULT 0,"
+        "  created_at INTEGER NOT NULL"
+        ");"
+    );
+    q.exec("CREATE INDEX IF NOT EXISTS idx_offline_status ON offline_report_queue(status, next_retry_ts);");
 
     // 启动时自动历史自检与极速回填
     sync_hourly_aggregation();
@@ -693,6 +710,100 @@ bool DatabaseManager::clear_all_history_data(bool reset_roi_configs, int* out_de
         q_vac.exec("VACUUM;");
     }
     return ok;
+}
+
+bool DatabaseManager::enqueue_offline_report(const QString& batch_uuid, const QString& report_type, const QByteArray& payload_blob) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    q.prepare("INSERT OR REPLACE INTO offline_report_queue "
+              "(batch_uuid, report_type, payload_blob, is_compressed, retry_count, next_retry_ts, status, created_at) "
+              "VALUES (:uuid, :type, :blob, 1, 0, :ts, 0, :now)");
+    q.bindValue(":uuid", batch_uuid);
+    q.bindValue(":type", report_type);
+    q.bindValue(":blob", payload_blob);
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    q.bindValue(":ts", now);
+    q.bindValue(":now", now);
+
+    if (!q.exec()) {
+        qWarning() << "[DatabaseManager] Failed to enqueue offline report:" << q.lastError().text();
+        return false;
+    }
+    return true;
+}
+
+std::vector<DatabaseManager::OfflineReportItem> DatabaseManager::fetch_pending_offline_reports(int limit) {
+    std::vector<OfflineReportItem> items;
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return items;
+
+    QSqlQuery q(db);
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    q.prepare("SELECT queue_id, batch_uuid, report_type, payload_blob, retry_count "
+              "FROM offline_report_queue "
+              "WHERE status = 0 AND next_retry_ts <= :now "
+              "ORDER BY queue_id ASC LIMIT :limit");
+    q.bindValue(":now", now);
+    q.bindValue(":limit", limit);
+
+    if (q.exec()) {
+        while (q.next()) {
+            OfflineReportItem item;
+            item.queue_id = q.value(0).toLongLong();
+            item.batch_uuid = q.value(1).toString();
+            item.report_type = q.value(2).toString();
+            item.payload_blob = q.value(3).toByteArray();
+            item.retry_count = q.value(4).toInt();
+            items.push_back(item);
+        }
+    }
+    return items;
+}
+
+bool DatabaseManager::remove_offline_report(int64_t queue_id) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    q.prepare("DELETE FROM offline_report_queue WHERE queue_id = :id");
+    q.bindValue(":id", queue_id);
+    return q.exec();
+}
+
+bool DatabaseManager::increment_offline_retry(int64_t queue_id) {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT retry_count FROM offline_report_queue WHERE queue_id = :id");
+    q.bindValue(":id", queue_id);
+    if (!q.exec() || !q.next()) return false;
+
+    int retries = q.value(0).toInt() + 1;
+    // 指数退避时间: min(60s, 2^retries * 2) + jitter
+    int backoff_sec = std::min(60, (1 << std::min(retries, 5)) * 2);
+    qint64 next_ts = QDateTime::currentMSecsSinceEpoch() + backoff_sec * 1000;
+
+    QSqlQuery u(db);
+    u.prepare("UPDATE offline_report_queue SET retry_count = :rc, next_retry_ts = :ts, status = 0 WHERE queue_id = :id");
+    u.bindValue(":rc", retries);
+    u.bindValue(":ts", next_ts);
+    u.bindValue(":id", queue_id);
+    return u.exec();
+}
+
+int DatabaseManager::get_pending_offline_count() {
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return 0;
+
+    QSqlQuery q(db);
+    q.prepare("SELECT COUNT(*) FROM offline_report_queue");
+    if (q.exec() && q.next()) {
+        return q.value(0).toInt();
+    }
+    return 0;
 }
 
 

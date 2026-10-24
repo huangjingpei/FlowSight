@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class BizDeviceHeartbeat implements Serializable {
     @TableId(type = IdType.INPUT)
     private Long pointId;
+    private String clientName;
     private String clientVersion;
     private Float currentFps;
     private Float inferLatencyMs;

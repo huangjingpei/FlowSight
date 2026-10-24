@@ -8,6 +8,7 @@
 #include "storage/ConfigManager.hpp"
 #include "storage/StoragePruner.hpp"
 #include "network/WebhookPusher.hpp"
+#include "network/EdgeReportManager.hpp"
 #include <QTimer>
 #include <QThreadPool>
 
@@ -28,6 +29,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // 初始化 Webhook 推送中心
     WebhookPusher::instance().init(this);
+
+    // 初始化智能批量聚合与断网离线自愈上报管理器
+    EdgeReportManager::instance().init(this);
 
     // 异步执行磁盘保护清理 (按配置天数清理过期短视频切片，非阻塞杜绝 UI 卡顿)
     int retention_days = ConfigManager::instance().get_clip_retention_days();
@@ -74,6 +78,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
+        EdgeReportManager::instance().record_passage(ev);
         WebhookPusher::instance().push_event(ev);
     });
     connect(pipeline_.get(), &PipelineController::crowd_surge_status_changed, view_monitor_, &MonitorWidget::set_crowd_surge_alert);
@@ -252,11 +257,29 @@ void MainWindow::setup_ui() {
     status_infer_label_ = create_chip("⚡ 推理: 14.2 ms", "#58a6ff");
     status_fps_label_ = create_chip("📺 帧率: 30.0 FPS", "#d2a8ff");
     auto* status_wal = create_chip("💾 WAL模式已就绪", "#7ee787");
+    auto* status_cloud = create_chip("☁️ 云端就绪", "#58a6ff");
+    auto* status_queue = create_chip("📦 离线队列: 0", "#8b949e");
 
     statusBar()->addWidget(status_device);
     statusBar()->addWidget(status_infer_label_);
     statusBar()->addWidget(status_fps_label_);
     statusBar()->addWidget(status_wal);
+    statusBar()->addWidget(status_cloud);
+    statusBar()->addWidget(status_queue);
+
+    connect(&EdgeReportManager::instance(), &EdgeReportManager::cloud_status_changed, this, [status_cloud](bool is_online, const QString& text) {
+        status_cloud->setText(is_online ? "☁️ 云端在线" : "☁️ 云端离线");
+        status_cloud->setStyleSheet(QString(
+            "background-color: #21262d; color: %1; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 500;"
+        ).arg(is_online ? "#3fb950" : "#f85149"));
+    });
+
+    connect(&EdgeReportManager::instance(), &EdgeReportManager::offline_queue_updated, this, [status_queue](int count) {
+        status_queue->setText(QString("📦 离线队列: %1").arg(count));
+        status_queue->setStyleSheet(QString(
+            "background-color: #21262d; color: %1; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 500;"
+        ).arg(count > 0 ? "#d29922" : "#8b949e"));
+    });
 }
 
 void MainWindow::setup_connections() {

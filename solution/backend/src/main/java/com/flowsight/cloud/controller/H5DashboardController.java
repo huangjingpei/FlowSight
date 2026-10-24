@@ -7,6 +7,7 @@ import com.flowsight.cloud.service.PointService;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.PointVO;
+import com.flowsight.cloud.vo.TrendReportVO;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +33,14 @@ public class H5DashboardController {
     @GetMapping("/dashboard/summary")
     public Result<DashboardSummaryVO> getDashboardSummary(@RequestParam Long pointId, HttpServletRequest request) {
         return Result.success(eventService.getDashboardSummary(pointId));
+    }
+
+    @GetMapping("/dashboard/trends")
+    public Result<TrendReportVO> getDashboardTrends(@RequestParam Long pointId,
+                                                    @RequestParam(defaultValue = "hour") String dimension,
+                                                    @RequestParam(defaultValue = "7") Integer days,
+                                                    HttpServletRequest request) {
+        return Result.success(eventService.getTrendReport(pointId, dimension, days));
     }
 
     @GetMapping("/events")
