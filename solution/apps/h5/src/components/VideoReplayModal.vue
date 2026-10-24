@@ -156,6 +156,9 @@ const handleClosed = () => {
   height: 100%;
   padding: 16px;
   box-sizing: border-box;
+  background: #0C1220;
+  color: #FFFFFF;
+  border-top: 2px solid #00F0FF;
 }
 
 .video-modal-header {
@@ -164,14 +167,15 @@ const handleClosed = () => {
 
 .video-modal-header .title {
   font-size: 16px;
-  font-weight: bold;
-  color: #1a1a1a;
+  font-weight: 800;
+  color: #FFFFFF;
   margin-bottom: 6px;
+  letter-spacing: 0.5px;
 }
 
 .video-modal-header .meta {
-  font-size: 13px;
-  color: #666;
+  font-size: 12px;
+  color: #94A3B8;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -179,34 +183,44 @@ const handleClosed = () => {
 }
 
 .tag-entry {
-  color: #07c160;
-  font-weight: 600;
+  color: #00FF88;
+  font-weight: 700;
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .tag-exit {
-  color: #ee0a24;
-  font-weight: 600;
+  color: #FF9E00;
+  font-weight: 700;
+  background: rgba(255, 158, 0, 0.15);
+  border: 1px solid rgba(255, 158, 0, 0.35);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .point-badge {
-  background: #f0f4ff;
-  color: #1989fa;
+  background: rgba(0, 240, 255, 0.15);
+  color: #00F0FF;
+  border: 1px solid rgba(0, 240, 255, 0.35);
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .player-wrapper {
   flex: 1;
-  background-color: #0d1117;
+  background-color: #050811;
+  border: 1px solid rgba(0, 240, 255, 0.3);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8), 0 4px 16px rgba(0, 240, 255, 0.15);
 }
 
 .html5-video {
@@ -221,7 +235,7 @@ const handleClosed = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(5, 8, 17, 0.85);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -238,14 +252,14 @@ const handleClosed = () => {
 }
 
 .state-title {
-  color: #e6edf3;
+  color: #FFFFFF;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   margin-top: 12px;
 }
 
 .state-desc {
-  color: #8b949e;
+  color: #94A3B8;
   font-size: 12px;
   line-height: 1.5;
   margin-top: 6px;
@@ -254,27 +268,28 @@ const handleClosed = () => {
 
 .btn-retry {
   margin-top: 14px;
-  background: #1989fa;
-  color: #fff;
+  background: linear-gradient(135deg, #00F0FF 0%, #0099FF 100%);
+  color: #050811;
   border: none;
-  padding: 6px 16px;
+  padding: 6px 18px;
   border-radius: 18px;
   font-size: 13px;
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  transition: opacity 0.2s;
+  box-shadow: 0 4px 14px rgba(0, 240, 255, 0.4);
 }
 
 .btn-retry:active {
-  opacity: 0.8;
+  transform: scale(0.97);
 }
 
 .footer-tip {
   margin-top: 10px;
-  font-size: 12px;
-  color: #999;
+  font-size: 11px;
+  color: #64748B;
   display: flex;
   align-items: center;
   gap: 4px;

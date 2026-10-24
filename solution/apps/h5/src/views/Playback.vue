@@ -1,225 +1,130 @@
 <template>
-  <div class="playback-page">
-    <!-- 顶部导航栏 -->
-    <van-nav-bar fixed placeholder class="gov-nav-bar">
-      <template #left>
-        <div class="nav-brand">
-          <span class="brand-logo">🎬</span>
-          <span class="brand-title">FlowSight 证据切片回放中心</span>
-        </div>
-      </template>
-      <template #right>
-        <div class="header-point-badge" v-if="selectedPointName">
-          <span>{{ selectedPointName }}</span>
-        </div>
-      </template>
-    </van-nav-bar>
+  <div class="playback-viewport">
+    <!-- 1. 顶部嵌入式标题栏 -->
+    <header class="flat-header">
+      <div class="header-left">
+        <span class="header-dot"></span>
+        <span class="header-title">证据切片回放</span>
+      </div>
+      <div class="header-point-badge" v-if="selectedPointName">
+        <span>{{ selectedPointName }}</span>
+      </div>
+    </header>
 
-    <div class="playback-body">
-      <!-- 1. 多维度组合搜索过滤卡片 -->
-      <div class="filter-card">
-        <div class="filter-title">
-          <span>🔍</span> 证据切片条件检索
-        </div>
-
-        <!-- 筛选行 1: 通道点位选择 -->
-        <div class="filter-row">
-          <span class="row-label">通道点位:</span>
+    <!-- 2. 主体：单屏纯平证据中心 (无页面级上下滚动) -->
+    <main class="flat-main">
+      <!-- 紧凑过滤控制栏 -->
+      <div class="flat-filter-box">
+        <div class="filter-line-1">
           <div class="point-select-wrap">
-            <select v-model="filterPointId" class="custom-select" @change="onSearch">
-              <option :value="0">🌐 全部通道点位</option>
+            <select v-model="filterPointId" class="flat-select" @change="onSearch">
+              <option :value="0">全部通道点位</option>
               <option v-for="p in pointOptions" :key="p.id" :value="p.id">
                 [{{ p.id }}] {{ p.pointName }}
               </option>
             </select>
           </div>
-        </div>
-
-        <!-- 筛选行 2: 通行方向 -->
-        <div class="filter-row">
-          <span class="row-label">通行方向:</span>
-          <div class="dir-btn-group">
-            <div
-              :class="['dir-btn', filterDirection === 'ALL' ? 'active-all' : '']"
+          <div class="dir-group">
+            <span
+              :class="['dir-pill', filterDirection === 'ALL' ? 'active' : '']"
               @click="setDirection('ALL')"
-            >
-              全部
-            </div>
-            <div
-              :class="['dir-btn', filterDirection === 'ENTRY' ? 'active-entry' : '']"
+            >全</span>
+            <span
+              :class="['dir-pill', filterDirection === 'ENTRY' ? 'active green' : '']"
               @click="setDirection('ENTRY')"
-            >
-              🟢 进入 (In)
-            </div>
-            <div
-              :class="['dir-btn', filterDirection === 'EXIT' ? 'active-exit' : '']"
+            >进</span>
+            <span
+              :class="['dir-pill', filterDirection === 'EXIT' ? 'active orange' : '']"
               @click="setDirection('EXIT')"
-            >
-              🟠 离开 (Out)
-            </div>
+            >出</span>
           </div>
         </div>
 
-        <!-- 筛选行 3: 快捷日期范围 -->
-        <div class="filter-row">
-          <span class="row-label">检索时间:</span>
-          <div class="date-quick-group">
-            <div
+        <div class="filter-line-2">
+          <div class="date-group">
+            <span
               v-for="d in dateShortcuts"
               :key="d.key"
-              :class="['date-chip', activeDateShortcut === d.key ? 'active' : '']"
+              :class="['date-pill', activeDateShortcut === d.key ? 'active' : '']"
               @click="setDateShortcut(d.key)"
             >
               {{ d.label }}
-            </div>
+            </span>
           </div>
-        </div>
-
-        <!-- 操作按钮与当前筛选说明 -->
-        <div class="filter-actions">
-          <span class="filter-summary">
-            {{ selectedDateRangeText }}
-          </span>
-          <div class="action-btns">
-            <button class="btn-reset" @click="onReset">↺ 重置</button>
-            <button class="btn-search" @click="onSearch">🔍 查询</button>
+          <div class="action-group">
+            <button class="btn-reset" @click="onReset">重置</button>
+            <button class="btn-search" @click="onSearch">查询</button>
           </div>
         </div>
       </div>
 
-      <!-- 2. 切片回放记录列表 -->
-      <div class="records-card">
-        <div class="records-header">
-          <div class="header-left">
-            <span class="header-icon">📹</span>
-            <span class="header-title">事件切片列表</span>
-            <span class="total-tag">共 {{ totalRecords }} 条</span>
-          </div>
-          <div class="page-size-selector">
-            <span class="size-lbl">每页:</span>
-            <select v-model="pageSize" class="size-select" @change="onPageSizeChange">
-              <option :value="10">10条</option>
-              <option :value="20">20条</option>
-              <option :value="50">50条</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- 加载中状态 -->
-        <div v-if="loading" class="loading-box">
-          <van-loading type="spinner" color="#58a6ff" size="28px">
-            正在检索切片证据流水...
+      <!-- 切片流水容器 (自适应占满中间全部剩余高度，仅内部滚动) -->
+      <div class="records-container">
+        <!-- 加载状态 -->
+        <div v-if="loading" class="state-center">
+          <van-loading type="spinner" color="#00D2FF" size="22px">
+            检索中...
           </van-loading>
         </div>
 
-        <!-- 空数据提示 -->
-        <div v-else-if="eventList.length === 0" class="empty-box">
-          <van-empty image="search" description="未检索到符合条件的通行切片数据" />
+        <!-- 空状态 -->
+        <div v-else-if="eventList.length === 0" class="state-center empty-text">
+          未检索到符合条件的通行证据切片
         </div>
 
-        <!-- 记录卡片列表 -->
-        <div v-else class="event-cards-list">
+        <!-- 扁平卡片列表 (仅列表内部滚动) -->
+        <div v-else class="event-list-scroll">
           <div
             v-for="ev in eventList"
             :key="ev.id"
-            class="event-card"
+            class="event-row"
             @click="handlePlayClip(ev)"
           >
-            <div class="card-top">
-              <div class="point-badge">
-                <span class="loc-icon">📍</span>
-                <span class="loc-name">{{ ev.pointName || ('通道 #' + ev.pointId) }}</span>
-              </div>
-              <div :class="['dir-pill', ev.direction === 'ENTRY' ? 'pill-in' : 'pill-out']">
-                {{ ev.direction === 'ENTRY' ? '🟢 进入' : '🟠 离开' }}
-              </div>
-              <div class="card-time">{{ ev.datetime }}</div>
-            </div>
-
-            <div class="card-middle">
-              <div class="target-meta">
-                <span class="track-tag">目标 #{{ ev.trackId }}</span>
-                <span class="attr-tag">{{ ev.gender || '未知' }}</span>
-                <span class="attr-tag">{{ ev.ageGroup || '未知' }}</span>
-                <span class="conf-tag" v-if="ev.confidence">
-                  置信度: {{ (ev.confidence * 100).toFixed(0) }}%
+            <div class="event-meta">
+              <div class="meta-top">
+                <span class="track-id">#{{ ev.trackId }}</span>
+                <span :class="['dir-badge', ev.direction === 'ENTRY' ? 'badge-in' : 'badge-out']">
+                  {{ ev.direction === 'ENTRY' ? '进入' : '离开' }}
                 </span>
+                <span class="point-name">{{ ev.pointName || ('通道#' + ev.pointId) }}</span>
               </div>
-              <div class="play-action-wrap">
-                <button class="btn-play-clip">
-                  <span class="play-icon">▶</span>
-                  <span>播放切片</span>
-                </button>
+              <div class="meta-sub">
+                <span class="time-str">{{ ev.datetime }}</span>
+                <span class="attr-str">{{ ev.gender || '未知' }} · {{ ev.ageGroup || '未知' }}</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- 3. 全功能综合分页条 (首页 / 上一页 / 选页 / 下一页 / 尾页 / 跳转) -->
-        <div class="pagination-footer" v-if="totalRecords > 0">
-          <div class="pagination-info">
-            第 <span class="num-highlight">{{ currentPage }}</span> / {{ totalPages }} 页 (共 {{ totalRecords }} 条)
-          </div>
-
-          <!-- 分页按钮控制条 -->
-          <div class="pagination-bar">
-            <button
-              class="page-nav-btn"
-              :disabled="currentPage <= 1"
-              @click="goToPage(1)"
-              title="跳转到第一页"
-            >
-              ⏮ 首页
+            <!-- 回放按钮 -->
+            <button class="btn-play" @click.stop="handlePlayClip(ev)">
+              <span>▶ 播放</span>
             </button>
-            <button
-              class="page-nav-btn"
-              :disabled="currentPage <= 1"
-              @click="goToPage(currentPage - 1)"
-            >
-              ◀ 上一页
-            </button>
-
-            <!-- 中间当前页码胶囊 -->
-            <div class="page-current-pill">
-              <span>{{ currentPage }} / {{ totalPages }}</span>
-            </div>
-
-            <button
-              class="page-nav-btn"
-              :disabled="currentPage >= totalPages"
-              @click="goToPage(currentPage + 1)"
-            >
-              下一页 ▶
-            </button>
-            <button
-              class="page-nav-btn"
-              :disabled="currentPage >= totalPages"
-              @click="goToPage(totalPages)"
-              title="跳转到最后一页"
-            >
-              尾页 ⏭
-            </button>
-          </div>
-
-          <!-- 快速跳转指定页码 -->
-          <div class="jump-row">
-            <span class="jump-label">跳转至:</span>
-            <input
-              type="number"
-              v-model.number="jumpTargetPage"
-              class="jump-input"
-              :min="1"
-              :max="totalPages"
-              @keyup.enter="handleJump"
-            />
-            <span class="jump-unit">页</span>
-            <button class="btn-jump" @click="handleJump">前往</button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 视频切片标准秒开回放弹窗 (触发状态机互斥锁) -->
+      <!-- 紧凑底部单行分页 -->
+      <div class="flat-pagination" v-if="totalRecords > 0">
+        <button
+          class="page-btn"
+          :disabled="currentPage <= 1"
+          @click="goToPage(currentPage - 1)"
+        >
+          上一页
+        </button>
+
+        <span class="page-info">{{ currentPage }} / {{ totalPages }} (共{{ totalRecords }}条)</span>
+
+        <button
+          class="page-btn"
+          :disabled="currentPage >= totalPages"
+          @click="goToPage(currentPage + 1)"
+        >
+          下一页
+        </button>
+      </div>
+    </main>
+
+    <!-- 视频切片标准秒开回放弹窗 -->
     <VideoReplayModal
       v-model:show="showVideoModal"
       :play-url="currentPlayUrl"
@@ -232,10 +137,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { showToast } from 'vant';
 import { h5Api, EventQueryParams } from '../api';
-import { usePointStore } from '../store/point';
 import VideoReplayModal from '../components/VideoReplayModal.vue';
-
-const pointStore = usePointStore();
 
 // 筛选状态
 const filterPointId = ref<number>(0);
@@ -249,9 +151,8 @@ const currentPage = ref<number>(1);
 const pageSize = ref<number>(10);
 const totalRecords = ref<number>(0);
 const totalPages = ref<number>(1);
-const jumpTargetPage = ref<number>(1);
 
-// 数据列表与加载状态
+// 数据列表
 const loading = ref<boolean>(false);
 const eventList = ref<any[]>([]);
 const pointOptions = ref<any[]>([]);
@@ -261,29 +162,19 @@ const showVideoModal = ref<boolean>(false);
 const currentPlayUrl = ref<string>('');
 const currentEvent = ref<any>(null);
 
-// 快捷日期选项
 const dateShortcuts = [
   { key: 'today', label: '今天' },
   { key: 'yesterday', label: '昨天' },
   { key: 'week', label: '近7天' },
-  { key: 'all', label: '全部时间' }
+  { key: 'all', label: '全部' }
 ];
 
 const selectedPointName = computed(() => {
-  if (filterPointId.value === 0) return '全部点位';
+  if (filterPointId.value === 0) return '全部通道';
   const found = pointOptions.value.find(p => p.id === filterPointId.value);
   return found ? found.pointName : '';
 });
 
-const selectedDateRangeText = computed(() => {
-  if (activeDateShortcut.value === 'today') return '已选: 今天全天通行记录';
-  if (activeDateShortcut.value === 'yesterday') return '已选: 昨天全天记录';
-  if (activeDateShortcut.value === 'week') return '已选: 近 7 天事件流水';
-  if (activeDateShortcut.value === 'all') return '已选: 不限时间跨度';
-  return `已选: ${startDate.value} ~ ${endDate.value}`;
-});
-
-// 计算日期快捷参数
 const calculateDateRange = (key: string) => {
   const now = new Date();
   const formatYMD = (d: Date) => {
@@ -298,29 +189,29 @@ const calculateDateRange = (key: string) => {
     startDate.value = s;
     endDate.value = s;
   } else if (key === 'yesterday') {
-    const yest = new Date(now.getTime() - 24 * 3600 * 1000);
-    const s = formatYMD(yest);
+    const y = new Date(now.getTime() - 24 * 3600 * 1000);
+    const s = formatYMD(y);
     startDate.value = s;
     endDate.value = s;
   } else if (key === 'week') {
-    const weekAgo = new Date(now.getTime() - 6 * 24 * 3600 * 1000);
-    startDate.value = formatYMD(weekAgo);
+    const w = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    startDate.value = formatYMD(w);
     endDate.value = formatYMD(now);
-  } else {
+  } else if (key === 'all') {
     startDate.value = '';
     endDate.value = '';
   }
 };
 
-const setDateShortcut = (key: string) => {
-  activeDateShortcut.value = key;
-  calculateDateRange(key);
+const setDirection = (dir: string) => {
+  filterDirection.value = dir;
   currentPage.value = 1;
   fetchEvents();
 };
 
-const setDirection = (dir: string) => {
-  filterDirection.value = dir;
+const setDateShortcut = (key: string) => {
+  activeDateShortcut.value = key;
+  calculateDateRange(key);
   currentPage.value = 1;
   fetchEvents();
 };
@@ -336,37 +227,19 @@ const onReset = () => {
   activeDateShortcut.value = 'today';
   calculateDateRange('today');
   currentPage.value = 1;
-  pageSize.value = 10;
-  fetchEvents();
-};
-
-const onPageSizeChange = () => {
-  currentPage.value = 1;
   fetchEvents();
 };
 
 const goToPage = (page: number) => {
   if (page < 1 || page > totalPages.value || page === currentPage.value) return;
   currentPage.value = page;
-  jumpTargetPage.value = page;
   fetchEvents();
 };
 
-const handleJump = () => {
-  if (!jumpTargetPage.value || jumpTargetPage.value < 1) {
-    showToast('请输入有效的目标页码');
-    return;
-  }
-  let target = jumpTargetPage.value;
-  if (target > totalPages.value) target = totalPages.value;
-  goToPage(target);
-};
-
-// 获取事件分页列表
 const fetchEvents = async () => {
   loading.value = true;
   try {
-    const defaultPid = pointOptions.value.length > 0 ? pointOptions.value[0].id : 1;
+    const defaultPid = (pointOptions.value.length > 0) ? pointOptions.value[0].id : 0;
     const pid = filterPointId.value > 0 ? filterPointId.value : defaultPid;
 
     const params: EventQueryParams = {
@@ -384,20 +257,18 @@ const fetchEvents = async () => {
       totalRecords.value = res.total || res.records.length;
       totalPages.value = Math.max(1, Math.ceil(totalRecords.value / pageSize.value));
       currentPage.value = res.current || 1;
-      jumpTargetPage.value = currentPage.value;
     } else {
       eventList.value = [];
       totalRecords.value = 0;
       totalPages.value = 1;
     }
   } catch (err: any) {
-    showToast(err.message || '加载事件切片失败');
+    showToast(err.message || '加载切片失败');
   } finally {
     loading.value = false;
   }
 };
 
-// 获取点位列表
 const fetchPoints = async () => {
   try {
     const res: any = await h5Api.getMyPoints();
@@ -407,12 +278,9 @@ const fetchPoints = async () => {
         filterPointId.value = res[0].id;
       }
     }
-  } catch (e) {
-    console.error('获取点位失败', e);
-  }
+  } catch (e) {}
 };
 
-// 点击播放视频切片
 const handlePlayClip = (ev: any) => {
   if (!ev.playUrl) {
     showToast('该记录尚未关联或生成有效切片视频');
@@ -431,502 +299,321 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.playback-page {
-  max-width: 520px;
-  margin: 0 auto;
-  min-height: 100vh;
-  background-color: #060911;
-  color: #c9d1d9;
-  padding-bottom: 72px; /* 为全局底部导航栏留足空间 */
+/* 整个视图严格占满父容器，无页面级滚动 */
+.playback-viewport {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: #0A0D14;
+}
+
+/* 顶部标题栏 */
+.flat-header {
+  flex-shrink: 0;
+  height: 44px;
+  background: #0E131D;
+  border-bottom: 1px solid #1E2636;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
   box-sizing: border-box;
 }
 
-/* 顶部政务物业风格导航 */
-.gov-nav-bar {
-  max-width: 520px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  background: rgba(10, 15, 29, 0.85) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-.nav-brand {
+.header-left {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.brand-logo {
-  font-size: 18px;
+.header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00D2FF;
 }
 
-.brand-title {
-  color: #f0f6fc;
-  font-size: 15px;
+.header-title {
+  color: #FFFFFF;
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: 0.5px;
 }
 
 .header-point-badge {
-  background: #21262d;
-  color: #58a6ff;
-  border: 1px solid #388bfd33;
-  padding: 3px 8px;
-  border-radius: 12px;
+  background: #182030;
+  color: #00D2FF;
+  border: 1px solid #2A364F;
+  padding: 2px 8px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
 }
 
-.playback-body {
-  padding: 12px 14px;
+/* 主体单屏 */
+.cockpit-body, .flat-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+  gap: 8px;
 }
 
-/* 1. 过滤检索卡片 */
-.filter-card {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+/* 紧凑过滤栏 */
+.flat-filter-box {
+  flex-shrink: 0;
+  height: 68px;
+  background: #121722;
+  border: 1px solid #1E2636;
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.filter-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #58a6ff;
-  margin-bottom: 12px;
+.filter-line-1, .filter-line-2 {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-
-.filter-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  font-size: 13px;
-}
-
-.row-label {
-  width: 72px;
-  color: #8b949e;
-  font-weight: 500;
-  flex-shrink: 0;
 }
 
 .point-select-wrap {
   flex: 1;
 }
 
-.custom-select {
+.flat-select {
   width: 100%;
-  background: #0d1117;
-  color: #f0f6fc;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
+  height: 24px;
+  background: #182030;
+  color: #FFFFFF;
+  border: 1px solid #2A364F;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
   outline: none;
 }
 
-.dir-btn-group {
+.dir-group {
   display: flex;
-  gap: 8px;
-  flex: 1;
-}
-
-.dir-btn {
-  flex: 1;
-  text-align: center;
-  padding: 6px 0;
-  background: #0d1117;
-  color: #8b949e;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.dir-btn.active-all {
-  background: #1f6feb;
-  color: #ffffff;
-  border-color: #388bfd;
-  font-weight: bold;
-}
-
-.dir-btn.active-entry {
-  background: #238636;
-  color: #ffffff;
-  border-color: #2ea043;
-  font-weight: bold;
-}
-
-.dir-btn.active-exit {
-  background: #d29922;
-  color: #0d1117;
-  border-color: #d29922;
-  font-weight: bold;
-}
-
-.date-quick-group {
-  display: flex;
-  gap: 6px;
-  flex: 1;
-}
-
-.date-chip {
-  flex: 1;
-  text-align: center;
-  padding: 5px 0;
-  background: #0d1117;
-  color: #8b949e;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.date-chip.active {
-  background: #388bfd26;
-  color: #58a6ff;
-  border-color: #58a6ff;
-  font-weight: 600;
-}
-
-.filter-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #21262d;
-}
-
-.filter-summary {
-  font-size: 11px;
-  color: #8b949e;
-}
-
-.action-btns {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-reset {
-  background: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
-  padding: 5px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-search {
-  background: #1f6feb;
-  color: #ffffff;
-  border: 1px solid #388bfd;
-  padding: 5px 16px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-/* 2. 切片记录列表卡片 */
-.records-card {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.records-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #21262d;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-icon {
-  font-size: 15px;
-}
-
-.header-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #f0f6fc;
-}
-
-.total-tag {
-  background: #21262d;
-  color: #58a6ff;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 11px;
-  margin-left: 4px;
-}
-
-.page-size-selector {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #8b949e;
-}
-
-.size-select {
-  background: #0d1117;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  padding: 2px 4px;
-  font-size: 11px;
-  outline: none;
-}
-
-.loading-box, .empty-box {
-  padding: 30px 0;
-  text-align: center;
-}
-
-/* 事件证据卡片样式 */
-.event-cards-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.event-card {
-  background: #0d1117;
-  border: 1px solid #21262d;
-  border-radius: 6px;
-  padding: 10px 12px;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.event-card:hover {
-  border-color: #388bfd;
-  background: #111822;
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.point-badge {
-  background: #1f242c;
-  color: #79c0ff;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 
 .dir-pill {
-  padding: 2px 6px;
+  width: 28px;
+  height: 24px;
+  line-height: 24px;
+  text-align: center;
+  background: #182030;
+  color: #94A3B8;
+  border: 1px solid #2A364F;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
+  cursor: pointer;
+}
+.dir-pill.active { background: #00D2FF; color: #0A0D14; border-color: #00D2FF; }
+.dir-pill.active.green { background: #00E676; color: #0A0D14; border-color: #00E676; }
+.dir-pill.active.orange { background: #FF9100; color: #0A0D14; border-color: #FF9100; }
+
+.date-group {
+  display: flex;
+  gap: 3px;
+  flex: 1;
 }
 
-.pill-in {
-  background: #23863626;
-  color: #3fb950;
-  border: 1px solid #2386364d;
+.date-pill {
+  flex: 1;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  background: #182030;
+  color: #94A3B8;
+  border: 1px solid #2A364F;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.date-pill.active {
+  background: #00D2FF;
+  color: #0A0D14;
+  border-color: #00D2FF;
+  font-weight: 800;
 }
 
-.pill-out {
-  background: #d2992226;
-  color: #e3b341;
-  border: 1px solid #d299224d;
+.action-group {
+  display: flex;
+  gap: 4px;
 }
 
-.card-time {
-  margin-left: auto;
-  font-size: 11px;
-  color: #8b949e;
+.btn-reset, .btn-search {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+.btn-reset {
+  background: #182030;
+  color: #94A3B8;
+  border: 1px solid #2A364F;
+}
+.btn-search {
+  background: #00D2FF;
+  color: #0A0D14;
 }
 
-.card-middle {
+/* 切片容器 (填满中间剩余高度) */
+.records-container {
+  flex: 1;
+  min-height: 0;
+  background: #121722;
+  border: 1px solid #1E2636;
+  border-radius: 6px;
+  padding: 6px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.state-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-text {
+  color: #64748B;
+  font-size: 12px;
+}
+
+/* 列表滚动容器 */
+.event-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-row {
+  background: #182030;
+  border: 1px solid #222C3E;
+  border-radius: 6px;
+  padding: 8px 10px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
+}
+.event-row:active {
+  background: #1E293F;
 }
 
-.target-meta {
+.event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.meta-top {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
 }
 
-.track-tag {
-  color: #f0f6fc;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.attr-tag {
-  background: #21262d;
-  color: #8b949e;
+.track-id {
   font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 800;
+  color: #00D2FF;
 }
 
-.conf-tag {
-  color: #58a6ff;
-  font-size: 11px;
-}
-
-.btn-play-clip {
-  background: linear-gradient(135deg, #1f6feb 0%, #238636 100%);
-  color: #ffffff;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 14px;
-  font-size: 11px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  box-shadow: 0 2px 6px rgba(31, 111, 235, 0.4);
-  cursor: pointer;
-  transition: transform 0.1s;
-}
-
-.btn-play-clip:active {
-  transform: scale(0.96);
-}
-
-.play-icon {
-  font-size: 9px;
-}
-
-/* 3. 分页控制器组件 */
-.pagination-footer {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid #21262d;
-}
-
-.pagination-info {
-  text-align: center;
-  font-size: 12px;
-  color: #8b949e;
-  margin-bottom: 8px;
-}
-
-.num-highlight {
-  color: #58a6ff;
-  font-weight: bold;
-}
-
-.pagination-bar {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.page-nav-btn {
-  background: #21262d;
-  color: #c9d1d9;
-  border: 1px solid #30363d;
-  padding: 5px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-nav-btn:hover:not(:disabled) {
-  background: #30363d;
-  color: #58a6ff;
-  border-color: #58a6ff;
-}
-
-.page-nav-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.page-current-pill {
-  background: #0d1117;
-  color: #58a6ff;
-  border: 1px solid #388bfd66;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 11px;
+.dir-badge {
+  font-size: 10px;
   font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.badge-in { background: rgba(0, 230, 118, 0.15); color: #00E676; }
+.badge-out { background: rgba(255, 145, 0, 0.15); color: #FF9100; }
+
+.point-name {
+  font-size: 10px;
+  color: #94A3B8;
 }
 
-.jump-row {
+.meta-sub {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #8b949e;
+  gap: 8px;
+  font-size: 10px;
+  color: #64748B;
 }
 
-.jump-label {
-  font-size: 11px;
-}
-
-.jump-input {
-  width: 48px;
-  background: #0d1117;
-  color: #f0f6fc;
-  border: 1px solid #30363d;
+/* 播放按钮 */
+.btn-play {
+  flex-shrink: 0;
+  margin-left: 8px;
+  background: #00D2FF;
+  color: #0A0D14;
+  border: none;
   border-radius: 4px;
-  padding: 3px 6px;
-  font-size: 12px;
-  text-align: center;
-  outline: none;
-}
-
-.jump-unit {
+  padding: 4px 10px;
   font-size: 11px;
-}
-
-.btn-jump {
-  background: #21262d;
-  color: #58a6ff;
-  border: 1px solid #388bfd4d;
-  padding: 3px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
 }
+.btn-play:active {
+  opacity: 0.85;
+}
 
-.btn-jump:hover {
-  background: #1f6feb;
-  color: #ffffff;
+/* 底部单行分页 */
+.flat-pagination {
+  flex-shrink: 0;
+  height: 30px;
+  background: #121722;
+  border: 1px solid #1E2636;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+.page-btn {
+  height: 22px;
+  padding: 0 8px;
+  background: #182030;
+  color: #00D2FF;
+  border: 1px solid #2A364F;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.page-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  color: #64748B;
+}
+
+.page-info {
+  font-size: 10px;
+  color: #94A3B8;
+  font-weight: 600;
 }
 </style>
