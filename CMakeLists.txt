@@ -163,4 +163,33 @@ if(WIN32)
             $<TARGET_FILE_DIR:FlowSightEngine>
         )
     endif()
+    if(EXISTS "D:/opencv/build/x64/vc16/bin/opencv_world480d.dll")
+        add_custom_command(TARGET FlowSight POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "D:/opencv/build/x64/vc16/bin/opencv_world480d.dll"
+            $<TARGET_FILE_DIR:FlowSight>
+        )
+        add_custom_command(TARGET FlowSightEngine POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "D:/opencv/build/x64/vc16/bin/opencv_world480d.dll"
+            $<TARGET_FILE_DIR:FlowSightEngine>
+        )
+    endif()
+
+    # 自动执行 windeployqt 部署 Qt 依赖动态库与平台插件 (解决 Qt6Guid.dll / qwindows.dll 找不到问题)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "C:/Qt/6.9.2/msvc2022_64/bin")
+    if(WINDEPLOYQT_EXECUTABLE)
+        add_custom_command(TARGET FlowSight POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXECUTABLE}"
+                    --no-translations
+                    --no-compiler-runtime
+                    "$<TARGET_FILE:FlowSight>"
+            COMMENT "Deploying Qt dependencies via windeployqt for FlowSight..."
+        )
+    endif()
 endif()
+
+# 设置 VS 调试环境 PATH (VS 内部宏使用 %PATH% 而非 $ENV{PATH}，路径无多余转义斜杠)
+set_target_properties(FlowSight PROPERTIES
+    VS_DEBUGGER_ENVIRONMENT "PATH=C:/Qt/6.9.2/msvc2022_64/bin;%PATH%"
+)
