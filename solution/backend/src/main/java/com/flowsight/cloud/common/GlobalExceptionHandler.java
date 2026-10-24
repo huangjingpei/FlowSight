@@ -29,6 +29,12 @@ public class GlobalExceptionHandler {
         return Result.fail(400, e.getMessage());
     }
 
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.NOT_FOUND)
+    public Result<Void> handleNotFound(org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        return Result.fail(404, "请求的资源或静态文件不存在: " + e.getResourcePath());
+    }
+
     @ExceptionHandler(Exception.class)
     public Result<Void> handleGeneral(Exception e) {
         log.error("Unhandled Exception: ", e);

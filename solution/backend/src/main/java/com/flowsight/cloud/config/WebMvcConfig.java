@@ -43,11 +43,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
         if (!clipsDir.exists()) {
             clipsDir.mkdirs();
         }
-        String uploadPath = clipsDir.toURI().toString();
-        if (!uploadPath.endsWith("/")) {
-            uploadPath += "/";
+        String absPath = clipsDir.getAbsolutePath().replace("\\", "/");
+        if (!absPath.endsWith("/")) {
+            absPath += "/";
         }
         registry.addResourceHandler("/api/v1/clips/**")
-                .addResourceLocations(uploadPath);
+                .addResourceLocations("file:" + absPath, "file:./uploads/clips/", "file:../uploads/clips/");
     }
 }
