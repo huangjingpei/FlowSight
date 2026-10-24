@@ -8,6 +8,9 @@
 #include <thread>
 #include <vector>
 #include <atomic>
+#include <chrono>
+#include <algorithm>
+#include <cmath>
 #include <QDir>
 
 class ClipRecorder {
@@ -30,25 +33,42 @@ public:
         }
     }
 
-    // 每帧送入画面构建环形缓冲（约 3 秒）
+    // 每帧送入画面构建带时间戳的环形缓冲（约 3 秒）
     void push_frame(const cv::Mat& frame) {
         if (frame.empty()) return;
+        int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+
         std::lock_guard<std::mutex> lock(mtx_);
         if (frame_buffer_.size() >= max_buffer_size_) {
             frame_buffer_.pop_front();
         }
-        frame_buffer_.push_back(frame.clone());
+        frame_buffer_.push_back(BufferedFrame{frame.clone(), now_ms});
     }
 
     // 触发进出事件时调用：将切片投递到任务队列，由后台独立线程平滑排队编码保存
-    std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int fps = 25) {
+    // 关键优化: 依据缓冲池帧到达的实际物理时间跨度精确自适应计算 FPS，根治回放“快进感”
+    std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int fallback_fps = 25) {
         std::vector<cv::Mat> snapshot;
+        int actual_fps = fallback_fps;
         {
             std::lock_guard<std::mutex> lock(mtx_);
-            snapshot.assign(frame_buffer_.begin(), frame_buffer_.end());
-        }
+            if (frame_buffer_.empty()) return "";
 
-        if (snapshot.empty()) return "";
+            // 依据首尾帧的真实物理流逝时间 (ms)，动态精确计算该切片的实际帧率
+            if (frame_buffer_.size() >= 2) {
+                int64_t delta_ms = frame_buffer_.back().timestamp_ms - frame_buffer_.front().timestamp_ms;
+                if (delta_ms >= 200) {
+                    double calc = (frame_buffer_.size() - 1) * 1000.0 / static_cast<double>(delta_ms);
+                    actual_fps = std::clamp(static_cast<int>(std::round(calc)), 5, 60);
+                }
+            }
+
+            snapshot.reserve(frame_buffer_.size());
+            for (const auto& bf : frame_buffer_) {
+                snapshot.push_back(bf.frame);
+            }
+        }
 
         QDir dir(QString::fromStdString(output_dir));
         if (!dir.exists()) {
@@ -64,7 +84,7 @@ public:
             if (task_queue_.size() >= 15) {
                 return "";
             }
-            task_queue_.push(ClipTask{std::move(snapshot), filename, fps});
+            task_queue_.push(ClipTask{std::move(snapshot), filename, actual_fps});
         }
         cv_.notify_one();
 
@@ -72,6 +92,11 @@ public:
     }
 
 private:
+    struct BufferedFrame {
+        cv::Mat frame;
+        int64_t timestamp_ms = 0;
+    };
+
     struct ClipTask {
         std::vector<cv::Mat> snapshot;
         std::string filename;
@@ -121,7 +146,7 @@ private:
     }
 
     size_t max_buffer_size_;
-    std::deque<cv::Mat> frame_buffer_;
+    std::deque<BufferedFrame> frame_buffer_;
     std::mutex mtx_;
 
     // 线程池队列与后台编码 Worker
