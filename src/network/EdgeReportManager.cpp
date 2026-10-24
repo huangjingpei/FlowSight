@@ -213,6 +213,53 @@ void EdgeReportManager::send_test_batch(std::function<void(bool success, const Q
         });
 }
 
+void EdgeReportManager::fetch_cloud_config(ConfigCallback callback) {
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) {
+        if (callback) callback(false, "未配置云端中台地址或未绑定点位 Token", QJsonObject());
+        return;
+    }
+
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    QUrl config_url(cloud_base_url_.trimmed() + "/api/v1/edge/config");
+    QNetworkRequest request(config_url);
+    request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
+    request.setTransferTimeout(5000);
+
+    QNetworkReply* reply = nam_->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, callback]() {
+        reply->deleteLater();
+        int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError && http_status == 200) {
+            QByteArray data = reply->readAll();
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            QJsonObject root = doc.object();
+            int code = root.value("code").toInt(200);
+            if (code == 200 && root.contains("data")) {
+                QJsonObject point_cfg = root.value("data").toObject();
+                // 同步本地点位名称与状态
+                bound_point_name_ = point_cfg.value("pointName").toString(bound_point_name_);
+                is_online_ = true;
+                is_point_deactivated_ = false;
+                emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+                if (callback) callback(true, "拉取云端点位配置成功", point_cfg);
+                return;
+            } else {
+                QString msg = root.value("message").toString("云端返回异常");
+                if (callback) callback(false, msg, QJsonObject());
+                return;
+            }
+        }
+
+        if (http_status == 400 || http_status == 401 || http_status == 403) {
+            is_point_deactivated_ = true;
+            is_online_ = false;
+            emit cloud_status_changed(false, "⚠️ 点位已下架或Token已注销 (本地持续自主监控)");
+        }
+        if (callback) callback(false, QString("拉取失败 (HTTP %1): %2").arg(http_status).arg(reply->errorString()), QJsonObject());
+    });
+}
+
 void EdgeReportManager::record_passage(const PassageEvent& event) {
     QMutexLocker locker(&mutex_);
     if (event.direction == PassageDirection::ENTRY) {

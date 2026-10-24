@@ -220,6 +220,13 @@ void SettingsWidget::setup_ui() {
     );
     cloud_row3->addWidget(btn_bind_point_);
 
+    btn_sync_config_ = new QPushButton("🔄 同步云端配置 (RTSP流)", this);
+    btn_sync_config_->setStyleSheet(
+        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #2ea043; }"
+        "QPushButton:hover { background: #2ea043; }"
+    );
+    cloud_row3->addWidget(btn_sync_config_);
+
     btn_test_report_ = new QPushButton("⚡ 立即上报测试包", this);
     btn_test_report_->setStyleSheet(
         "QPushButton { background: #8957e5; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #a371f7; }"
@@ -409,7 +416,51 @@ void SettingsWidget::setup_ui() {
 
         cloud_status_info_label_->setText(QString("🟢 绑定成功！已接入云端点位: %1 (ID: %2) | 节点: %3").arg(pname).arg(pid).arg(client_name));
         cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-        QMessageBox::information(this, "绑定成功", QString("客户端已成功与云端点位「%1」建立关联！\n数据将自动聚合压缩上报。").arg(pname));
+        QMessageBox::information(this, "绑定成功", QString("客户端已成功与云端点位「%1」建立关联！\n系统将自动同步拉取摄像头视频流配置。").arg(pname));
+
+        // 绑定成功后自动触发拉取云端 RTSP 流与点位详细参数
+        btn_sync_config_->click();
+    });
+
+    connect(btn_sync_config_, &QPushButton::clicked, this, [this]() {
+        btn_sync_config_->setEnabled(false);
+        btn_sync_config_->setText("正在同步...");
+        cloud_status_info_label_->setText("正在从云端拉取点位参数与摄像头 RTSP 配置...");
+
+        EdgeReportManager::instance().fetch_cloud_config([this](bool success, const QString& msg, const QJsonObject& cfg_data) {
+            btn_sync_config_->setEnabled(true);
+            btn_sync_config_->setText("🔄 同步云端配置 (RTSP流)");
+
+            if (success) {
+                QString pname = cfg_data.value("pointName").toString();
+                QString rtsp = cfg_data.value("cameraRtsp").toString();
+                QString res = cfg_data.value("resolution").toString();
+
+                auto& cfg = ConfigManager::instance();
+                if (!pname.isEmpty()) {
+                    cfg.set_cloud_point_name(pname);
+                }
+
+                if (!rtsp.trimmed().isEmpty()) {
+                    video_input_edit_->setText(rtsp.trimmed());
+                    cfg.set_video_source(rtsp.trimmed());
+                    cfg.save();
+                    emit video_source_changed(rtsp.trimmed());
+                    cloud_status_info_label_->setText(QString("✅ 云端配置已同步！点位: %1 | 摄像头 RTSP: %2 | 已自适应热重载视频流").arg(pname).arg(rtsp));
+                    cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                    QMessageBox::information(this, "云端配置已同步", QString("成功从云端中台拉取最新点位资产！\n点位名称: %1\n摄像头流: %2\n分辨率: %3\n\n已自适应热重载视频流！").arg(pname).arg(rtsp).arg(res));
+                } else {
+                    cfg.save();
+                    cloud_status_info_label_->setText(QString("✅ 云端配置已同步！点位: %1 (云端未配置 RTSP 流地址)").arg(pname));
+                    cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                    QMessageBox::information(this, "云端配置已同步", QString("点位名称: %1\n云端尚未录入 RTSP 视频流地址，保持当前视频输入源不变。").arg(pname));
+                }
+            } else {
+                cloud_status_info_label_->setText(QString("❌ 同步云端配置失败: %1").arg(msg));
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                QMessageBox::warning(this, "同步失败", msg);
+            }
+        });
     });
 
     connect(btn_test_report_, &QPushButton::clicked, this, [this]() {

@@ -49,6 +49,7 @@ private:
     QPushButton* btn_cloud_login_ = nullptr;
     QComboBox* cloud_point_combo_ = nullptr;
     QPushButton* btn_bind_point_ = nullptr;
+    QPushButton* btn_sync_config_ = nullptr;
     QPushButton* btn_test_report_ = nullptr;
     QLabel* cloud_status_info_label_ = nullptr;
 

@@ -49,6 +49,10 @@ public:
     // 4. 手动发送测试聚合上报包 (用于设置界面联调验证)
     void send_test_batch(std::function<void(bool success, const QString& msg, qint64 latency_ms)> callback);
 
+    // 5. 动态拉取云端点位配置 (RTSP 摄像头流、点位名称、分辨率)
+    using ConfigCallback = std::function<void(bool success, const QString& msg, const QJsonObject& point_config)>;
+    void fetch_cloud_config(ConfigCallback callback);
+
     // 获取离线积压队列数量
     int get_offline_queue_count() const;
 
