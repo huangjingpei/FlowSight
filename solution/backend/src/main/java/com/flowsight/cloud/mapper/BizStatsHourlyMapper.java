@@ -20,9 +20,9 @@ public interface BizStatsHourlyMapper extends BaseMapper<BizStatsHourly> {
                                                @Param("startDate") LocalDate startDate,
                                                @Param("endDate") LocalDate endDate);
 
-    @Select("SELECT CONCAT(YEAR(stat_date), '-Q', QUARTER(stat_date)) as quarterName, " +
-            "SUM(entry_count) as entryCount, SUM(exit_count) as exitCount " +
-            "FROM biz_stats_hourly WHERE point_id = #{pointId} " +
-            "GROUP BY YEAR(stat_date), QUARTER(stat_date) ORDER BY YEAR(stat_date) ASC, QUARTER(stat_date) ASC")
+    @Select("SELECT t.quarterName, SUM(t.entry_count) as entryCount, SUM(t.exit_count) as exitCount " +
+            "FROM (SELECT CONCAT(YEAR(stat_date), '-Q', QUARTER(stat_date)) as quarterName, entry_count, exit_count " +
+            "      FROM biz_stats_hourly WHERE point_id = #{pointId}) t " +
+            "GROUP BY t.quarterName ORDER BY t.quarterName ASC")
     List<Map<String, Object>> selectQuarterlyStats(@Param("pointId") Long pointId);
 }
