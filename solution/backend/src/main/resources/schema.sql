@@ -89,3 +89,6 @@ CREATE TABLE IF NOT EXISTS `biz_device_heartbeat` (
     `last_heartbeat` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最新心跳时间',
     PRIMARY KEY (`point_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='边缘设备健康心跳表';
+
+-- 增量平滑迁移补丁: 若历史已有表缺少 client_name 字段则自动补齐 (配合 continue-on-error: true 幂等执行)
+ALTER TABLE `biz_device_heartbeat` ADD COLUMN `client_name` VARCHAR(64) DEFAULT 'FlowSight-Node';
