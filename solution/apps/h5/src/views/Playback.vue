@@ -432,8 +432,10 @@ onMounted(async () => {
 
 <style scoped>
 .playback-page {
+  max-width: 520px;
+  margin: 0 auto;
   min-height: 100vh;
-  background-color: #0d1117;
+  background-color: #060911;
   color: #c9d1d9;
   padding-bottom: 72px; /* 为全局底部导航栏留足空间 */
   box-sizing: border-box;
@@ -441,8 +443,13 @@ onMounted(async () => {
 
 /* 顶部政务物业风格导航 */
 .gov-nav-bar {
-  background: #161b22 !important;
-  border-bottom: 1px solid #30363d;
+  max-width: 520px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(10, 15, 29, 0.85) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .nav-brand {

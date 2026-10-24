@@ -388,7 +388,7 @@ public class EventServiceImpl implements EventService {
     @Override
     public TrendReportVO getTrendReport(Long pointId, String dimension, Integer days) {
         if (dimension == null || dimension.trim().isEmpty()) {
-            dimension = "hour";
+            dimension = "realtime";
         }
         TrendReportVO vo = new TrendReportVO();
         vo.setDimension(dimension);
@@ -401,8 +401,89 @@ public class EventServiceImpl implements EventService {
         String peakTime = "-";
         int totalPeriod = 0;
 
-        if ("hour".equalsIgnoreCase(dimension)) {
-            vo.setTitle("今日 24 小时逐时客流分布曲线");
+        if ("realtime".equalsIgnoreCase(dimension) || "timeline".equalsIgnoreCase(dimension)) {
+            LocalDate today = LocalDate.now();
+            long startOfDayMs = today.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+            long endOfDayMs = today.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() - 1;
+
+            List<BizPassageEvent> events = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
+                    .eq(BizPassageEvent::getPointId, pointId)
+                    .ge(BizPassageEvent::getTimestampMs, startOfDayMs)
+                    .le(BizPassageEvent::getTimestampMs, endOfDayMs)
+                    .orderByAsc(BizPassageEvent::getTimestampMs));
+
+            vo.setTitle("今日实时通行时序曲线 (真实采集时间动态流)");
+
+            if (events.isEmpty()) {
+                LocalDateTime now = LocalDateTime.now();
+                for (int i = 5; i >= 0; i--) {
+                    categories.add(now.minusMinutes(i * 5L).format(DateTimeFormatter.ofPattern("HH:mm")));
+                    entryList.add(0);
+                    exitList.add(0);
+                    totalList.add(0);
+                }
+            } else {
+                long firstTs = events.get(0).getTimestampMs();
+                long lastTs = events.get(events.size() - 1).getTimestampMs();
+                long spanMs = Math.max(1000L, lastTs - firstTs);
+
+                long stepMs;
+                DateTimeFormatter formatter;
+                if (spanMs <= 15 * 60 * 1000L) {
+                    stepMs = 60 * 1000L; // 1 min
+                    formatter = DateTimeFormatter.ofPattern("HH:mm");
+                } else if (spanMs <= 2 * 3600 * 1000L) {
+                    stepMs = 5 * 60 * 1000L; // 5 min
+                    formatter = DateTimeFormatter.ofPattern("HH:mm");
+                } else if (spanMs <= 6 * 3600 * 1000L) {
+                    stepMs = 15 * 60 * 1000L; // 15 min
+                    formatter = DateTimeFormatter.ofPattern("HH:mm");
+                } else {
+                    stepMs = 30 * 60 * 1000L; // 30 min
+                    formatter = DateTimeFormatter.ofPattern("HH:mm");
+                }
+
+                long bucketStart = (firstTs / stepMs) * stepMs;
+                long bucketEnd = (lastTs / stepMs + 1) * stepMs;
+
+                Map<Long, int[]> bucketMap = new LinkedHashMap<>();
+                for (long t = bucketStart; t <= bucketEnd; t += stepMs) {
+                    bucketMap.put(t, new int[]{0, 0});
+                }
+
+                for (BizPassageEvent ev : events) {
+                    long bKey = (ev.getTimestampMs() / stepMs) * stepMs;
+                    int[] counts = bucketMap.computeIfAbsent(bKey, k -> new int[]{0, 0});
+                    if ("ENTRY".equalsIgnoreCase(ev.getDirection())) {
+                        counts[0]++;
+                    } else {
+                        counts[1]++;
+                    }
+                }
+
+                for (Map.Entry<Long, int[]> entry : bucketMap.entrySet()) {
+                    LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(entry.getKey()), ZoneId.systemDefault());
+                    String timeLabel = ldt.format(formatter);
+                    int in = entry.getValue()[0];
+                    int out = entry.getValue()[1];
+                    int tot = in + out;
+
+                    categories.add(timeLabel);
+                    entryList.add(in);
+                    exitList.add(out);
+                    totalList.add(tot);
+                    totalPeriod += tot;
+
+                    if (tot > peak) {
+                        peak = tot;
+                        peakTime = timeLabel;
+                    }
+                }
+            }
+            vo.setAverageCount(categories.isEmpty() ? 0.0 : Math.round((double) totalPeriod / categories.size() * 10.0) / 10.0);
+
+        } else if ("hour".equalsIgnoreCase(dimension)) {
+            vo.setTitle("今日逐时客流分布曲线");
             LocalDate today = LocalDate.now();
             List<BizStatsHourly> list = statsMapper.selectList(new LambdaQueryWrapper<BizStatsHourly>()
                     .eq(BizStatsHourly::getPointId, pointId)
@@ -411,7 +492,8 @@ public class EventServiceImpl implements EventService {
             Map<Integer, BizStatsHourly> map = list.stream()
                     .collect(Collectors.toMap(BizStatsHourly::getStatHour, s -> s, (s1, s2) -> s1));
 
-            for (int h = 0; h < 24; h++) {
+            int maxHour = Math.min(23, Math.max(LocalDateTime.now().getHour(), 6));
+            for (int h = 0; h <= maxHour; h++) {
                 categories.add(String.format("%02d:00", h));
                 BizStatsHourly s = map.get(h);
                 int in = s != null ? s.getEntryCount() : 0;
@@ -426,7 +508,7 @@ public class EventServiceImpl implements EventService {
                     peakTime = String.format("%02d:00", h);
                 }
             }
-            vo.setAverageCount(Math.round((double) totalPeriod / 24 * 10.0) / 10.0);
+            vo.setAverageCount(Math.round((double) totalPeriod / Math.max(1, maxHour + 1) * 10.0) / 10.0);
 
         } else if ("day".equalsIgnoreCase(dimension)) {
             int d = (days != null && days > 0) ? days : 7;
