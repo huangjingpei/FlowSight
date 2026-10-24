@@ -6,6 +6,7 @@
 #include "storage/DatabaseManager.hpp"
 #include "storage/ConfigManager.hpp"
 #include "video/ClipRecorder.hpp"
+#include "network/EdgeReportManager.hpp"
 
 #include <opencv2/opencv.hpp>
 #include <QDateTime>
@@ -512,6 +513,7 @@ public slots:
                     // 若已成功获得真实识别属性，尝试异步校准该目标若在早期被记为 '未知' 的历史通行事件
                     if (trk.gender != "未知") {
                         DatabaseManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
+                        EdgeReportManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
                     }
                 }
             }

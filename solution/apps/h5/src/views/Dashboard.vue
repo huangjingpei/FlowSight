@@ -13,20 +13,35 @@
       </template>
     </van-nav-bar>
 
-    <!-- 顶部点位选择器: 视频播放中硬锁定禁止切换 -->
-    <div class="point-switcher-bar">
-      <van-dropdown-menu :disabled="pointStore.isMediaPlaying">
-        <van-dropdown-item
-          v-model="activePointId"
-          :options="pointOptions"
-          :disabled="pointStore.isMediaPlaying"
-          @change="onPointChange"
-        />
-      </van-dropdown-menu>
-      <div v-if="pointStore.isMediaPlaying" class="locked-tip">
-        <span>🔒 视频回放中已锁定点位切换</span>
-      </div>
+    <!-- 若无开通点位，显示友好引导状态 -->
+    <div v-if="!pointsLoading && pointStore.points.length === 0" class="no-points-container">
+      <van-empty image="network">
+        <template #description>
+          <div class="empty-desc-bold">当前商户账号尚未配置视频点位</div>
+          <div class="empty-desc-sub">请联系系统总管理员分配监控点位与边端工控机授权</div>
+        </template>
+        <van-button round type="primary" size="small" class="refresh-btn" @click="handleRefreshPoints">
+          刷新点位状态
+        </van-button>
+      </van-empty>
     </div>
+
+    <!-- 正常已配置点位的大屏内容 -->
+    <template v-else>
+      <!-- 顶部点位选择器: 视频播放中硬锁定禁止切换 -->
+      <div class="point-switcher-bar">
+        <van-dropdown-menu :disabled="pointStore.isMediaPlaying">
+          <van-dropdown-item
+            v-model="activePointId"
+            :options="pointOptions"
+            :disabled="pointStore.isMediaPlaying"
+            @change="onPointChange"
+          />
+        </van-dropdown-menu>
+        <div v-if="pointStore.isMediaPlaying" class="locked-tip">
+          <span>🔒 视频回放中已锁定点位切换</span>
+        </div>
+      </div>
 
     <!-- 客户端节点身份与健康状态铭牌 -->
     <div class="client-meta-bar" v-if="summary.pointId">
@@ -192,6 +207,7 @@
         </div>
       </div>
     </van-pull-refresh>
+    </template>
   </div>
 </template>
 
@@ -261,7 +277,10 @@ const pointOptions = computed(() => {
   }));
 });
 
+const pointsLoading = ref(true);
+
 const loadPoints = async () => {
+  pointsLoading.value = true;
   try {
     const list: any = await h5Api.getMyPoints();
     pointStore.setPoints(list);
@@ -270,6 +289,16 @@ const loadPoints = async () => {
     }
   } catch (e) {
     //
+  } finally {
+    pointsLoading.value = false;
+  }
+};
+
+const handleRefreshPoints = async () => {
+  await loadPoints();
+  if (activePointId.value) {
+    await loadSummary();
+    await loadTrends();
   }
 };
 
@@ -902,4 +931,29 @@ onUnmounted(() => {
 .text-emerald { color: #059669; }
 .text-cyan { color: #0284c7; }
 .text-amber { color: #d97706; }
+
+.no-points-container {
+  padding: 60px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.empty-desc-bold {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.empty-desc-sub {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.refresh-btn {
+  padding: 0 24px;
+}
 </style>

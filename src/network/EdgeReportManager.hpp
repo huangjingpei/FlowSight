@@ -40,6 +40,9 @@ public:
     // 2. 累加通行事件到当前聚合窗口
     void record_passage(const PassageEvent& event);
 
+    // 异步校准内存聚合窗口中事件的 AI 属性 (防止二级分类完成时事件已进入批量缓冲)
+    void update_event_attributes(int track_id, const std::string& gender, const std::string& age_group);
+
     // 手动/定时触发聚合包刷新上报
     void flush_batch();
 

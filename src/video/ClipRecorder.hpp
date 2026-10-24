@@ -99,8 +99,17 @@ private:
 
             int w = task.snapshot[0].cols;
             int h = task.snapshot[0].rows;
-            // 尝试以 mp4v / avc1 编码保存
-            cv::VideoWriter writer(task.filename, cv::VideoWriter::fourcc('m', 'p', '4', 'v'), task.fps, cv::Size(w, h));
+            // 移动端 HTML5 <video> 强依赖 H.264 编码 (avc1 / H264)，优先使用 H.264，缺省时降级兼容
+            cv::VideoWriter writer(task.filename, cv::VideoWriter::fourcc('a', 'v', 'c', '1'), task.fps, cv::Size(w, h));
+            if (!writer.isOpened()) {
+                writer.open(task.filename, cv::VideoWriter::fourcc('H', '2', '6', '4'), task.fps, cv::Size(w, h));
+            }
+            if (!writer.isOpened()) {
+                writer.open(task.filename, cv::VideoWriter::fourcc('X', '2', '6', '4'), task.fps, cv::Size(w, h));
+            }
+            if (!writer.isOpened()) {
+                writer.open(task.filename, cv::VideoWriter::fourcc('m', 'p', '4', 'v'), task.fps, cv::Size(w, h));
+            }
             if (!writer.isOpened()) {
                 writer.open(task.filename, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), task.fps, cv::Size(w, h));
             }

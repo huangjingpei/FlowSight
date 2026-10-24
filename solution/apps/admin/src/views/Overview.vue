@@ -40,7 +40,16 @@
       <el-table :data="pointList" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="pointName" label="点位名称" width="160" />
-        <el-table-column prop="userPhone" label="归属商户手机号" width="150" />
+        <el-table-column label="归属商户企业" width="180">
+          <template #default="{ row }">
+            <div style="font-weight: 500; color: #303133;">
+              {{ row.companyName || row.userNickname || '商户客户' }}
+            </div>
+            <div style="font-size: 12px; color: #909399;">
+              📱 {{ row.userPhone || '-' }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="address" label="物理安装地址" min-width="180" />
         <el-table-column prop="resolution" label="流分辨率" width="120" />
         <el-table-column prop="currentFps" label="实时FPS" width="100">

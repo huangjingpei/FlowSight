@@ -289,6 +289,36 @@ void EdgeReportManager::record_passage(const PassageEvent& event) {
     }
 }
 
+void EdgeReportManager::update_event_attributes(int track_id, const std::string& gender, const std::string& age_group) {
+    if (track_id <= 0 || gender.empty() || gender == "未知") return;
+
+    QMutexLocker locker(&mutex_);
+    for (auto& ev : batch_events_) {
+        if (ev.track_id == track_id) {
+            if (ev.gender != gender) {
+                if (ev.gender == "男") male_count_ = std::max(0, male_count_ - 1);
+                else if (ev.gender == "女") female_count_ = std::max(0, female_count_ - 1);
+
+                if (gender == "男") male_count_++;
+                else if (gender == "女") female_count_++;
+
+                ev.gender = gender;
+            }
+            if (ev.age_group != age_group) {
+                if (ev.age_group.find("儿童") != std::string::npos) child_count_ = std::max(0, child_count_ - 1);
+                else if (ev.age_group.find("老年") != std::string::npos) senior_count_ = std::max(0, senior_count_ - 1);
+                else adult_count_ = std::max(0, adult_count_ - 1);
+
+                if (age_group.find("儿童") != std::string::npos) child_count_++;
+                else if (age_group.find("老年") != std::string::npos) senior_count_++;
+                else adult_count_++;
+
+                ev.age_group = age_group;
+            }
+        }
+    }
+}
+
 QByteArray EdgeReportManager::compress_data(const QByteArray& raw_json) {
     // 使用 Qt 内置 qCompress，并剔除前 4 字节的 Qt 私有 length header，输出标准 Deflate/ZLIB 流
     QByteArray compressed = qCompress(raw_json);
