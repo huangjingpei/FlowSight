@@ -71,6 +71,12 @@ public:
     QString get_cloud_point_name() const { return cloud_point_name_; }
     void set_cloud_point_name(const QString& val) { cloud_point_name_ = val; }
 
+    QString get_cloud_point_code() const { return cloud_point_code_; }
+    void set_cloud_point_code(const QString& val) { cloud_point_code_ = val; }
+
+    QString get_cloud_device_password() const { return cloud_device_password_; }
+    void set_cloud_device_password(const QString& val) { cloud_device_password_ = val; }
+
     QString get_cloud_point_token() const { return cloud_point_token_; }
     void set_cloud_point_token(const QString& val) { cloud_point_token_ = val; }
 
@@ -102,12 +108,14 @@ private:
     QString webhook_token_ = "";
     int webhook_timeout_ms_ = 3000;
 
-    // 云端中台持久化配置
+    // 云端中台持久化配置 (双密码体系)
     QString cloud_server_url_ = "http://localhost:8080";
     QString cloud_client_name_ = "FlowSight-Node-1";
     QString cloud_user_phone_ = "13800000000";
     qint64 cloud_point_id_ = 1;
-    QString cloud_point_name_ = "主控通道";
-    QString cloud_point_token_ = "ptk_c7c51284a35c43f5a5292927b9baea07";
+    QString cloud_point_name_ = "万科西区东门主入口";
+    QString cloud_point_code_ = "POINT_VK_EAST_01";
+    QString cloud_device_password_ = "Edge@123456";
+    QString cloud_point_token_ = "ptk_b2b307f111394859985f85eda543c509";
     bool cloud_sync_enabled_ = true;
 };

@@ -68,7 +68,47 @@
         </div>
       </div>
 
-      <!-- 设置条目 2: 通道客群属性画像 (收纳于设置条目中) -->
+      <!-- 设置条目 2: 双密码体系 - 边缘设备专用接入密钥 (密码 2) -->
+      <div class="settings-card">
+        <div class="card-header" @click="showDevPwdForm = !showDevPwdForm">
+          <div class="header-title-box">
+            <span class="item-icon">🛡️</span>
+            <span class="item-title">边缘专属设备密码 (密码 2)</span>
+          </div>
+          <span class="toggle-btn">{{ showDevPwdForm ? '收起 ▲' : '管理/重置 ▼' }}</span>
+        </div>
+
+        <div class="card-sub-info">
+          <div class="sub-meta-row">
+            <span class="sm-k">点位唯一编码:</span>
+            <span class="sm-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
+          </div>
+          <div class="sub-meta-row">
+            <span class="sm-k">设备密码状态:</span>
+            <span class="sm-v green-status">✅ 已设置并安全加密 (BCrypt)</span>
+          </div>
+        </div>
+
+        <div v-if="showDevPwdForm" class="pwd-form-wrap">
+          <div class="dual-pwd-hint">
+            💡 <b>双密码安全隔离说明</b>：此密码仅供现场摄像头工控机接入鉴权，与您的账号主密码完全解耦。现场设备失窃或报废时，在此一键重置即可切断旧设备上传权限。
+          </div>
+          <div class="form-item">
+            <span class="f-label">新设备专属密码:</span>
+            <input
+              v-model="newDevicePassword"
+              type="password"
+              placeholder="请输入新设备密码（至少6位）"
+              class="f-input"
+            />
+          </div>
+          <button class="btn-change-pwd btn-cyan-action" :disabled="devPwdLoading" @click="handleResetDevicePassword">
+            {{ devPwdLoading ? '正在重置凭证...' : '确认重置边缘专属密码 (密码 2)' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 设置条目 3: 通道客群属性画像 (收纳于设置条目中) -->
       <div class="settings-card">
         <div class="card-header" @click="showDemographics = !showDemographics">
           <div class="header-title-box">
@@ -179,15 +219,58 @@ const userProfile = computed(() => {
 
 // 折叠状态
 const showPwdForm = ref(false);
+const showDevPwdForm = ref(false);
 const showDemographics = ref(true);
 
-// 密码表单
+// 密码 1: 商户账号登录密码表单
 const pwdForm = ref({
   oldPassword: '',
   newPassword: '',
   confirmPassword: ''
 });
 const pwdLoading = ref(false);
+
+// 密码 2: 边缘专属设备接入密码表单
+const newDevicePassword = ref('');
+const devPwdLoading = ref(false);
+const pointCredential = ref<any>({
+  pointId: 1,
+  pointCode: 'POINT_VK_EAST_01',
+  pointToken: '',
+  hasDevicePassword: true
+});
+
+const loadPointCredential = async (pid: number) => {
+  try {
+    const res: any = await h5Api.getPointCredential(pid);
+    if (res) pointCredential.value = res;
+  } catch (e) {}
+};
+
+const handleResetDevicePassword = async () => {
+  if (!newDevicePassword.value || newDevicePassword.value.length < 6) {
+    showToast('新设备专属密码不能少于6位');
+    return;
+  }
+  showDialog({
+    title: '重置边缘设备专属密码 (密码 2)',
+    message: '确认重置？重置后云端将立即吊销当前旧设备的连接凭证。现场边缘端必须重新输入此新密码认证后方可继续上传数据。',
+    showCancelButton: true
+  }).then(async () => {
+    devPwdLoading.value = true;
+    try {
+      const pid = summary.value.pointId || 1;
+      const res: any = await h5Api.resetDevicePassword(pid, { newDevicePassword: newDevicePassword.value.trim() });
+      showToast({ message: '边缘设备专属接入密码已更新！', position: 'top' });
+      newDevicePassword.value = '';
+      showDevPwdForm.value = false;
+      if (res) pointCredential.value = res;
+    } catch (e: any) {
+    } finally {
+      devPwdLoading.value = false;
+    }
+  }).catch(() => {});
+};
 
 // 刷新频率选项
 const refreshRates = [
@@ -232,6 +315,7 @@ const loadSummary = async () => {
       const pid = points[0].id;
       const data: any = await h5Api.getDashboardSummary(pid);
       summary.value = data;
+      loadPointCredential(pid);
     }
   } catch (e) {}
 };
@@ -432,6 +516,62 @@ onMounted(() => {
   font-size: 11px;
   color: #00D2FF;
   font-weight: 600;
+}
+
+/* 双密码体系子信息与提示 */
+.card-sub-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #0B0E14;
+  border-radius: 4px;
+  padding: 6px 10px;
+  border: 1px solid #1A2230;
+}
+
+.sub-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sm-k {
+  font-size: 11px;
+  color: #94A3B8;
+}
+
+.sm-v {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cyan-code {
+  color: #00D2FF;
+  font-family: monospace;
+}
+
+.green-status {
+  color: #00E676;
+}
+
+.dual-pwd-hint {
+  font-size: 10.5px;
+  color: #94A3B8;
+  background: #182030;
+  border-left: 3px solid #00D2FF;
+  padding: 6px 8px;
+  border-radius: 2px;
+  line-height: 145%;
+}
+
+.btn-cyan-action {
+  background: #182030;
+  color: #00D2FF;
+  border: 1px solid #00D2FF;
+}
+.btn-cyan-action:hover {
+  background: #00D2FF;
+  color: #0A0D14;
 }
 
 /* 密码修改表单 */

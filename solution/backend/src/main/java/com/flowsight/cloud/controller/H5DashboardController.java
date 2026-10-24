@@ -3,11 +3,13 @@ package com.flowsight.cloud.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.common.Result;
 import com.flowsight.cloud.dto.ChangePasswordDTO;
+import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
 import com.flowsight.cloud.service.UserService;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
+import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 import com.flowsight.cloud.vo.TrendReportVO;
 import jakarta.servlet.http.HttpServletRequest;
@@ -81,5 +83,28 @@ public class H5DashboardController {
         Long userId = (Long) request.getAttribute("userId");
         userService.changePassword(userId, dto.getOldPassword(), dto.getNewPassword());
         return Result.success("密码修改成功，请妥善保管新密码", null);
+    }
+
+    /**
+     * 双密码体系：商户获取名下点位的边缘接入参数与密码状态 (密码 2)
+     */
+    @GetMapping("/points/{pointId}/credential")
+    public Result<PointCredentialVO> getPointCredential(@PathVariable Long pointId, HttpServletRequest request) {
+        checkPointOwnership(pointId, request);
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.success(pointService.getPointCredential(pointId, userId));
+    }
+
+    /**
+     * 双密码体系：商户重置名下边缘设备专属接入密码 (密码 2)
+     */
+    @PostMapping("/points/{pointId}/device-password")
+    public Result<PointCredentialVO> resetDevicePassword(@PathVariable Long pointId,
+                                                         @Valid @RequestBody ResetDevicePasswordDTO dto,
+                                                         HttpServletRequest request) {
+        checkPointOwnership(pointId, request);
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.success("边缘设备接入密码重置成功，已自动切断旧设备通信凭证",
+                pointService.resetDevicePassword(pointId, userId, dto));
     }
 }

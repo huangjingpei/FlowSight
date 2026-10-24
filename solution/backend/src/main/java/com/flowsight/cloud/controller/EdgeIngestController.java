@@ -1,13 +1,16 @@
 package com.flowsight.cloud.controller;
 
 import com.flowsight.cloud.common.Result;
+import com.flowsight.cloud.dto.DeviceLoginDTO;
 import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
+import com.flowsight.cloud.vo.DeviceLoginVO;
 import com.flowsight.cloud.vo.PointVO;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,6 +24,14 @@ public class EdgeIngestController {
 
     @Autowired
     private EventService eventService;
+
+    /**
+     * 双密码体系：边缘设备专属身份接入认证 (密码 2)
+     */
+    @PostMapping("/auth/device-login")
+    public Result<DeviceLoginVO> deviceLogin(@Valid @RequestBody DeviceLoginDTO dto) {
+        return Result.success("边缘设备认证就绪", pointService.loginWithDeviceCredentials(dto));
+    }
 
     private BizPoint authenticateEdge(String token) {
         if (token == null || token.trim().isEmpty()) {

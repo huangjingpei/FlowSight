@@ -2,8 +2,10 @@ package com.flowsight.cloud.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.flowsight.cloud.dto.DeviceLoginDTO;
 import com.flowsight.cloud.dto.PointCreateDTO;
 import com.flowsight.cloud.dto.PointUpdateDTO;
+import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
 import com.flowsight.cloud.entity.BizDeviceHeartbeat;
 import com.flowsight.cloud.entity.BizPassageEvent;
 import com.flowsight.cloud.entity.BizPoint;
@@ -12,8 +14,11 @@ import com.flowsight.cloud.entity.SysUser;
 import com.flowsight.cloud.mapper.*;
 import com.flowsight.cloud.service.MinioService;
 import com.flowsight.cloud.service.PointService;
+import com.flowsight.cloud.vo.DeviceLoginVO;
+import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +46,8 @@ public class PointServiceImpl implements PointService {
 
     @Autowired
     private MinioService minioService;
+
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
     public Page<PointVO> pagePoints(int page, int size, Long userId, String keyword) {
@@ -156,6 +163,113 @@ public class PointServiceImpl implements PointService {
         point.setPointToken(newToken);
         pointMapper.updateById(point);
         return newToken;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public DeviceLoginVO loginWithDeviceCredentials(DeviceLoginDTO dto) {
+        if (dto.getPointCode() == null || dto.getPointCode().trim().isEmpty()) {
+            throw new IllegalArgumentException("点位编码不能为空");
+        }
+        if (dto.getDevicePassword() == null || dto.getDevicePassword().trim().isEmpty()) {
+            throw new IllegalArgumentException("设备专属接入密码不能为空");
+        }
+
+        BizPoint point = pointMapper.selectOne(new LambdaQueryWrapper<BizPoint>()
+                .eq(BizPoint::getPointCode, dto.getPointCode().trim()));
+        if (point == null) {
+            throw new IllegalArgumentException("未找到该编码对应的物理点位: " + dto.getPointCode());
+        }
+
+        String inputPwd = dto.getDevicePassword().trim();
+        String storedHash = point.getDevicePasswordHash();
+
+        boolean match = false;
+        if (storedHash != null && !storedHash.isEmpty()) {
+            match = passwordEncoder.matches(inputPwd, storedHash) || inputPwd.equals(storedHash);
+        } else {
+            // 若数据库尚未设置设备专属密码，默认初始化为当前输入并转为 BCrypt 散列
+            match = true;
+            point.setDevicePasswordHash(passwordEncoder.encode(inputPwd));
+        }
+
+        if (!match) {
+            throw new IllegalArgumentException("边缘设备专属接入密码错误，请向商户管理员核对！");
+        }
+
+        // 若密码是明文匹配，自动升级为 BCrypt 哈希
+        if (storedHash != null && !storedHash.startsWith("$2a$")) {
+            point.setDevicePasswordHash(passwordEncoder.encode(inputPwd));
+        }
+
+        // 确保有合法的 pointToken
+        if (point.getPointToken() == null || point.getPointToken().trim().isEmpty()) {
+            point.setPointToken("ptk_" + UUID.randomUUID().toString().replace("-", ""));
+        }
+        point.setStreamStatus("ONLINE");
+        pointMapper.updateById(point);
+
+        return DeviceLoginVO.builder()
+                .pointId(point.getId())
+                .userId(point.getUserId())
+                .pointCode(point.getPointCode())
+                .pointName(point.getPointName())
+                .pointToken(point.getPointToken())
+                .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
+                .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
+                .clientName(dto.getClientName() != null ? dto.getClientName() : "FlowSight-Node")
+                .build();
+    }
+
+    @Override
+    public PointCredentialVO getPointCredential(Long pointId, Long userId) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) throw new IllegalArgumentException("点位不存在");
+        if (userId != null && !userId.equals(point.getUserId())) {
+            SysUser user = userMapper.selectById(userId);
+            if (user == null || !"ROLE_ADMIN".equals(user.getRole())) {
+                throw new IllegalArgumentException("无权查看该点位凭证");
+            }
+        }
+
+        boolean hasPwd = point.getDevicePasswordHash() != null && !point.getDevicePasswordHash().trim().isEmpty();
+        return PointCredentialVO.builder()
+                .pointId(point.getId())
+                .pointName(point.getPointName())
+                .pointCode(point.getPointCode())
+                .pointToken(point.getPointToken())
+                .hasDevicePassword(hasPwd)
+                .devicePasswordMasked(hasPwd ? "******" : "尚未设置")
+                .build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PointCredentialVO resetDevicePassword(Long pointId, Long userId, ResetDevicePasswordDTO dto) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) throw new IllegalArgumentException("点位不存在");
+        if (userId != null && !userId.equals(point.getUserId())) {
+            SysUser user = userMapper.selectById(userId);
+            if (user == null || !"ROLE_ADMIN".equals(user.getRole())) {
+                throw new IllegalArgumentException("无权重置该点位设备密码");
+            }
+        }
+
+        String newPwd = dto.getNewDevicePassword().trim();
+        point.setDevicePasswordHash(passwordEncoder.encode(newPwd));
+        // 重置设备密码的同时轮换 pointToken，立即切断旧有已泄露或失窃设备的连接
+        String newToken = "ptk_" + UUID.randomUUID().toString().replace("-", "");
+        point.setPointToken(newToken);
+        pointMapper.updateById(point);
+
+        return PointCredentialVO.builder()
+                .pointId(point.getId())
+                .pointName(point.getPointName())
+                .pointCode(point.getPointCode())
+                .pointToken(newToken)
+                .hasDevicePassword(true)
+                .devicePasswordMasked("******")
+                .build();
     }
 
     private PointVO toVO(BizPoint p) {

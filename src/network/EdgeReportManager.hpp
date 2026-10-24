@@ -30,9 +30,13 @@ public:
 
     void init(QObject* parent = nullptr);
 
-    // 1. 统一手机号 + 密码登录
+    // 1. 统一手机号 + 密码登录 (商户主账号模式)
     using LoginCallback = std::function<void(bool success, const QString& msg, const QJsonArray& points)>;
     void login_with_credentials(const QString& base_url, const QString& phone, const QString& password, LoginCallback callback);
+
+    // 双密码体系：边缘设备专属身份接入认证 (PointCode + DevicePassword 换取设备专属 Token)
+    using DeviceLoginCallback = std::function<void(bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token)>;
+    void login_with_device_credentials(const QString& base_url, const QString& point_code, const QString& device_password, const QString& client_name, DeviceLoginCallback callback);
 
     // 绑定选中的云端点位
     void bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name = "");

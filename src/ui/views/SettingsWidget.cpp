@@ -174,66 +174,85 @@ void SettingsWidget::setup_ui() {
     cloud_row1->addWidget(cloud_client_name_edit_, 1);
     cloud_layout->addLayout(cloud_row1);
 
-    // 行 2: 手机号与密码登录
+    // 行 2: 双密码体系 - 边缘设备专属接入认证 (密码 2，推荐生产环境)
     auto* cloud_row2 = new QHBoxLayout();
-    cloud_row2->addWidget(new QLabel("管理手机号:", this));
-    cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
-    cloud_phone_edit_->setPlaceholderText("手机号 (如 13800000000)");
-    cloud_row2->addWidget(cloud_phone_edit_, 1);
+    cloud_row2->addWidget(new QLabel("点位唯一编码:", this));
+    cloud_point_code_edit_ = new QLineEdit(cfg.get_cloud_point_code(), this);
+    cloud_point_code_edit_->setPlaceholderText("例如: POINT_VK_EAST_01");
+    cloud_row2->addWidget(cloud_point_code_edit_, 1);
 
     cloud_row2->addSpacing(16);
-    cloud_row2->addWidget(new QLabel("登录密码:", this));
-    cloud_password_edit_ = new QLineEdit(this);
-    cloud_password_edit_->setEchoMode(QLineEdit::Password);
-    cloud_password_edit_->setPlaceholderText("默认与手机号同号或管理密码");
-    cloud_password_edit_->setText(cfg.get_cloud_user_phone());
-    cloud_row2->addWidget(cloud_password_edit_, 1);
+    cloud_row2->addWidget(new QLabel("设备专属密码 (密码 2):", this));
+    cloud_device_pwd_edit_ = new QLineEdit(cfg.get_cloud_device_password(), this);
+    cloud_device_pwd_edit_->setEchoMode(QLineEdit::Password);
+    cloud_device_pwd_edit_->setPlaceholderText("由商户在 H5 端生成与设置");
+    cloud_row2->addWidget(cloud_device_pwd_edit_, 1);
 
-    btn_cloud_login_ = new QPushButton("🔐 登录并拉取点位", this);
-    btn_cloud_login_->setStyleSheet(
-        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #2ea043; }"
-        "QPushButton:hover { background: #2ea043; }"
+    btn_device_auth_ = new QPushButton("🛡️ 设备专属接入认证", this);
+    btn_device_auth_->setStyleSheet(
+        "QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #388bfd; }"
+        "QPushButton:hover { background: #388bfd; }"
     );
-    cloud_row2->addWidget(btn_cloud_login_);
+    cloud_row2->addWidget(btn_device_auth_);
     cloud_layout->addLayout(cloud_row2);
 
-    // 行 3: 监控点位选择与绑定确认
+    // 行 3: 商户手机号实施配对 (密码 1 施工备选) 与点位拉取
     auto* cloud_row3 = new QHBoxLayout();
-    cloud_row3->addWidget(new QLabel("所属监控点位:", this));
+    cloud_row3->addWidget(new QLabel("施工备选手机号:", this));
+    cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
+    cloud_phone_edit_->setPlaceholderText("商户登录手机号");
+    cloud_row3->addWidget(cloud_phone_edit_, 1);
+
+    cloud_row3->addSpacing(16);
+    cloud_row3->addWidget(new QLabel("密码 1:", this));
+    cloud_password_edit_ = new QLineEdit(this);
+    cloud_password_edit_->setEchoMode(QLineEdit::Password);
+    cloud_password_edit_->setPlaceholderText("商户登录密码");
+    cloud_password_edit_->setText(cfg.get_cloud_user_phone());
+    cloud_row3->addWidget(cloud_password_edit_, 1);
+
+    btn_cloud_login_ = new QPushButton("🔍 拉取商户点位", this);
+    btn_cloud_login_->setStyleSheet(
+        "QPushButton { background: #21262d; color: #8b949e; font-weight: bold; padding: 6px 12px; border-radius: 4px; border: 1px solid #30363d; }"
+        "QPushButton:hover { background: #30363d; color: #c9d1d9; }"
+    );
+    cloud_row3->addWidget(btn_cloud_login_);
+
     cloud_point_combo_ = new QComboBox(this);
     cloud_point_combo_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-
-    // 预填当前已绑定的点位
     if (cfg.get_cloud_point_id() > 0) {
         QVariantMap pdata;
         pdata["id"] = cfg.get_cloud_point_id();
         pdata["name"] = cfg.get_cloud_point_name();
         pdata["token"] = cfg.get_cloud_point_token();
-        cloud_point_combo_->addItem(QString("[%1] %2 (已绑定)").arg(cfg.get_cloud_point_id()).arg(cfg.get_cloud_point_name()), pdata);
+        cloud_point_combo_->addItem(QString("[%1] %2").arg(cfg.get_cloud_point_id()).arg(cfg.get_cloud_point_name()), pdata);
     }
     cloud_row3->addWidget(cloud_point_combo_, 1);
 
-    btn_bind_point_ = new QPushButton("🔗 确认绑定此点位", this);
+    btn_bind_point_ = new QPushButton("🔗 确认绑定", this);
     btn_bind_point_->setStyleSheet(
-        "QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #388bfd; }"
-        "QPushButton:hover { background: #388bfd; }"
+        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 12px; border-radius: 4px; border: 1px solid #2ea043; }"
+        "QPushButton:hover { background: #2ea043; }"
     );
     cloud_row3->addWidget(btn_bind_point_);
+    cloud_layout->addLayout(cloud_row3);
 
+    // 行 4: 云端同步与测试联调操作
+    auto* cloud_row4 = new QHBoxLayout();
     btn_sync_config_ = new QPushButton("🔄 同步云端配置 (RTSP流)", this);
     btn_sync_config_->setStyleSheet(
         "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #2ea043; }"
         "QPushButton:hover { background: #2ea043; }"
     );
-    cloud_row3->addWidget(btn_sync_config_);
+    cloud_row4->addWidget(btn_sync_config_);
 
     btn_test_report_ = new QPushButton("⚡ 立即上报测试包", this);
     btn_test_report_->setStyleSheet(
         "QPushButton { background: #8957e5; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #a371f7; }"
         "QPushButton:hover { background: #a371f7; }"
     );
-    cloud_row3->addWidget(btn_test_report_);
-    cloud_layout->addLayout(cloud_row3);
+    cloud_row4->addWidget(btn_test_report_);
+    cloud_layout->addLayout(cloud_row4);
 
     // 状态提示条
     cloud_status_info_label_ = new QLabel(this);
@@ -349,6 +368,51 @@ void SettingsWidget::setup_ui() {
                 webhook_status_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 4px 8px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
             }
         });
+    });
+
+    // 双密码体系：边缘专属设备接入认证 (密码 2)
+    connect(btn_device_auth_, &QPushButton::clicked, this, [this]() {
+        QString url = cloud_url_edit_->text().trimmed();
+        QString point_code = cloud_point_code_edit_->text().trimmed();
+        QString dev_pwd = cloud_device_pwd_edit_->text().trimmed();
+        QString client_name = cloud_client_name_edit_->text().trimmed();
+
+        if (point_code.isEmpty()) {
+            QMessageBox::warning(this, "提示", "请输入点位唯一编码 (PointCode)！");
+            return;
+        }
+        if (dev_pwd.isEmpty()) {
+            QMessageBox::warning(this, "提示", "请输入边缘设备专属接入密码 (密码 2)！");
+            return;
+        }
+
+        btn_device_auth_->setEnabled(false);
+        btn_device_auth_->setText("认证中...");
+        cloud_status_info_label_->setText("正在向云端提交设备专属凭据 (密码 2) 认证...");
+        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
+
+        EdgeReportManager::instance().login_with_device_credentials(
+            url, point_code, dev_pwd, client_name,
+            [this, point_code](bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token) {
+                btn_device_auth_->setEnabled(true);
+                btn_device_auth_->setText("🛡️ 设备专属接入认证");
+
+                if (!success) {
+                    cloud_status_info_label_->setText(QString("❌ 设备认证失败: %1").arg(msg));
+                    cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                    QMessageBox::warning(this, "认证失败", QString("设备专属密码错误或点位不存在: %1").arg(msg));
+                    return;
+                }
+
+                cloud_status_info_label_->setText(QString("🟢 认证成功！已接入点位: %1 (ID: %2, 编码: %3) | 凭证: %4...")
+                    .arg(point_name).arg(point_id).arg(point_code).arg(point_token.left(16)));
+                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                QMessageBox::information(this, "设备认证成功", QString("边缘端已成功使用设备专属密码接入点位「%1」！\n已激活长效通信凭据并自动同步 RTSP 流。").arg(point_name));
+
+                // 认证成功后自动触发拉取云端 RTSP 流与点位参数
+                btn_sync_config_->click();
+            }
+        );
     });
 
     connect(btn_cloud_login_, &QPushButton::clicked, this, [this]() {

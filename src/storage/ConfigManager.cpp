@@ -43,8 +43,10 @@ void ConfigManager::load(const QString& ini_path) {
     cloud_client_name_ = settings.value("Cloud/ClientName", "FlowSight-Node-1").toString();
     cloud_user_phone_ = settings.value("Cloud/UserPhone", "13800000000").toString();
     cloud_point_id_ = settings.value("Cloud/PointId", 1).toLongLong();
-    cloud_point_name_ = settings.value("Cloud/PointName", "主控通道").toString();
-    cloud_point_token_ = settings.value("Cloud/PointToken", "ptk_c7c51284a35c43f5a5292927b9baea07").toString();
+    cloud_point_name_ = settings.value("Cloud/PointName", "万科西区东门主入口").toString();
+    cloud_point_code_ = settings.value("Cloud/PointCode", "POINT_VK_EAST_01").toString();
+    cloud_device_password_ = settings.value("Cloud/DevicePassword", "Edge@123456").toString();
+    cloud_point_token_ = settings.value("Cloud/PointToken", "ptk_b2b307f111394859985f85eda543c509").toString();
     cloud_sync_enabled_ = settings.value("Cloud/SyncEnabled", true).toBool();
 }
 
@@ -78,6 +80,8 @@ void ConfigManager::save() {
     settings.setValue("Cloud/UserPhone", cloud_user_phone_);
     settings.setValue("Cloud/PointId", cloud_point_id_);
     settings.setValue("Cloud/PointName", cloud_point_name_);
+    settings.setValue("Cloud/PointCode", cloud_point_code_);
+    settings.setValue("Cloud/DevicePassword", cloud_device_password_);
     settings.setValue("Cloud/PointToken", cloud_point_token_);
     settings.setValue("Cloud/SyncEnabled", cloud_sync_enabled_);
     settings.sync();

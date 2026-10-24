@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     `resolution` VARCHAR(32) DEFAULT '1920x1080' COMMENT '推流画面分辨率规格',
     `stream_status` VARCHAR(20) NOT NULL DEFAULT 'OFFLINE' COMMENT '状态: ONLINE-在线, OFFLINE-离线, ALERT-异常',
     `point_token` VARCHAR(64) NOT NULL COMMENT '边缘采集端专用对接认证Token',
+    `device_password_hash` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '边缘专属设备接入密码(BCrypt散列)',
     `is_deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除标记: 0-正常, 1-已删除',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '配置更新时间',
@@ -56,18 +57,18 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     KEY `idx_token` (`point_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='监控分析点位资产表';
 
--- 预置商户点位资产数据: 万科名下 2 点位 + 滨江政务名下 1 点位
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
-VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`);
+-- 预置商户点位资产数据: 万科名下 2 点位 + 滨江政务名下 1 点位 (预置默认设备接入密码: Edge@123456)
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
 
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
-VALUES (2, 2, '万科西区地库人行道', 'POINT_VK_BASE_02', 'B1层地下车库进出通道', '', '1920x1080', 'OFFLINE', 'ptk_vanke_base_002')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`);
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (2, 2, '万科西区地库人行道', 'POINT_VK_BASE_02', 'B1层地下车库进出通道', '', '1920x1080', 'OFFLINE', 'ptk_vanke_base_002', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `device_password_hash`=VALUES(`device_password_hash`);
 
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`) 
-VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'ONLINE', 'ptk_gov_south_003')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `point_token`=VALUES(`point_token`);
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'ONLINE', 'ptk_gov_south_003', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
 
 -- 3. 人流通行结构化事件流水明细表
 CREATE TABLE IF NOT EXISTS `biz_passage_event` (

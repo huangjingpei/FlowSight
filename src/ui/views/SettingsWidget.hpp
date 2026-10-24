@@ -44,6 +44,12 @@ private:
     // 云端中台手机号密码登录与点位绑定
     QLineEdit* cloud_url_edit_ = nullptr;
     QLineEdit* cloud_client_name_edit_ = nullptr;
+
+    // 双密码体系：边缘设备专属接入认证 (密码 2)
+    QLineEdit* cloud_point_code_edit_ = nullptr;
+    QLineEdit* cloud_device_pwd_edit_ = nullptr;
+    QPushButton* btn_device_auth_ = nullptr;
+
     QLineEdit* cloud_phone_edit_ = nullptr;
     QLineEdit* cloud_password_edit_ = nullptr;
     QPushButton* btn_cloud_login_ = nullptr;

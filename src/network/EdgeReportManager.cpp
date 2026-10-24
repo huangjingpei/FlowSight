@@ -114,6 +114,50 @@ void EdgeReportManager::login_with_credentials(const QString& base_url, const QS
     });
 }
 
+void EdgeReportManager::login_with_device_credentials(const QString& base_url, const QString& point_code, const QString& device_password, const QString& client_name, DeviceLoginCallback callback) {
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    QUrl dev_login_url(base_url.trimmed() + "/api/v1/edge/auth/device-login");
+    QNetworkRequest request(dev_login_url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject obj;
+    obj["pointCode"] = point_code.trimmed();
+    obj["devicePassword"] = device_password.trimmed();
+    obj["clientName"] = client_name.trimmed().isEmpty() ? "FlowSight-Node-1" : client_name.trimmed();
+    QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+
+    QNetworkReply* reply = nam_->post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, base_url, point_code, device_password, client_name, callback]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            if (callback) callback(false, QString("设备认证网络异常: %1").arg(reply->errorString()), 0, "", "");
+            return;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+        QJsonObject root = doc.object();
+        int code = root["code"].toInt();
+        if (code != 200) {
+            if (callback) callback(false, root["message"].toString("边缘设备专属密码错误或点位不存在"), 0, "", "");
+            return;
+        }
+
+        QJsonObject data = root["data"].toObject();
+        qint64 pid = data["pointId"].toInteger();
+        QString pname = data["pointName"].toString();
+        QString ptoken = data["pointToken"].toString();
+
+        // 自动完成绑定与配置持久化
+        auto& cfg = ConfigManager::instance();
+        cfg.set_cloud_point_code(point_code.trimmed());
+        cfg.set_cloud_device_password(device_password.trimmed());
+        bind_point(base_url, pid, pname, ptoken, client_name);
+
+        if (callback) callback(true, "设备身份认证成功！已接入云端通道。", pid, pname, ptoken);
+    });
+}
+
 void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name) {
     cloud_base_url_ = base_url.trimmed();
     bound_point_id_ = point_id;
