@@ -52,8 +52,9 @@ public:
     // 获取离线积压队列数量
     int get_offline_queue_count() const;
 
-    // 当前是否在线
+    // 当前是否在线与点位有效性状态
     bool is_cloud_online() const { return is_online_; }
+    bool is_point_deactivated() const { return is_point_deactivated_; }
 
     QString get_cloud_base_url() const { return cloud_base_url_; }
     qint64 get_bound_point_id() const { return bound_point_id_; }
@@ -117,6 +118,7 @@ private:
     std::vector<PassageEvent> batch_events_;
 
     bool is_online_ = false;
+    bool is_point_deactivated_ = false;
     bool is_draining_ = false;
 
     // 本地持久化配置缓存

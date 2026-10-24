@@ -280,10 +280,16 @@ void MainWindow::setup_ui() {
     statusBar()->addWidget(status_queue);
 
     connect(&EdgeReportManager::instance(), &EdgeReportManager::cloud_status_changed, this, [status_cloud](bool is_online, const QString& text) {
-        status_cloud->setText(is_online ? "☁️ 云端在线" : "☁️ 云端离线");
-        status_cloud->setStyleSheet(QString(
-            "background-color: #21262d; color: %1; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 500;"
-        ).arg(is_online ? "#3fb950" : "#f85149"));
+        if (text.contains("已注销") || text.contains("已下架") || text.contains("无效")) {
+            status_cloud->setText("⚠️ 点位已下架(本地自治)");
+            status_cloud->setStyleSheet("background-color: #3b2300; color: #e3b341; border: 1px solid #d29922; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 600;");
+        } else {
+            status_cloud->setText(is_online ? "☁️ 云端在线" : "☁️ 云端离线");
+            status_cloud->setStyleSheet(QString(
+                "background-color: #21262d; color: %1; border-radius: 4px; padding: 2px 8px; margin: 0 4px; font-weight: 500;"
+            ).arg(is_online ? "#3fb950" : "#f85149"));
+        }
+        status_cloud->setToolTip(text);
     });
 
     connect(&EdgeReportManager::instance(), &EdgeReportManager::offline_queue_updated, this, [status_queue](int count) {

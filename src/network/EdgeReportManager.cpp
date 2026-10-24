@@ -133,6 +133,7 @@ void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, con
     cfg.save();
 
     is_online_ = true;
+    is_point_deactivated_ = false;
     emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
 
     // 绑定生效后立即发送一次心跳同步状态
@@ -257,6 +258,21 @@ void EdgeReportManager::flush_batch() {
     }
 
     qint64 now_ts = QDateTime::currentMSecsSinceEpoch();
+
+    if (is_point_deactivated_) {
+        // 点位在云端已注销或 Token 失效，停止发送网络请求，重置内存池并保持本地自治
+        in_increment_ = 0;
+        out_increment_ = 0;
+        male_count_ = 0;
+        female_count_ = 0;
+        child_count_ = 0;
+        adult_count_ = 0;
+        senior_count_ = 0;
+        batch_events_.clear();
+        window_start_ts_ = now_ts;
+        return;
+    }
+
     QString batch_uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
 
     QJsonObject root;
@@ -335,8 +351,17 @@ void EdgeReportManager::flush_batch() {
         [this, batch_uuid, compressed_blob, total_events](bool success, int code, const QString& err) {
             if (success) {
                 is_online_ = true;
+                is_point_deactivated_ = false;
                 emit cloud_status_changed(true, "云端同步正常 (HTTP 200)");
                 emit batch_reported(true, total_events, 0);
+            } else if (code == 400 || code == 401 || code == 403) {
+                // 点位在云端已删除、注销或 Token 已被管理员重置/作废！
+                // 关键容灾机制: 严禁将死任务存入离线队列表，防止死循环无限重试！
+                is_online_ = false;
+                is_point_deactivated_ = true;
+                qWarning().noquote() << QString("[EdgeReport] Point deactivated or token invalid (HTTP %1: %2). Entering local autonomous mode.")
+                                            .arg(code).arg(err);
+                emit cloud_status_changed(false, "⚠️ 点位已下架或Token已注销 (本地持续自主监控)");
             } else {
                 // 上传失败: 网络抖动/断网/5xx，保存到本地 SQLite 离线队列
                 qWarning().noquote() << QString("[EdgeReport] Upload failed (%1, code %2). Saving to SQLite offline queue.")
@@ -391,6 +416,7 @@ void EdgeReportManager::on_watchdog_timer_timeout() {
 }
 
 void EdgeReportManager::drain_offline_queue() {
+    if (is_point_deactivated_) return;
     if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
 
     auto items = DatabaseManager::instance().fetch_pending_offline_reports(3);
@@ -411,8 +437,17 @@ void EdgeReportManager::drain_offline_queue() {
                 emit offline_queue_updated(DatabaseManager::instance().get_pending_offline_count());
                 // 继续排空下一条
                 drain_offline_queue();
+            } else if (code == 400 || code == 401 || code == 403) {
+                // 点位在云端已被删除或 Token 失效：直接剔除历史不可达死任务，彻底打破死循环！
+                is_point_deactivated_ = true;
+                is_online_ = false;
+                DatabaseManager::instance().remove_offline_report(item.queue_id);
+                qWarning().noquote() << QString("[EdgeReport] Dropped unroutable offline queue #%1 due to point deactivation (HTTP %2)")
+                                            .arg(item.queue_id).arg(code);
+                emit offline_queue_updated(DatabaseManager::instance().get_pending_offline_count());
+                emit cloud_status_changed(false, "⚠️ 点位已下架或Token已注销 (本地持续自主监控)");
             } else {
-                // 失败，增加重试计数并退避
+                // 真正的网络中断/5xx故障，增加重试计数并退避
                 DatabaseManager::instance().increment_offline_retry(item.queue_id);
                 qWarning().noquote() << QString("[EdgeReport] Failed to drain offline queue #%1: %2").arg(item.queue_id).arg(err);
             }
@@ -421,6 +456,7 @@ void EdgeReportManager::drain_offline_queue() {
 
 void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend) {
     current_occupancy_ = current_occupancy;
+    if (is_point_deactivated_) return;
     if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
 
     QUrl hb_url(cloud_base_url_.trimmed() + "/api/v1/edge/heartbeat");
@@ -457,6 +493,11 @@ void EdgeReportManager::enqueue_clip_upload(const QString& clip_path, int track_
 }
 
 void EdgeReportManager::process_clip_upload_queue() {
+    if (is_point_deactivated_) {
+        QMutexLocker locker(&clip_mutex_);
+        pending_clips_.clear();
+        return;
+    }
     if (is_uploading_clip_) return;
     if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
 
@@ -527,6 +568,13 @@ void EdgeReportManager::process_clip_upload_queue() {
             if (!pending_clips_.empty() && pending_clips_.front().local_path == task.local_path) {
                 pending_clips_.pop_front();
             }
+        } else if (http_status == 400 || http_status == 401 || http_status == 403) {
+            is_point_deactivated_ = true;
+            is_online_ = false;
+            QMutexLocker locker(&clip_mutex_);
+            pending_clips_.clear();
+            qWarning() << "[EdgeReportManager] Clip upload canceled: point token invalid/deactivated (HTTP" << http_status << "). Entering local autonomy.";
+            emit cloud_status_changed(false, "⚠️ 点位已下架或Token已注销 (本地持续自主监控)");
         } else {
             qWarning() << "[EdgeReportManager] Video clip upload failed (HTTP" << http_status << "):" << reply->errorString();
             QMutexLocker locker(&clip_mutex_);
