@@ -35,6 +35,11 @@ public:
         }
     }
 
+    void clear() {
+        std::lock_guard<std::mutex> lock(mtx_);
+        frame_buffer_.clear();
+    }
+
     // 每帧送入画面构建带时间戳的环形缓冲（约 3 秒）
     void push_frame(const cv::Mat& frame) {
         if (frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;

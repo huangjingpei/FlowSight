@@ -418,6 +418,10 @@ public slots:
             if (is_paused_) {
                 int step = step_requested_.exchange(0);
                 if (step != 0 && has_real_video) {
+                    if (step < 0) {
+                        if (tracker_) tracker_->reset();
+                        if (roi_counter_) roi_counter_->reset();
+                    }
                     std::lock_guard<std::mutex> lk(cap_mtx_);
                     if (cap_.isOpened()) {
                         double cur_frame = cap_.get(cv::CAP_PROP_POS_FRAMES);
@@ -454,6 +458,12 @@ public slots:
                         cap_.set(cv::CAP_PROP_POS_FRAMES, target_frame);
                     }
                 }
+                // 时间轴拖拽定位后，必须重置跟踪状态机、ROI位移上下文与切片环形缓冲
+                // 彻底杜绝拖拽引起的跨时空伪位移误触发与切片错乱
+                if (tracker_) tracker_->reset();
+                if (roi_counter_) roi_counter_->reset();
+                AttributeClassifier::instance().clear_cache();
+                if (clip_recorder_) clip_recorder_->clear();
             }
 
             int64_t now_ms = QDateTime::currentMSecsSinceEpoch();
