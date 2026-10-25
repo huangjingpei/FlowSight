@@ -69,12 +69,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 import { h5Api, TrendReportVO } from '../api';
 import { usePointStore } from '../store/point';
+import { useThemeStore } from '../store/theme';
 
 const pointStore = usePointStore();
+const themeStore = useThemeStore();
 const activePointId = ref<number>(0);
 
 const dimensionOptions = [
@@ -138,20 +140,24 @@ const renderECharts = () => {
     myChart = echarts.init(chartRef.value);
   }
 
+  const isLight = themeStore.currentTheme === 'light';
   const isBar = currentDimension.value === 'quarter';
   const categories = trendData.value.categories || [];
   const entryData = trendData.value.entryList || [];
   const exitData = trendData.value.exitList || [];
 
+  const entryColor = isLight ? '#0284C7' : '#00D2FF';
+  const exitColor = isLight ? '#E11D48' : '#FF3D71';
+
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#182030',
-      borderColor: '#2A364F',
+      backgroundColor: isLight ? '#FFFFFF' : '#182030',
+      borderColor: isLight ? '#CBD5E1' : '#2A364F',
       borderWidth: 1,
       padding: [8, 12],
-      textStyle: { color: '#FFFFFF', fontSize: 12, fontWeight: 600 },
-      axisPointer: { type: isBar ? 'shadow' : 'line', lineStyle: { color: '#00D2FF', width: 1.5, type: 'dashed' } }
+      textStyle: { color: isLight ? '#0F172A' : '#FFFFFF', fontSize: 12, fontWeight: 600 },
+      axisPointer: { type: isBar ? 'shadow' : 'line', lineStyle: { color: entryColor, width: 1.5, type: 'dashed' } }
     },
     grid: {
       left: '4%',
@@ -164,7 +170,7 @@ const renderECharts = () => {
       type: 'category',
       name: '时间',
       nameLocation: 'end',
-      nameTextStyle: { color: '#94A3B8', fontSize: 11, padding: [0, 0, 0, 4] },
+      nameTextStyle: { color: isLight ? '#64748B' : '#94A3B8', fontSize: 11, padding: [0, 0, 0, 4] },
       data: categories,
       boundaryGap: isBar,
       axisLine: {
@@ -172,41 +178,41 @@ const renderECharts = () => {
         symbol: ['none', 'arrow'],
         symbolSize: [6, 10],
         symbolOffset: [0, 8],
-        lineStyle: { color: '#475569', width: 1.5 }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569', width: 1.5 }
       },
       axisTick: {
         show: true,
         alignWithLabel: true,
-        lineStyle: { color: '#475569' }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569' }
       },
       splitLine: {
         show: true,
-        lineStyle: { color: '#1A2230', type: 'dashed' }
+        lineStyle: { color: isLight ? '#F1F5F9' : '#1A2230', type: 'dashed' }
       },
-      axisLabel: { color: '#94A3B8', fontSize: 10, interval: categories.length > 14 ? 1 : 0 }
+      axisLabel: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10, interval: categories.length > 14 ? 1 : 0 }
     },
     yAxis: {
       type: 'value',
       name: '人次 (人)',
       nameLocation: 'end',
-      nameTextStyle: { color: '#94A3B8', fontSize: 11, padding: [0, 0, 6, 0] },
+      nameTextStyle: { color: isLight ? '#64748B' : '#94A3B8', fontSize: 11, padding: [0, 0, 6, 0] },
       minInterval: 1,
       axisLine: {
         show: true,
         symbol: ['none', 'arrow'],
         symbolSize: [6, 10],
         symbolOffset: [0, 8],
-        lineStyle: { color: '#475569', width: 1.5 }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569', width: 1.5 }
       },
       axisTick: {
         show: true,
-        lineStyle: { color: '#475569' }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569' }
       },
       splitLine: {
         show: true,
-        lineStyle: { color: '#1F293D', type: 'dashed' }
+        lineStyle: { color: isLight ? '#F1F5F9' : '#1F293D', type: 'dashed' }
       },
-      axisLabel: { color: '#94A3B8', fontSize: 10 }
+      axisLabel: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10 }
     },
     series: [
       {
@@ -215,12 +221,12 @@ const renderECharts = () => {
         smooth: 0.3,
         showSymbol: categories.length <= 15,
         symbolSize: 5,
-        itemStyle: { color: '#00D2FF' },
+        itemStyle: { color: entryColor },
         lineStyle: { width: 2.5 },
         areaStyle: isBar ? undefined : {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(0, 210, 255, 0.25)' },
-            { offset: 1, color: 'rgba(0, 210, 255, 0.00)' }
+            { offset: 0, color: isLight ? 'rgba(2, 132, 199, 0.28)' : 'rgba(0, 210, 255, 0.25)' },
+            { offset: 1, color: isLight ? 'rgba(2, 132, 199, 0.00)' : 'rgba(0, 210, 255, 0.00)' }
           ])
         },
         data: entryData
@@ -231,12 +237,12 @@ const renderECharts = () => {
         smooth: 0.3,
         showSymbol: categories.length <= 15,
         symbolSize: 5,
-        itemStyle: { color: '#FF3D71' },
+        itemStyle: { color: exitColor },
         lineStyle: { width: 2.5 },
         areaStyle: isBar ? undefined : {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(255, 61, 113, 0.25)' },
-            { offset: 1, color: 'rgba(255, 61, 113, 0.00)' }
+            { offset: 0, color: isLight ? 'rgba(225, 29, 72, 0.22)' : 'rgba(255, 61, 113, 0.25)' },
+            { offset: 1, color: isLight ? 'rgba(225, 29, 72, 0.00)' : 'rgba(255, 61, 113, 0.00)' }
           ])
         },
         data: exitData
@@ -246,6 +252,10 @@ const renderECharts = () => {
 
   myChart.setOption(option, true);
 };
+
+watch(() => themeStore.currentTheme, () => {
+  renderECharts();
+});
 
 const switchDimension = (key: string, days: number) => {
   currentDimension.value = key;
@@ -539,5 +549,115 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+/* ================= 浅色高对比度主题适配 ================= */
+:global(.theme-light) .trends-viewport {
+  background-color: var(--fs-bg);
+}
+
+:global(.theme-light) .flat-header {
+  background: var(--fs-header-bg);
+  border-bottom-color: var(--fs-border);
+}
+
+:global(.theme-light) .header-title {
+  color: var(--fs-text-main);
+}
+
+:global(.theme-light) .header-dot {
+  background: var(--fs-primary);
+}
+
+:global(.theme-light) .realtime-badge {
+  color: var(--fs-primary);
+  background: rgba(2, 132, 199, 0.12);
+}
+
+:global(.theme-light) .flat-point-bar {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+}
+
+:global(.theme-light) .point-label {
+  color: var(--fs-text-sub);
+}
+
+:global(.theme-light) .flat-select {
+  background-color: #F1F5F9;
+  color: #0F172A;
+  border-color: #CBD5E1;
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230284C7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+:global(.theme-light) .flat-select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+:global(.theme-light) .flat-select option:checked {
+  background-color: #E2E8F0 !important;
+  color: #0284C7 !important;
+}
+
+:global(.theme-light) .flat-segmented {
+  background: #F1F5F9;
+  border-color: var(--fs-card-border);
+}
+
+:global(.theme-light) .seg-btn {
+  color: var(--fs-text-sub);
+}
+
+:global(.theme-light) .seg-btn.active {
+  background: var(--fs-primary);
+  color: #FFFFFF;
+}
+
+:global(.theme-light) .kpi-cell {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+}
+
+:global(.theme-light) .cell-label {
+  color: var(--fs-text-dim);
+}
+
+:global(.theme-light) .cell-unit {
+  color: var(--fs-text-dim);
+}
+
+:global(.theme-light) .text-white {
+  color: var(--fs-text-main);
+}
+
+:global(.theme-light) .text-cyan {
+  color: var(--fs-primary);
+}
+
+:global(.theme-light) .text-green {
+  color: var(--fs-success);
+}
+
+:global(.theme-light) .chart-box {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+}
+
+:global(.theme-light) .legend-title {
+  color: var(--fs-text-main);
+}
+
+:global(.theme-light) .leg-item {
+  color: var(--fs-text-sub);
+}
+
+:global(.theme-light) .leg-dot.cyan {
+  background: var(--fs-primary);
+}
+
+:global(.theme-light) .leg-dot.pink {
+  background: #E11D48;
 }
 </style>

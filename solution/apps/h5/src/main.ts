@@ -8,8 +8,14 @@ import 'vant/lib/index.css';
 import Vant from 'vant';
 
 const app = createApp(App);
-app.use(createPinia());
+const pinia = createPinia();
+app.use(pinia);
 app.use(router);
 app.use(Vant);
+
+// 初始化并恢复全局显示主题与字号缩放无障碍配置
+import { useThemeStore } from './store/theme';
+const themeStore = useThemeStore();
+themeStore.init();
 
 app.mount('#app');

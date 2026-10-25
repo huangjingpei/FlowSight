@@ -184,9 +184,11 @@ import * as echarts from 'echarts';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
 import { useDashboardStore } from '../store/dashboard';
+import { useThemeStore } from '../store/theme';
 
 const pointStore = usePointStore();
 const dashboardStore = useDashboardStore();
+const themeStore = useThemeStore();
 const activePointId = ref<number>(0);
 
 const { pollRateSec } = storeToRefs(dashboardStore);
@@ -333,15 +335,19 @@ const renderPulseChart = () => {
     pulseChart = echarts.init(pulseChartRef.value);
   }
 
+  const isLight = themeStore.currentTheme === 'light';
+  const entryColor = isSurged.value ? '#FF5722' : (isLight ? '#0284C7' : '#00D2FF');
+  const exitColor = isLight ? '#E11D48' : '#FF3D71';
+
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: '#182030',
-      borderColor: '#2A364F',
+      backgroundColor: isLight ? '#FFFFFF' : '#182030',
+      borderColor: isLight ? '#CBD5E1' : '#2A364F',
       borderWidth: 1,
       padding: [6, 10],
-      textStyle: { color: '#FFFFFF', fontSize: 11, fontWeight: 600 },
-      axisPointer: { type: 'line', lineStyle: { color: '#00D2FF', width: 1, type: 'dashed' } }
+      textStyle: { color: isLight ? '#0F172A' : '#FFFFFF', fontSize: 11, fontWeight: 700 },
+      axisPointer: { type: 'line', lineStyle: { color: entryColor, width: 1, type: 'dashed' } }
     },
     grid: {
       left: '3%',
@@ -355,47 +361,47 @@ const renderPulseChart = () => {
       data: waveTimeline.value,
       name: '时间',
       nameLocation: 'end',
-      nameTextStyle: { color: '#94A3B8', fontSize: 10, padding: [0, 0, 0, 2] },
+      nameTextStyle: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10, padding: [0, 0, 0, 2] },
       axisLine: {
         show: true,
         symbol: ['none', 'arrow'],
         symbolSize: [6, 8],
         symbolOffset: [0, 6],
-        lineStyle: { color: '#475569', width: 1.5 }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569', width: 1.5 }
       },
       axisTick: {
         show: true,
         alignWithLabel: true,
-        lineStyle: { color: '#475569' }
+        lineStyle: { color: isLight ? '#CBD5E1' : '#475569' }
       },
       splitLine: {
         show: true,
-        lineStyle: { color: '#1A2230', type: 'dashed' }
+        lineStyle: { color: isLight ? '#E2E8F0' : '#1A2230', type: 'dashed' }
       },
-      axisLabel: { color: '#94A3B8', fontSize: 10 }
+      axisLabel: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10 }
     },
     yAxis: {
       type: 'value',
       name: `流速(人/${pollRateSec.value}s)`,
       nameLocation: 'end',
-      nameTextStyle: { color: '#94A3B8', fontSize: 10, padding: [0, 0, 6, 0] },
+      nameTextStyle: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10, padding: [0, 0, 6, 0] },
       minInterval: 1,
       axisLine: {
         show: true,
         symbol: ['none', 'arrow'],
         symbolSize: [6, 8],
         symbolOffset: [0, 6],
-        lineStyle: { color: '#475569', width: 1.5 }
+        lineStyle: { color: isLight ? '#94A3B8' : '#475569', width: 1.5 }
       },
       axisTick: {
         show: true,
-        lineStyle: { color: '#475569' }
+        lineStyle: { color: isLight ? '#CBD5E1' : '#475569' }
       },
       splitLine: {
         show: true,
-        lineStyle: { color: '#1F293D', type: 'dashed' }
+        lineStyle: { color: isLight ? '#E2E8F0' : '#1F293D', type: 'dashed' }
       },
-      axisLabel: { color: '#94A3B8', fontSize: 10 }
+      axisLabel: { color: isLight ? '#475569' : '#94A3B8', fontSize: 10 }
     },
     series: [
       {
@@ -404,8 +410,8 @@ const renderPulseChart = () => {
         smooth: 0.35,
         symbol: 'circle',
         symbolSize: isSurged.value ? 6 : 5,
-        itemStyle: { color: isSurged.value ? '#FF5722' : '#00D2FF' },
-        lineStyle: { width: isSurged.value ? 2.8 : 2.5, color: isSurged.value ? '#FF5722' : '#00D2FF' },
+        itemStyle: { color: entryColor },
+        lineStyle: { width: isSurged.value ? 2.8 : 2.5, color: entryColor },
         areaStyle: {
           color: isSurged.value
             ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -413,8 +419,8 @@ const renderPulseChart = () => {
                 { offset: 1, color: 'rgba(255, 87, 34, 0.0)' }
               ])
             : new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                { offset: 0, color: 'rgba(0, 210, 255, 0.3)' },
-                { offset: 1, color: 'rgba(0, 210, 255, 0.0)' }
+                { offset: 0, color: isLight ? 'rgba(2, 132, 199, 0.22)' : 'rgba(0, 210, 255, 0.3)' },
+                { offset: 1, color: isLight ? 'rgba(2, 132, 199, 0.0)' : 'rgba(0, 210, 255, 0.0)' }
               ])
         },
         data: waveEntryDelta.value
@@ -425,12 +431,12 @@ const renderPulseChart = () => {
         smooth: 0.35,
         symbol: 'circle',
         symbolSize: 5,
-        itemStyle: { color: '#FF3D71' },
-        lineStyle: { width: 2.5 },
+        itemStyle: { color: exitColor },
+        lineStyle: { width: 2.5, color: exitColor },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(255, 61, 113, 0.3)' },
-            { offset: 1, color: 'rgba(255, 61, 113, 0.0)' }
+            { offset: 0, color: isLight ? 'rgba(225, 29, 72, 0.2)' : 'rgba(255, 61, 113, 0.3)' },
+            { offset: 1, color: isLight ? 'rgba(225, 29, 72, 0.0)' : 'rgba(255, 61, 113, 0.0)' }
           ])
         },
         data: waveExitDelta.value
@@ -440,6 +446,13 @@ const renderPulseChart = () => {
 
   pulseChart.setOption(option);
 };
+
+// 监听主题切换，座舱折线图实时重绘
+watch(() => themeStore.currentTheme, () => {
+  if (isPageActive.value) {
+    renderPulseChart();
+  }
+});
 
 const restartPollTimer = (sec: number) => {
   if (pollTimer) {
@@ -1167,5 +1180,134 @@ onUnmounted(() => {
   padding: 1px 6px;
   border-radius: 3px;
   font-weight: 700;
+}
+
+/* ==================== 明亮浅色模式适配 (Light Theme) ==================== */
+:global(.theme-light) .dashboard-viewport {
+  background-color: var(--fs-chassis-bg);
+}
+:global(.theme-light) .flat-header {
+  background: var(--fs-header-bg);
+  border-bottom: 1px solid var(--fs-header-border);
+}
+:global(.theme-light) .company-name {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .flat-point-bar {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+:global(.theme-light) .point-label {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .flat-select {
+  background-color: var(--fs-select-bg);
+  border-color: var(--fs-select-border);
+  color: var(--fs-select-text);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230284C7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+:global(.theme-light) .poll-badge {
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.4);
+  color: #0284C7;
+}
+:global(.theme-light) .kpi-block {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+:global(.theme-light) .border-cyan { border-left-color: #0284C7; }
+:global(.theme-light) .border-green { border-left-color: #16A34A; }
+:global(.theme-light) .border-orange { border-left-color: #EA580C; }
+:global(.theme-light) .border-purple { border-left-color: #7C3AED; }
+:global(.theme-light) .badge-cyan { background: rgba(2, 132, 199, 0.12); color: #0284C7; }
+:global(.theme-light) .badge-green { background: rgba(22, 163, 74, 0.12); color: #16A34A; }
+:global(.theme-light) .badge-orange { background: rgba(234, 88, 12, 0.12); color: #EA580C; }
+:global(.theme-light) .badge-purple { background: rgba(124, 58, 237, 0.12); color: #7C3AED; }
+:global(.theme-light) .text-cyan { color: #0284C7; }
+:global(.theme-light) .text-green { color: #16A34A; }
+:global(.theme-light) .text-orange { color: #EA580C; }
+:global(.theme-light) .text-purple { color: #7C3AED; }
+:global(.theme-light) .kpi-unit { color: var(--fs-text-dim); }
+:global(.theme-light) .kpi-title {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .kpi-footer {
+  color: var(--fs-text-dim);
+}
+:global(.theme-light) .flat-status-bar {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  color: var(--fs-text-main);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+:global(.theme-light) .flat-status-bar.status-ok {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: #15803D;
+}
+:global(.theme-light) .flat-snapshot-strip {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+:global(.theme-light) .snap-info-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .snap-info-sub {
+  color: var(--fs-text-dim);
+}
+:global(.theme-light) .realtime-wave-card {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+:global(.theme-light) .wave-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .w-leg-item {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .rate-modal-card {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+:global(.theme-light) .rm-header {
+  background: #F8FAFC;
+  border-bottom-color: #E2E8F0;
+}
+:global(.theme-light) .rm-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .rm-desc {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .rate-modal-card .rate-card {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .rate-modal-card .rate-card-active {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: #0284C7;
+}
+:global(.theme-light) .rate-modal-card .rc-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .rate-modal-card .rc-desc {
+  color: var(--fs-text-dim);
+}
+:global(.theme-light) .snapshot-modal-card {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+}
+:global(.theme-light) .smc-header,
+:global(.theme-light) .smc-footer {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .smc-title {
+  color: var(--fs-text-main);
 }
 </style>

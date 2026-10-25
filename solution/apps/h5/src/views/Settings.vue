@@ -119,6 +119,42 @@
         </div>
       </div>
 
+      <!-- 设置分组 3: 显示风格与适老无障碍 -->
+      <div class="group-title">界面视觉与适老无障碍</div>
+      <div class="menu-group">
+        <!-- 条目 7: 界面主题模式切换 -->
+        <div class="menu-cell" @click="openModal('themeMode')">
+          <div class="cell-left">
+            <span class="cell-icon">🎨</span>
+            <div class="cell-text">
+              <span class="cell-title">界面显示主题风格</span>
+              <span class="cell-sub">深色科技夜间 / 明亮浅色适老高对比度</span>
+            </div>
+          </div>
+          <div class="cell-right">
+            <span class="cell-action-pill" :class="currentTheme === 'light' ? 'cyan-pill' : 'gray-pill'">
+              {{ currentTheme === 'light' ? '明亮浅色 ➔' : '深邃暗黑 ➔' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 条目 8: 界面字号大小与无障碍放大 -->
+        <div class="menu-cell" @click="openModal('fontSize')">
+          <div class="cell-left">
+            <span class="cell-icon">🔠</span>
+            <div class="cell-text">
+              <span class="cell-title">界面字号大小与无障碍</span>
+              <span class="cell-sub">标准 100% / 中等 110% / 关爱大字 120% 放大</span>
+            </div>
+          </div>
+          <div class="cell-right">
+            <span class="cell-action-pill purple-pill">
+              {{ fontScaleLabel }} ➔
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- 安全登出按钮 -->
       <div class="logout-btn-box">
         <button class="btn-logout" @click="handleLogout">
@@ -397,6 +433,84 @@
       </div>
     </div>
 
+    <!-- 弹窗 7: 界面显示主题模式切换 (深色 / 浅色高对比适老) -->
+    <div v-if="activeModal === 'themeMode'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">🎨</span>
+            <span class="dh-title">界面显示主题模式</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <p class="modal-desc">
+            选择决策看板视觉主题风格。推荐视力不佳或长辈用户切换至明亮浅色：
+          </p>
+          <div class="rate-select-list">
+            <div
+              v-for="t in themeOptions"
+              :key="t.key"
+              :class="['rate-card', currentTheme === t.key ? 'rate-card-active' : '']"
+              @click="handleSelectTheme(t.key)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ currentTheme === t.key ? '●' : '○' }}</span>
+                <div class="rc-text">
+                  <span class="rc-title">{{ t.label }}</span>
+                  <span class="rc-desc">{{ t.desc }}</span>
+                </div>
+              </div>
+              <span v-if="currentTheme === t.key" class="rc-tag">当前生效</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 8: 界面字号大小与无障碍放大 (标准 / 中等 / 关爱大字) -->
+    <div v-if="activeModal === 'fontSize'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <div class="dh-title-box">
+            <span class="dh-icon">🔠</span>
+            <span class="dh-title">界面字号大小与无障碍</span>
+          </div>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <p class="modal-desc">
+            根据使用者的视力舒适度手动调整全局字号大小，保障中长辈用户轻松阅读：
+          </p>
+          <div class="rate-select-list">
+            <div
+              v-for="f in fontScaleOptions"
+              :key="f.key"
+              :class="['rate-card', currentFontScale === f.key ? 'rate-card-active' : '']"
+              @click="handleSelectFontScale(f.key)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ currentFontScale === f.key ? '●' : '○' }}</span>
+                <div class="rc-text">
+                  <span class="rc-title">{{ f.label }}</span>
+                  <span class="rc-desc">{{ f.desc }}</span>
+                </div>
+              </div>
+              <span v-if="currentFontScale === f.key" class="rc-tag">当前生效</span>
+            </div>
+          </div>
+
+          <!-- 实时字号预览卡片 -->
+          <div class="font-preview-box">
+            <div class="fp-title">字号实时预览效果：</div>
+            <div class="fp-content">
+              瞬时在场 <b class="text-cyan">18人</b> · 累计客流 <b>1,250人次</b> (通行状态感知正常)
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -408,12 +522,22 @@ import { storeToRefs } from 'pinia';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
 import { useDashboardStore } from '../store/dashboard';
+import { useThemeStore, ThemeMode, FontSizeScale } from '../store/theme';
 
 const router = useRouter();
 const pointStore = usePointStore();
 const dashboardStore = useDashboardStore();
+const themeStore = useThemeStore();
+
 const { pollRateSec } = storeToRefs(dashboardStore);
+const { currentTheme, currentFontScale } = storeToRefs(themeStore);
 const activeRate = pollRateSec;
+
+const fontScaleLabel = computed(() => {
+  if (currentFontScale.value === 'large') return '关爱大字 120%';
+  if (currentFontScale.value === 'medium') return '中等 110%';
+  return '标准 100%';
+});
 
 // 用户资料
 const userProfile = computed(() => {
@@ -425,7 +549,7 @@ const userProfile = computed(() => {
 });
 
 // 对话框弹窗状态管理 (取代页面内部折叠)
-type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | null;
+type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | null;
 const activeModal = ref<ModalType>(null);
 
 const openModal = (type: ModalType) => {
@@ -573,6 +697,51 @@ const refreshRates = [
 const handleSelectRate = (sec: number) => {
   dashboardStore.setPollRate(sec);
   showToast({ message: `座舱刷新已设为 ${sec} 秒`, position: 'top', duration: 1000 });
+  closeModal();
+};
+
+// 主题模式选项
+const themeOptions = [
+  {
+    key: 'dark' as ThemeMode,
+    label: '深邃暗黑 (默认科技夜间)',
+    desc: '低发光柔和护眼，纯平极简暗黑中台，夜间环境首选'
+  },
+  {
+    key: 'light' as ThemeMode,
+    label: '明亮浅色 (高对比适老推荐)',
+    desc: '白底纯黑字高反差，光线充足环境易读，专为中长辈与视力欠佳者优化'
+  }
+];
+
+const handleSelectTheme = (mode: ThemeMode) => {
+  themeStore.setTheme(mode);
+  showToast({ message: `已切换为${mode === 'light' ? '明亮浅色' : '深邃暗黑'}风格`, position: 'top', duration: 1000 });
+  closeModal();
+};
+
+// 字号缩放无障碍选项
+const fontScaleOptions = [
+  {
+    key: 'standard' as FontSizeScale,
+    label: '标准字号 (100%)',
+    desc: '紧凑精炼，适合常规移动端查看与高信息密度展示'
+  },
+  {
+    key: 'medium' as FontSizeScale,
+    label: '中等字号 (110%)',
+    desc: '适度放大 10%，字体更饱满清晰，长时间阅读不易眼疲劳'
+  },
+  {
+    key: 'large' as FontSizeScale,
+    label: '关爱大字 (120% 适老化推荐)',
+    desc: '界面字号显著放大加粗，高对比度呈现，长辈与视力障碍友好'
+  }
+];
+
+const handleSelectFontScale = (scale: FontSizeScale) => {
+  themeStore.setFontScale(scale);
+  showToast({ message: '字号设置已生效', position: 'top', duration: 1000 });
   closeModal();
 };
 
@@ -1298,5 +1467,168 @@ onUnmounted(() => {
 .m-v {
   color: #CBD5E1;
   font-weight: 600;
+}
+
+/* 字号实时预览卡片 */
+.font-preview-box {
+  margin-top: 14px;
+  background: #0B0E14;
+  border: 1px dashed #00D2FF;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.fp-title {
+  font-size: 11px;
+  color: #64748B;
+  margin-bottom: 4px;
+}
+.fp-content {
+  font-size: 13px;
+  color: #F8FAFC;
+  line-height: 140%;
+}
+
+/* ==================== 明亮浅色模式适配 (Light Theme) ==================== */
+:global(.theme-light) .settings-viewport {
+  background-color: var(--fs-chassis-bg);
+}
+:global(.theme-light) .flat-header {
+  background: var(--fs-header-bg);
+  border-bottom: 1px solid var(--fs-header-border);
+}
+:global(.theme-light) .header-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .profile-card {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+:global(.theme-light) .company-name {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .avatar-box {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .phone-str {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .group-title {
+  color: #475569;
+}
+:global(.theme-light) .menu-group {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+:global(.theme-light) .menu-cell {
+  border-bottom-color: #F1F5F9;
+}
+:global(.theme-light) .menu-cell:active {
+  background: #F8FAFC;
+}
+:global(.theme-light) .cell-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .cell-sub {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .gray-pill {
+  background: #F1F5F9;
+  color: #475569;
+}
+:global(.theme-light) .cyan-pill {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0284C7;
+}
+:global(.theme-light) .blue-pill {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563EB;
+}
+:global(.theme-light) .purple-pill {
+  background: rgba(124, 58, 237, 0.12);
+  color: #7C3AED;
+}
+:global(.theme-light) .green-pill {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16A34A;
+}
+:global(.theme-light) .btn-logout {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+}
+:global(.theme-light) .dialog-card {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+:global(.theme-light) .dialog-header {
+  background: #F8FAFC;
+  border-bottom-color: #E2E8F0;
+}
+:global(.theme-light) .dh-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .modal-desc {
+  color: var(--fs-text-sub);
+}
+:global(.theme-light) .modal-sub-meta {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .rate-card {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .rate-card-active {
+  border-color: #0284C7;
+  background: rgba(2, 132, 199, 0.08);
+}
+:global(.theme-light) .rc-title {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .rc-desc {
+  color: var(--fs-text-dim);
+}
+:global(.theme-light) .mf-input {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}
+:global(.theme-light) .btn-modal-action.btn-gray-fill {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #334155;
+}
+:global(.theme-light) .node-meta-list {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .m-v {
+  color: var(--fs-text-main);
+}
+:global(.theme-light) .btn-copy-pin,
+:global(.theme-light) .btn-refresh-pin {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}
+:global(.theme-light) .pin-digit-box {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0284C7;
+}
+:global(.theme-light) .dual-pwd-hint {
+  background: #F8FAFC;
+  border-left-color: #0284C7;
+  color: #334155;
+}
+:global(.theme-light) .font-preview-box {
+  background: #F8FAFC;
+  border-color: #0284C7;
+}
+:global(.theme-light) .fp-content {
+  color: #0F172A;
 }
 </style>

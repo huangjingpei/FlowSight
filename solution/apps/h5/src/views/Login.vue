@@ -197,4 +197,50 @@ const onSubmit = async () => {
   font-size: 10px;
   color: #64748B;
 }
+
+/* ================= 浅色高对比度主题适配 ================= */
+:global(.theme-light) .login-viewport {
+  background-color: var(--fs-bg);
+}
+
+:global(.theme-light) .login-card {
+  background: var(--fs-card);
+  border-color: var(--fs-card-border);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+}
+
+:global(.theme-light) .brand-title {
+  color: var(--fs-text-main);
+}
+
+:global(.theme-light) .brand-sub {
+  color: var(--fs-text-sub);
+}
+
+:global(.theme-light) .form-label {
+  color: var(--fs-text-sub);
+}
+
+:global(.theme-light) .flat-input {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+  color: #0F172A;
+}
+
+:global(.theme-light) .flat-input:focus {
+  border-color: var(--fs-primary);
+}
+
+:global(.theme-light) .quick-link {
+  color: var(--fs-primary);
+}
+
+:global(.theme-light) .btn-submit {
+  background: var(--fs-primary);
+  color: #FFFFFF;
+}
+
+:global(.theme-light) .login-foot {
+  color: var(--fs-text-dim);
+}
 </style>
