@@ -19,4 +19,6 @@ public class PointCreateDTO {
     private String cameraRtsp;
 
     private String resolution;
+
+    private String bizType; // PEDESTRIAN / VEHICLE
 }

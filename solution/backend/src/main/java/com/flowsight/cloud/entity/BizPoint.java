@@ -20,6 +20,7 @@ public class BizPoint implements Serializable {
     private String address;
     private String cameraRtsp;
     private String resolution;
+    private String bizType; // PEDESTRIAN-客流, VEHICLE-车流
     private String streamStatus; // ONLINE, OFFLINE, ALERT
     private String pointToken;
     private String devicePasswordHash;

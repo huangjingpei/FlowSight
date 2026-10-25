@@ -114,6 +114,10 @@ public class EventServiceImpl implements EventService {
         event.setConfidence(dto.getConfidence() != null ? dto.getConfidence() : 0.85f);
         event.setGender(gender);
         event.setAgeGroup(ageGroup);
+        event.setPlateNumber(dto.getPlateNumber() != null ? dto.getPlateNumber() : "");
+        event.setPlateColor(dto.getPlateColor() != null ? dto.getPlateColor() : "");
+        event.setVehicleType(dto.getVehicleType() != null ? dto.getVehicleType() : "");
+        event.setVehicleColor(dto.getVehicleColor() != null ? dto.getVehicleColor() : "");
         event.setTimestampMs(ts);
         event.setLocalClipPath(dto.getClipPath() != null ? dto.getClipPath() : "");
 
@@ -217,6 +221,10 @@ public class EventServiceImpl implements EventService {
                     event.setConfidence(evDto.getConfidence() != null ? evDto.getConfidence() : 0.85f);
                     event.setGender(gender);
                     event.setAgeGroup(ageGroup);
+                    event.setPlateNumber(evDto.getPlateNumber() != null ? evDto.getPlateNumber() : "");
+                    event.setPlateColor(evDto.getPlateColor() != null ? evDto.getPlateColor() : "");
+                    event.setVehicleType(evDto.getVehicleType() != null ? evDto.getVehicleType() : "");
+                    event.setVehicleColor(evDto.getVehicleColor() != null ? evDto.getVehicleColor() : "");
                     event.setTimestampMs(evTs);
                     event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
 
@@ -476,6 +484,7 @@ public class EventServiceImpl implements EventService {
         DashboardSummaryVO vo = new DashboardSummaryVO();
         vo.setPointId(point.getId());
         vo.setPointName(point.getPointName());
+        vo.setBizType(point.getBizType() != null ? point.getBizType() : "PEDESTRIAN");
         vo.setClientName(hb != null && hb.getClientName() != null ? hb.getClientName() : ("FlowSight-Node-" + point.getId()));
         vo.setAppVersion(hb != null && hb.getClientVersion() != null ? hb.getClientVersion() : "v1.2.0");
         if (hb != null && hb.getLastHeartbeat() != null) {
@@ -759,6 +768,10 @@ public class EventServiceImpl implements EventService {
             vo.setConfidence(e.getConfidence());
             vo.setGender(e.getGender());
             vo.setAgeGroup(e.getAgeGroup());
+            vo.setPlateNumber(e.getPlateNumber());
+            vo.setPlateColor(e.getPlateColor());
+            vo.setVehicleType(e.getVehicleType());
+            vo.setVehicleColor(e.getVehicleColor());
             vo.setTimestampMs(e.getTimestampMs());
 
             LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(e.getTimestampMs()), ZoneId.systemDefault());

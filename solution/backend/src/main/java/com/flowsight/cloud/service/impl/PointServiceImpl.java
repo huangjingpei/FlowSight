@@ -112,6 +112,7 @@ public class PointServiceImpl implements PointService {
         point.setAddress(dto.getAddress() != null ? dto.getAddress() : "");
         point.setCameraRtsp(dto.getCameraRtsp() != null ? dto.getCameraRtsp() : "");
         point.setResolution(dto.getResolution() != null ? dto.getResolution() : "1920x1080");
+        point.setBizType(dto.getBizType() != null && !dto.getBizType().trim().isEmpty() ? dto.getBizType().trim().toUpperCase() : "PEDESTRIAN");
         point.setStreamStatus("OFFLINE");
         point.setPointToken("ptk_" + UUID.randomUUID().toString().replace("-", ""));
 
@@ -136,6 +137,7 @@ public class PointServiceImpl implements PointService {
         if (dto.getAddress() != null) point.setAddress(dto.getAddress());
         if (dto.getCameraRtsp() != null) point.setCameraRtsp(dto.getCameraRtsp());
         if (dto.getResolution() != null) point.setResolution(dto.getResolution());
+        if (dto.getBizType() != null && !dto.getBizType().trim().isEmpty()) point.setBizType(dto.getBizType().trim().toUpperCase());
         if (dto.getStreamStatus() != null) point.setStreamStatus(dto.getStreamStatus());
 
         pointMapper.updateById(point);
@@ -240,6 +242,7 @@ public class PointServiceImpl implements PointService {
                 .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
                 .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
                 .clientName(dto.getClientName() != null ? dto.getClientName() : "FlowSight-Node")
+                .bizType(point.getBizType() != null ? point.getBizType() : "PEDESTRIAN")
                 .build();
     }
 
@@ -372,6 +375,7 @@ public class PointServiceImpl implements PointService {
                 .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
                 .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
                 .clientName(dto.getClientName() != null ? dto.getClientName() : "FlowSight-Node")
+                .bizType(point.getBizType() != null ? point.getBizType() : "PEDESTRIAN")
                 .build();
     }
 
@@ -385,6 +389,7 @@ public class PointServiceImpl implements PointService {
         vo.setCameraRtsp(p.getCameraRtsp());
         vo.setResolution(p.getResolution());
         vo.setPointToken(p.getPointToken());
+        vo.setBizType(p.getBizType() != null ? p.getBizType() : "PEDESTRIAN");
         vo.setCreateTime(p.getCreateTime());
 
         // 查询属主客户信息
@@ -486,6 +491,7 @@ public class PointServiceImpl implements PointService {
                 .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
                 .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
                 .clientName(targetClient)
+                .bizType(point.getBizType() != null ? point.getBizType() : "PEDESTRIAN")
                 .build();
     }
 

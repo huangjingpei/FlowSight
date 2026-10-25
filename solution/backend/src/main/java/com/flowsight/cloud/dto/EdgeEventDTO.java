@@ -32,5 +32,21 @@ public class EdgeEventDTO {
     @JsonProperty("clipPath")
     private String clipPath;
 
-    private Map<String, String> attributes; // gender, age_group
+    @JsonAlias({"plate_number", "plateNumber"})
+    @JsonProperty("plateNumber")
+    private String plateNumber;
+
+    @JsonAlias({"plate_color", "plateColor"})
+    @JsonProperty("plateColor")
+    private String plateColor;
+
+    @JsonAlias({"vehicle_type", "vehicleType"})
+    @JsonProperty("vehicleType")
+    private String vehicleType;
+
+    @JsonAlias({"vehicle_color", "vehicleColor"})
+    @JsonProperty("vehicleColor")
+    private String vehicleColor;
+
+    private Map<String, String> attributes; // gender, age_group, plate_number, etc.
 }

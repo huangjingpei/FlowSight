@@ -18,5 +18,6 @@ public class DeviceLoginVO {
     private String pointToken;
     private String cameraRtsp;
     private String resolution;
+    private String bizType;
     private String clientName;
 }

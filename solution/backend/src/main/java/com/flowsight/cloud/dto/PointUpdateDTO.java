@@ -10,5 +10,6 @@ public class PointUpdateDTO {
     private String address;
     private String cameraRtsp;
     private String resolution;
+    private String bizType;
     private String streamStatus;
 }

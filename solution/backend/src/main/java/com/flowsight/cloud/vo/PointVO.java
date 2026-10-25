@@ -15,6 +15,7 @@ public class PointVO {
     private String address;
     private String cameraRtsp;
     private String resolution;
+    private String bizType; // PEDESTRIAN-客流, VEHICLE-车流
     private String streamStatus;
     private String pointToken;
     private String boundClientName;

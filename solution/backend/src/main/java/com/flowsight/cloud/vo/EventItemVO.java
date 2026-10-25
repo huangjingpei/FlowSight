@@ -12,6 +12,10 @@ public class EventItemVO {
     private Float confidence;
     private String gender;
     private String ageGroup;
+    private String plateNumber;
+    private String plateColor;
+    private String vehicleType;
+    private String vehicleColor;
     private Long timestampMs;
     private String datetime;
     private String playUrl; // MinIO 临时签名/直链播放地址

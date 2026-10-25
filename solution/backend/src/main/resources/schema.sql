@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     `address` VARCHAR(255) DEFAULT '' COMMENT '物理安装具体位置/门店地址',
     `camera_rtsp` VARCHAR(512) DEFAULT '' COMMENT '摄像头 RTSP 流地址',
     `resolution` VARCHAR(32) DEFAULT '1920x1080' COMMENT '推流画面分辨率规格',
+    `biz_type` VARCHAR(16) NOT NULL DEFAULT 'PEDESTRIAN' COMMENT '业务模式: PEDESTRIAN-客流, VEHICLE-车流',
     `stream_status` VARCHAR(20) NOT NULL DEFAULT 'OFFLINE' COMMENT '状态: ONLINE-在线, OFFLINE-离线, ALERT-异常',
     `point_token` VARCHAR(64) NOT NULL COMMENT '边缘采集端专用对接认证Token',
     `device_password_hash` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '边缘专属设备接入密码(BCrypt散列)',
@@ -58,20 +59,20 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     KEY `idx_token` (`point_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='监控分析点位资产表';
 
--- 预置商户点位资产数据: 万科名下 2 点位 + 滨江政务名下 1 点位 (预置默认设备接入密码: Edge@123456)
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
+-- 预置商户点位资产数据: 万科名下 2 点位 (人流+车流) + 滨江政务名下 1 点位 (预置默认设备接入密码: Edge@123456)
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'PEDESTRIAN', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
 
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (2, 2, '万科西区地库人行道', 'POINT_VK_BASE_02', 'B1层地下车库进出通道', '', '1920x1080', 'OFFLINE', 'ptk_vanke_base_002', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `device_password_hash`=VALUES(`device_password_hash`);
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (2, 2, '万科西区地库机动车道', 'POINT_VK_BASE_02', 'B1层地下车库车辆出入道闸', '', '1920x1080', 'VEHICLE', 'OFFLINE', 'ptk_vanke_base_002', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `device_password_hash`=VALUES(`device_password_hash`);
 
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'ONLINE', 'ptk_gov_south_003', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
+INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
+VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'PEDESTRIAN', 'ONLINE', 'ptk_gov_south_003', 'Edge@123456')
+ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
 
--- 3. 人流通行结构化事件流水明细表
+-- 3. 通行结构化事件流水明细表 (支持人流属性与车流车牌属性)
 CREATE TABLE IF NOT EXISTS `biz_passage_event` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '事件全局唯一流水ID',
     `point_id` BIGINT NOT NULL COMMENT '所属点位ID',
@@ -81,6 +82,10 @@ CREATE TABLE IF NOT EXISTS `biz_passage_event` (
     `confidence` FLOAT NOT NULL DEFAULT 0.0 COMMENT '检测综合置信度',
     `gender` VARCHAR(16) DEFAULT '未知' COMMENT '客群画像预测性别: 男/女/未知',
     `age_group` VARCHAR(32) DEFAULT '未知' COMMENT '预测年龄段: 青年(18-35)等',
+    `plate_number` VARCHAR(32) DEFAULT '' COMMENT '车牌号码: 浙A·88888',
+    `plate_color` VARCHAR(16) DEFAULT '' COMMENT '号牌颜色: 蓝色/绿色/黄色/白色/其他',
+    `vehicle_type` VARCHAR(32) DEFAULT '' COMMENT '车辆类型: 小型客车/大型客车/载货汽车等',
+    `vehicle_color` VARCHAR(16) DEFAULT '' COMMENT '车身颜色: 白色/黑色/灰色/红色/蓝色等',
     `timestamp_ms` BIGINT NOT NULL COMMENT '通行发生绝对毫秒时间戳',
     `clip_url` VARCHAR(512) DEFAULT '' COMMENT '云端短视频切片 MinIO 访问路径',
     `local_clip_path` VARCHAR(255) DEFAULT '' COMMENT '边缘端原始生成切片相对路径',
@@ -88,6 +93,7 @@ CREATE TABLE IF NOT EXISTS `biz_passage_event` (
     PRIMARY KEY (`id`),
     KEY `idx_point_time` (`point_id`, `timestamp_ms`),
     KEY `idx_user_time` (`user_id`, `timestamp_ms`),
+    KEY `idx_plate` (`plate_number`),
     KEY `idx_track` (`track_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通行事件明细流水表';
 
