@@ -327,4 +327,342 @@ select optgroup {
   color: var(--fs-cyan, #00D2FF) !important;
   font-weight: 800 !important;
 }
+
+/* ==================== 全局明亮浅色主题 (Light Theme) 级联注入 ==================== */
+.theme-light .dashboard-viewport,
+.theme-light .trends-viewport,
+.theme-light .playback-viewport,
+.theme-light .settings-viewport,
+.theme-light .login-viewport {
+  background-color: var(--fs-bg, #F8FAFC) !important;
+}
+
+.theme-light .flat-header {
+  background: var(--fs-header-bg, #FFFFFF) !important;
+  border-bottom: 1px solid var(--fs-border, #E2E8F0) !important;
+}
+
+.theme-light .flat-point-bar,
+.theme-light .kpi-block,
+.theme-light .flat-snapshot-strip,
+.theme-light .realtime-wave-card,
+.theme-light .kpi-cell,
+.theme-light .chart-box,
+.theme-light .flat-filter-box,
+.theme-light .records-container,
+.theme-light .flat-pagination,
+.theme-light .profile-card,
+.theme-light .menu-group,
+.theme-light .login-card {
+  background: var(--fs-card, #FFFFFF) !important;
+  border-color: var(--fs-card-border, #CBD5E1) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-light .event-row {
+  background: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light .event-row:active {
+  background: #F1F5F9 !important;
+}
+
+.theme-light .company-name,
+.theme-light .header-title,
+.theme-light .cell-title,
+.theme-light .wave-title,
+.theme-light .legend-title,
+.theme-light .brand-title,
+.theme-light .kpi-title,
+.theme-light .snap-info-title,
+.theme-light .text-white {
+  color: #0F172A !important;
+}
+
+.theme-light .point-label,
+.theme-light .cell-sub,
+.theme-light .phone-str,
+.theme-light .brand-sub,
+.theme-light .form-label,
+.theme-light .point-name,
+.theme-light .w-leg-item,
+.theme-light .leg-item,
+.theme-light .page-info {
+  color: #334155 !important;
+}
+
+.theme-light .kpi-footer,
+.theme-light .cell-label,
+.theme-light .cell-unit,
+.theme-light .kpi-unit,
+.theme-light .snap-info-sub,
+.theme-light .meta-sub,
+.theme-light .empty-text,
+.theme-light .login-foot {
+  color: #64748B !important;
+}
+
+.theme-light .text-cyan,
+.theme-light .track-id,
+.theme-light .quick-link {
+  color: #0284C7 !important;
+}
+
+.theme-light .text-green {
+  color: #16A34A !important;
+}
+
+.theme-light .text-orange {
+  color: #EA580C !important;
+}
+
+.theme-light .text-purple {
+  color: #7C3AED !important;
+}
+
+.theme-light .border-cyan { border-left-color: #0284C7 !important; }
+.theme-light .border-green { border-left-color: #16A34A !important; }
+.theme-light .border-orange { border-left-color: #EA580C !important; }
+.theme-light .border-purple { border-left-color: #7C3AED !important; }
+
+.theme-light .badge-cyan { background: rgba(2, 132, 199, 0.12) !important; color: #0284C7 !important; }
+.theme-light .badge-green { background: rgba(22, 163, 74, 0.12) !important; color: #16A34A !important; }
+.theme-light .badge-orange { background: rgba(234, 88, 12, 0.12) !important; color: #EA580C !important; }
+.theme-light .badge-purple { background: rgba(124, 58, 237, 0.12) !important; color: #7C3AED !important; }
+
+.theme-light .flat-select {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+  color-scheme: light !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230284C7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+}
+
+.theme-light .flat-select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.theme-light .flat-select option:checked {
+  background-color: #E2E8F0 !important;
+  color: #0284C7 !important;
+}
+
+.theme-light .poll-badge {
+  background: rgba(2, 132, 199, 0.1) !important;
+  border-color: rgba(2, 132, 199, 0.4) !important;
+  color: #0284C7 !important;
+}
+
+.theme-light .flat-status-bar {
+  background: var(--fs-card, #FFFFFF) !important;
+  border-color: var(--fs-card-border, #CBD5E1) !important;
+  color: #0F172A !important;
+}
+
+.theme-light .flat-status-bar.status-ok {
+  background: rgba(22, 163, 74, 0.08) !important;
+  border-color: rgba(22, 163, 74, 0.3) !important;
+  color: #15803D !important;
+}
+
+.theme-light .flat-segmented {
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light .seg-btn {
+  color: #475569 !important;
+}
+
+.theme-light .seg-btn.active {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+}
+
+.theme-light .dir-pill,
+.theme-light .date-pill,
+.theme-light .btn-reset,
+.theme-light .page-btn {
+  background: #F1F5F9 !important;
+  color: #475569 !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light .dir-pill.active,
+.theme-light .date-pill.active,
+.theme-light .btn-search,
+.theme-light .btn-play {
+  background: #0284C7 !important;
+  color: #FFFFFF !important;
+  border-color: #0284C7 !important;
+}
+
+.theme-light .dir-pill.active.green {
+  background: #16A34A !important;
+  color: #FFFFFF !important;
+  border-color: #16A34A !important;
+}
+
+.theme-light .dir-pill.active.orange {
+  background: #EA580C !important;
+  color: #FFFFFF !important;
+  border-color: #EA580C !important;
+}
+
+.theme-light .menu-cell {
+  border-bottom-color: #F1F5F9 !important;
+}
+
+.theme-light .menu-cell:active {
+  background: #F8FAFC !important;
+}
+
+.theme-light .btn-logout {
+  background: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #DC2626 !important;
+}
+
+.theme-light .dialog-card {
+  background: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15) !important;
+}
+
+.theme-light .dialog-header {
+  background: #F8FAFC !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+.theme-light .dh-title {
+  color: #0F172A !important;
+}
+
+.theme-light .modal-desc {
+  color: #475569 !important;
+}
+
+.theme-light .modal-sub-meta,
+.theme-light .rate-card {
+  background: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light .rate-card-active {
+  background: rgba(2, 132, 199, 0.08) !important;
+  border-color: #0284C7 !important;
+}
+
+.theme-light .rc-title {
+  color: #0F172A !important;
+}
+
+.theme-light .rc-desc {
+  color: #64748B !important;
+}
+
+.theme-light .mf-input,
+.theme-light .flat-input {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+.theme-light .btn-modal-action.btn-gray-fill {
+  background: #F1F5F9 !important;
+  border-color: #CBD5E1 !important;
+  color: #334155 !important;
+}
+
+.theme-light .node-meta-list {
+  background: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light .m-k {
+  color: #64748B !important;
+}
+
+.theme-light .m-v {
+  color: #0F172A !important;
+}
+
+.theme-light .btn-copy-pin,
+.theme-light .btn-refresh-pin {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+.theme-light .pin-digit-box {
+  background: #F8FAFC !important;
+  border-color: #CBD5E1 !important;
+  color: #0284C7 !important;
+}
+
+.theme-light .dual-pwd-hint {
+  background: #F8FAFC !important;
+  border-left-color: #0284C7 !important;
+  color: #334155 !important;
+}
+
+.theme-light .font-preview-box {
+  background: #F8FAFC !important;
+  border-color: #0284C7 !important;
+}
+
+.theme-light .fp-content {
+  color: #0F172A !important;
+}
+
+.theme-light .avatar-box {
+  background: #F1F5F9 !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light .group-title {
+  color: #475569 !important;
+}
+
+.theme-light .gray-pill {
+  background: #F1F5F9 !important;
+  color: #475569 !important;
+}
+
+.theme-light .cyan-pill {
+  background: rgba(2, 132, 199, 0.12) !important;
+  color: #0284C7 !important;
+}
+
+.theme-light .blue-pill {
+  background: rgba(37, 99, 235, 0.12) !important;
+  color: #2563EB !important;
+}
+
+.theme-light .purple-pill {
+  background: rgba(124, 58, 237, 0.12) !important;
+  color: #7C3AED !important;
+}
+
+.theme-light .green-pill {
+  background: rgba(22, 163, 74, 0.12) !important;
+  color: #16A34A !important;
+}
+
+.theme-light .snapshot-modal-card {
+  background: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light .smc-header,
+.theme-light .smc-footer {
+  background: #F8FAFC !important;
+  border-color: #E2E8F0 !important;
+}
+
+.theme-light .smc-title {
+  color: #0F172A !important;
+}
 </style>

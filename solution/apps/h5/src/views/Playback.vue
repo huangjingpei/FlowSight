@@ -307,15 +307,15 @@ onMounted(async () => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
-  background-color: #0A0D14;
+  background-color: var(--fs-bg, #0A0D14);
 }
 
 /* 顶部标题栏 */
 .flat-header {
   flex-shrink: 0;
   height: 44px;
-  background: #0E131D;
-  border-bottom: 1px solid #1E2636;
+  background: var(--fs-header-bg, #0E131D);
+  border-bottom: 1px solid var(--fs-header-border, #1E2636);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -333,11 +333,11 @@ onMounted(async () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #00D2FF;
+  background: var(--fs-primary, #00D2FF);
 }
 
 .header-title {
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
   font-size: 14px;
   font-weight: 700;
 }
@@ -368,8 +368,8 @@ onMounted(async () => {
 .flat-filter-box {
   flex-shrink: 0;
   height: 68px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 6px 8px;
   box-sizing: border-box;
@@ -485,8 +485,8 @@ onMounted(async () => {
 .records-container {
   flex: 1;
   min-height: 0;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 6px;
   box-sizing: border-box;
@@ -502,7 +502,7 @@ onMounted(async () => {
   justify-content: center;
 }
 .empty-text {
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
   font-size: 12px;
 }
 
@@ -517,8 +517,8 @@ onMounted(async () => {
 }
 
 .event-row {
-  background: #182030;
-  border: 1px solid #222C3E;
+  background: var(--fs-card-secondary, #182030);
+  border: 1px solid var(--fs-card-border, #222C3E);
   border-radius: 6px;
   padding: 8px 10px;
   display: flex;
@@ -546,7 +546,7 @@ onMounted(async () => {
 .track-id {
   font-size: 11px;
   font-weight: 800;
-  color: #00D2FF;
+  color: var(--fs-primary, #00D2FF);
 }
 
 .dir-badge {
@@ -560,7 +560,7 @@ onMounted(async () => {
 
 .point-name {
   font-size: 10px;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
 }
 
 .meta-sub {
@@ -568,15 +568,15 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   font-size: 10px;
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
 }
 
 /* 播放按钮 */
 .btn-play {
   flex-shrink: 0;
   margin-left: 8px;
-  background: #00D2FF;
-  color: #0A0D14;
+  background: var(--fs-primary, #00D2FF);
+  color: #FFFFFF;
   border: none;
   border-radius: 4px;
   padding: 4px 10px;
@@ -592,8 +592,8 @@ onMounted(async () => {
 .flat-pagination {
   flex-shrink: 0;
   height: 30px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   display: flex;
   justify-content: space-between;

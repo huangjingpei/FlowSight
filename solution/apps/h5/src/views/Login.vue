@@ -92,7 +92,7 @@ const onSubmit = async () => {
 .login-viewport {
   width: 100%;
   height: 100%;
-  background-color: #0A0D14;
+  background-color: var(--fs-bg, #0A0D14);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -103,8 +103,8 @@ const onSubmit = async () => {
 .login-card {
   width: 100%;
   max-width: 360px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 8px;
   padding: 24px 20px;
   box-sizing: border-box;

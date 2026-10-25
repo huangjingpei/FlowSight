@@ -815,15 +815,15 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
-  background-color: #0A0D14;
+  background-color: var(--fs-bg, #0A0D14);
 }
 
 /* 顶部标题栏 */
 .flat-header {
   flex-shrink: 0;
   height: 44px;
-  background: #0E131D;
-  border-bottom: 1px solid #1E2636;
+  background: var(--fs-header-bg, #0E131D);
+  border-bottom: 1px solid var(--fs-header-border, #1E2636);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -841,13 +841,13 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #00D2FF;
+  background: var(--fs-primary, #00D2FF);
 }
 
 .header-title {
   font-size: 14px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
   letter-spacing: 0.5px;
 }
 
@@ -876,8 +876,8 @@ onUnmounted(() => {
 
 /* 商户卡片 */
 .profile-card {
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 8px;
   padding: 12px;
 }
@@ -909,7 +909,7 @@ onUnmounted(() => {
 .company-name {
   font-size: 13px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--fs-text-main, #F8FAFC);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -942,8 +942,8 @@ onUnmounted(() => {
 
 /* 纯平菜单列表卡片组 */
 .menu-group {
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 8px;
   overflow: hidden;
   display: flex;

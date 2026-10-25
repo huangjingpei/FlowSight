@@ -305,15 +305,15 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
-  background-color: #0A0D14;
+  background-color: var(--fs-bg, #0A0D14);
 }
 
 /* 顶部标题栏 */
 .flat-header {
   flex-shrink: 0;
   height: 44px;
-  background: #0E131D;
-  border-bottom: 1px solid #1E2636;
+  background: var(--fs-header-bg, #0E131D);
+  border-bottom: 1px solid var(--fs-header-border, #1E2636);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -331,13 +331,13 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #00D2FF;
+  background: var(--fs-primary, #00D2FF);
 }
 
 .header-title {
   font-size: 14px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
 }
 
 .realtime-badge {
@@ -365,8 +365,8 @@ onUnmounted(() => {
 .flat-point-bar {
   flex-shrink: 0;
   height: 36px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 0 10px;
   display: flex;
@@ -376,7 +376,7 @@ onUnmounted(() => {
 
 .point-label {
   font-size: 12px;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -428,8 +428,8 @@ onUnmounted(() => {
 .flat-segmented {
   flex-shrink: 0;
   height: 32px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -444,15 +444,15 @@ onUnmounted(() => {
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .seg-btn.active {
-  background: #00D2FF;
-  color: #0A0D14;
+  background: var(--fs-primary, #00D2FF);
+  color: #FFFFFF;
 }
 
 /* 3 项核心摘要 */
@@ -465,8 +465,8 @@ onUnmounted(() => {
 }
 
 .kpi-cell {
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 6px 8px;
   display: flex;
@@ -478,7 +478,7 @@ onUnmounted(() => {
 
 .cell-label {
   font-size: 10px;
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
   font-weight: 600;
 }
 
@@ -490,19 +490,19 @@ onUnmounted(() => {
 .cell-unit {
   font-size: 10px;
   font-weight: normal;
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
 }
 
-.text-white { color: #FFFFFF; }
-.text-cyan { color: #00D2FF; }
-.text-green { color: #00E676; }
+.text-white { color: var(--fs-text-main, #FFFFFF); }
+.text-cyan { color: var(--fs-primary, #00D2FF); }
+.text-green { color: var(--fs-success, #00E676); }
 
 /* 图表容器 */
 .chart-box {
   flex: 1;
   min-height: 0;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 8px 8px 4px 8px;
   display: flex;
@@ -519,7 +519,7 @@ onUnmounted(() => {
 .legend-title {
   font-size: 11px;
   font-weight: 700;
-  color: #CBD5E1;
+  color: var(--fs-text-main, #CBD5E1);
 }
 
 .legend-items {

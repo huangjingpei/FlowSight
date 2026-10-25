@@ -543,15 +543,15 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
-  background-color: #0A0D14;
+  background-color: var(--fs-bg, #0A0D14);
 }
 
 /* 顶部极简标题栏 */
 .flat-header {
   flex-shrink: 0;
   height: 44px;
-  background: #0E131D;
-  border-bottom: 1px solid #1E2636;
+  background: var(--fs-header-bg, #0E131D);
+  border-bottom: 1px solid var(--fs-header-border, #1E2636);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -569,13 +569,13 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #00D2FF;
+  background: var(--fs-primary, #00D2FF);
 }
 
 .company-name {
   font-size: 14px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
   letter-spacing: 0.5px;
   max-width: 240px;
   overflow: hidden;
@@ -615,8 +615,8 @@ onUnmounted(() => {
 .flat-point-bar {
   flex-shrink: 0;
   height: 34px;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 0 10px;
   display: flex;
@@ -626,7 +626,7 @@ onUnmounted(() => {
 
 .point-label {
   font-size: 11px;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -710,8 +710,8 @@ onUnmounted(() => {
 }
 
 .kpi-block {
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 8px 10px;
   display: flex;
@@ -734,7 +734,7 @@ onUnmounted(() => {
 .kpi-title {
   font-size: 11px;
   font-weight: 700;
-  color: #CBD5E1;
+  color: var(--fs-text-main, #CBD5E1);
 }
 
 .kpi-badge {
@@ -814,8 +814,8 @@ onUnmounted(() => {
 .flat-snapshot-strip {
   flex-shrink: 0;
   height: 38px;
-  background: #111827;
-  border: 1px solid #1F2937;
+  background: var(--fs-card, #111827);
+  border: 1px solid var(--fs-card-border, #1F2937);
   border-radius: 4px;
   padding: 3px 8px;
   display: flex;
@@ -868,7 +868,7 @@ onUnmounted(() => {
 .snap-info-title {
   font-size: 11px;
   font-weight: 700;
-  color: #E2E8F0;
+  color: var(--fs-text-main, #E2E8F0);
 }
 .snap-roi-pill {
   font-size: 9px;
@@ -880,7 +880,7 @@ onUnmounted(() => {
 }
 .snap-info-sub {
   font-size: 9.5px;
-  color: #64748B;
+  color: var(--fs-text-sub, #64748B);
 }
 .snap-zoom-icon {
   font-size: 13px;
@@ -979,8 +979,8 @@ onUnmounted(() => {
 .realtime-wave-card {
   flex: 1;
   min-height: 0;
-  background: #121722;
-  border: 1px solid #1E2636;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-card-border, #1E2636);
   border-radius: 6px;
   padding: 6px 8px 2px 8px;
   display: flex;
@@ -1005,13 +1005,13 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #00D2FF;
+  background: var(--fs-primary, #00D2FF);
 }
 
 .wave-title {
   font-size: 11px;
   font-weight: 700;
-  color: #CBD5E1;
+  color: var(--fs-text-main, #CBD5E1);
 }
 
 .wave-legend {
