@@ -231,30 +231,104 @@ void EdgeReportManager::pair_with_code(const QString& base_url, const QString& p
     });
 }
 
-void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name) {
-    cloud_base_url_ = base_url.trimmed();
-    bound_point_id_ = point_id;
-    bound_point_name_ = point_name;
-    bound_point_token_ = point_token;
-    if (!client_name.trimmed().isEmpty()) {
-        client_name_ = client_name.trimmed();
+void EdgeReportManager::unbind_current_point(std::function<void(bool success, const QString& msg)> callback) {
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty() || bound_point_id_ <= 0) {
+        if (callback) callback(true, "无绑定点位需要解绑");
+        return;
     }
 
-    auto& cfg = ConfigManager::instance();
-    cfg.set_cloud_server_url(cloud_base_url_);
-    cfg.set_cloud_point_id(bound_point_id_);
-    cfg.set_cloud_point_name(bound_point_name_);
-    cfg.set_cloud_point_token(bound_point_token_);
-    cfg.set_cloud_client_name(client_name_);
-    cfg.set_cloud_sync_enabled(true);
-    cfg.save();
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
 
-    is_online_ = true;
-    is_point_deactivated_ = false;
-    emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+    QUrl unbind_url(cloud_base_url_.trimmed() + "/api/v1/edge/unbind");
+    QNetworkRequest request(unbind_url);
+    request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setTransferTimeout(3000);
 
-    // 绑定生效后立即发送一次心跳同步状态
-    send_heartbeat(30.0f, 15.0f, current_occupancy_, "CPU");
+    QJsonObject obj;
+    obj["clientName"] = client_name_;
+    QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+
+    QString old_point_name = bound_point_name_;
+    QNetworkReply* reply = nam_->post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, old_point_name, callback]() {
+        reply->deleteLater();
+        int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError && (http_status == 200 || http_status == 204)) {
+            qInfo() << "[EdgeReportManager] 旧点位已成功解绑下线并释放锁:" << old_point_name;
+            if (callback) callback(true, "旧点位已释放下线");
+        } else {
+            qWarning() << "[EdgeReportManager] 旧点位解绑通知失败:" << reply->errorString();
+            if (callback) callback(false, reply->errorString());
+        }
+    });
+}
+
+void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token,
+                                   const QString& client_name, bool force, BindCallback callback) {
+    // 1. 若当前已经绑定了旧点位且点位发生变更，优先发起主动解绑下线握手，防止产生双在线幽灵
+    if (bound_point_id_ > 0 && bound_point_id_ != point_id && !bound_point_token_.isEmpty()) {
+        qInfo() << "[EdgeReportManager] 检测到点位换绑，先主动释放旧点位:" << bound_point_id_ << bound_point_name_;
+        unbind_current_point();
+        reset_batch(); // 清空旧点位的待上报聚合数据，防止数据串流
+    }
+
+    QString trimmed_url = base_url.trimmed();
+    QString target_client = client_name.trimmed().isEmpty() ? client_name_ : client_name.trimmed();
+    if (target_client.isEmpty()) target_client = "FlowSight-Node-1";
+
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    // 2. 向云端发起独占绑定申请，核验排他锁
+    QUrl bind_url(trimmed_url + "/api/v1/edge/bind");
+    QNetworkRequest request(bind_url);
+    request.setRawHeader("X-Point-Token", point_token.trimmed().toUtf8());
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setTransferTimeout(4000);
+
+    QJsonObject obj;
+    obj["clientName"] = target_client;
+    obj["force"] = force;
+    QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+
+    QNetworkReply* reply = nam_->post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, trimmed_url, point_id, point_name, point_token, target_client, callback]() {
+        reply->deleteLater();
+        int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError && (http_status == 200 || http_status == 201)) {
+            cloud_base_url_ = trimmed_url;
+            bound_point_id_ = point_id;
+            bound_point_name_ = point_name;
+            bound_point_token_ = point_token;
+            client_name_ = target_client;
+
+            auto& cfg = ConfigManager::instance();
+            cfg.set_cloud_server_url(cloud_base_url_);
+            cfg.set_cloud_point_id(bound_point_id_);
+            cfg.set_cloud_point_name(bound_point_name_);
+            cfg.set_cloud_point_token(bound_point_token_);
+            cfg.set_cloud_client_name(client_name_);
+            cfg.set_cloud_sync_enabled(true);
+            cfg.save();
+
+            is_online_ = true;
+            is_point_deactivated_ = false;
+            emit cloud_status_changed(true, QString("已独占绑定点位: %1 [在线]").arg(bound_point_name_));
+
+            // 绑定生效后立即发送一次心跳同步状态
+            send_heartbeat(30.0f, 15.0f, current_occupancy_, "CPU");
+
+            if (callback) callback(true, "点位独占绑定成功！");
+        } else {
+            QByteArray err_data = reply->readAll();
+            QString err_msg = QString("绑定失败 (HTTP %1): %2").arg(http_status).arg(reply->errorString());
+            QJsonDocument doc = QJsonDocument::fromJson(err_data);
+            if (doc.isObject() && doc.object().contains("message")) {
+                err_msg = doc.object().value("message").toString();
+            }
+            if (callback) callback(false, err_msg);
+        }
+    });
 }
 
 void EdgeReportManager::send_test_batch(std::function<void(bool success, const QString& msg, qint64 latency_ms)> callback) {

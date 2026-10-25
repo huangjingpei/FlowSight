@@ -46,8 +46,13 @@ public:
     // 现场快照预览上传 (JPEG)
     void upload_snapshot(const QByteArray& jpeg_data);
 
-    // 绑定选中的云端点位
-    void bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token, const QString& client_name = "");
+    // 绑定选中的云端点位 (内置换绑自动解绑老点位握手与独占锁)
+    using BindCallback = std::function<void(bool success, const QString& msg)>;
+    void bind_point(const QString& base_url, qint64 point_id, const QString& point_name, const QString& point_token,
+                    const QString& client_name = "", bool force = false, BindCallback callback = nullptr);
+
+    // 主动解绑当前点位 (下线握手并释放云端独占锁)
+    void unbind_current_point(std::function<void(bool success, const QString& msg)> callback = nullptr);
 
     // 2. 累加通行事件到当前聚合窗口
     void record_passage(const PassageEvent& event);

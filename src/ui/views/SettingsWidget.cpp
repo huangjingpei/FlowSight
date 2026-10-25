@@ -332,19 +332,35 @@ void SettingsWidget::setup_ui() {
             }
 
             cloud_point_combo_->clear();
+            QString my_client = cloud_client_name_edit_->text().trimmed();
+            if (my_client.isEmpty()) my_client = "FlowSight-Node-1";
+
             for (const auto& val : points) {
                 QJsonObject p = val.toObject();
                 qint64 pid = p["id"].toInteger();
                 QString pname = p["pointName"].toString();
                 QString pcode = p["pointCode"].toString();
                 QString ptoken = p["pointToken"].toString();
+                bool isOccupied = p["isOccupied"].toBool();
+                QString boundClient = p["boundClientName"].toString();
 
                 QVariantMap map;
                 map["id"] = pid;
                 map["name"] = pname;
                 map["token"] = ptoken;
+                map["occupied"] = isOccupied;
+                map["boundClient"] = boundClient;
 
-                cloud_point_combo_->addItem(QString("[%1] %2 (%3)").arg(pid).arg(pname).arg(pcode), map);
+                QString statusTag = "🟢 空闲";
+                if (isOccupied) {
+                    if (!boundClient.isEmpty() && boundClient == my_client) {
+                        statusTag = "🟢 本机已绑";
+                    } else {
+                        statusTag = QString("🔴 设备【%1】占用中").arg(boundClient.isEmpty() ? "其他节点" : boundClient);
+                    }
+                }
+
+                cloud_point_combo_->addItem(QString("[%1] %2 (%3) - %4").arg(pid).arg(pname).arg(pcode).arg(statusTag), map);
             }
 
             auto& cfg = ConfigManager::instance();
@@ -356,8 +372,8 @@ void SettingsWidget::setup_ui() {
         });
     });
 
-    // 确认绑定点位
-    connect(btn_bind_point_, &QPushButton::clicked, this, [this]() {
+    // 确认绑定点位 (支持独占排他锁核验与换绑自动解绑握手)
+    connect(btn_bind_point_, &QPushButton::clicked, this, [this, update_status_badge]() {
         if (cloud_point_combo_->count() == 0) {
             QMessageBox::warning(this, "提示", "请先登录云端拉取点位列表！");
             return;
@@ -367,23 +383,48 @@ void SettingsWidget::setup_ui() {
         qint64 pid = map["id"].toLongLong();
         QString pname = map["name"].toString();
         QString ptoken = map["token"].toString();
+        bool isOccupied = map["occupied"].toBool();
+        QString boundClient = map["boundClient"].toString();
         QString url = cloud_url_edit_->text().trimmed();
         QString client_name = cloud_client_name_edit_->text().trimmed();
 
         if (client_name.isEmpty()) client_name = "FlowSight-Node-1";
 
-        EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name);
+        bool force = false;
+        if (isOccupied && !boundClient.isEmpty() && boundClient != client_name) {
+            auto reply = QMessageBox::warning(
+                this,
+                "点位独占排他冲突警告",
+                QString("⚠️ 点位【%1】当前正在被另一台边缘设备【%2】独占在线运行！\n\n"
+                        "为防止数据重复与采集通道错乱，同一物理点位禁止多机重复绑定。\n"
+                        "若原设备已下线或需要强制换绑至本机，请点击【Yes】强制解除旧设备锁定。")
+                    .arg(pname).arg(boundClient),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No
+            );
+            if (reply != QMessageBox::Yes) {
+                return;
+            }
+            force = true;
+        }
 
-        auto& cfg = ConfigManager::instance();
-        cfg.set_cloud_server_url(url);
-        cfg.set_cloud_point_id(pid);
-        cfg.set_cloud_point_name(pname);
-        cfg.set_cloud_point_token(ptoken);
-        cfg.set_cloud_client_name(client_name);
-        cfg.save();
+        btn_bind_point_->setEnabled(false);
+        btn_bind_point_->setText("正在绑定...");
 
-        // 绑定成功后自动触发拉取云端 RTSP 流与点位详细参数
-        btn_sync_config_->click();
+        EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name, force, [this, update_status_badge](bool success, const QString& msg) {
+            btn_bind_point_->setEnabled(true);
+            btn_bind_point_->setText("🔗 确认绑定");
+
+            if (success) {
+                update_status_badge();
+                // 绑定成功后自动触发拉取云端 RTSP 流与点位详细参数
+                btn_sync_config_->click();
+            } else {
+                cloud_status_info_label_->setText(QString("❌ 绑定失败: %1").arg(msg));
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 7px 12px; background: rgba(248, 81, 73, 0.12); border-radius: 4px; border: 1px solid rgba(248, 81, 73, 0.4);");
+                QMessageBox::warning(this, "绑定失败", msg);
+            }
+        });
     });
 
     // 同步云端配置 (拉取云端管理员配置的 RTSP 视频流与分辨率)
