@@ -11,18 +11,37 @@ export interface PointHistoryState {
   lastSummary: DashboardSummaryVO | null;
 }
 
+const readValidStorageRate = (): number => {
+  try {
+    const raw = localStorage.getItem('flowsight_poll_rate');
+    const val = Number(raw);
+    if ([5, 10, 30].includes(val)) {
+      return val;
+    }
+  } catch (e) {}
+  return 5;
+};
+
 export const useDashboardStore = defineStore('dashboard', () => {
-  // 实时座舱数据刷新频率 (秒)，默认 5s，持久化于 localStorage
-  const pollRateSec = ref<number>(Number(localStorage.getItem('flowsight_poll_rate') || 5));
+  // 实时座舱数据刷新频率 (秒)，仅支持 5, 10, 30，默认 5s，与 localStorage 双向绑定
+  const pollRateSec = ref<number>(readValidStorageRate());
 
   // 滑动时间序列缓存 (按 pointId 隔离存储，防止切换通道或导航切页导致历史丢失)
   const historyMap = ref<Record<number, PointHistoryState>>({});
 
   const setPollRate = (sec: number) => {
-    pollRateSec.value = sec;
+    const validSec = [5, 10, 30].includes(Number(sec)) ? Number(sec) : 5;
+    pollRateSec.value = validSec;
     try {
-      localStorage.setItem('flowsight_poll_rate', String(sec));
+      localStorage.setItem('flowsight_poll_rate', String(validSec));
     } catch (e) {}
+  };
+
+  const syncFromStorage = () => {
+    const latest = readValidStorageRate();
+    if (pollRateSec.value !== latest) {
+      pollRateSec.value = latest;
+    }
   };
 
   /**
@@ -125,6 +144,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     pollRateSec,
     historyMap,
     setPollRate,
+    syncFromStorage,
     getPointHistory,
     recordTick,
     clearCache

@@ -401,9 +401,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showDialog } from 'vant';
+import { storeToRefs } from 'pinia';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
 import { useDashboardStore } from '../store/dashboard';
@@ -411,6 +412,8 @@ import { useDashboardStore } from '../store/dashboard';
 const router = useRouter();
 const pointStore = usePointStore();
 const dashboardStore = useDashboardStore();
+const { pollRateSec } = storeToRefs(dashboardStore);
+const activeRate = pollRateSec;
 
 // 用户资料
 const userProfile = computed(() => {
@@ -566,7 +569,6 @@ const refreshRates = [
   { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
   { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
 ];
-const activeRate = computed(() => dashboardStore.pollRateSec);
 
 const handleSelectRate = (sec: number) => {
   dashboardStore.setPollRate(sec);
@@ -623,7 +625,12 @@ const handleLogout = () => {
 };
 
 onMounted(() => {
+  dashboardStore.syncFromStorage();
   loadSummary();
+});
+
+onActivated(() => {
+  dashboardStore.syncFromStorage();
 });
 
 onUnmounted(() => {

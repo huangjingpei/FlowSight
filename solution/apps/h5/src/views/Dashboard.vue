@@ -25,7 +25,13 @@
             </option>
           </select>
         </div>
-        <span class="poll-badge">{{ pollRateSec }}s实时同步</span>
+        <span
+          class="poll-badge poll-badge-btn"
+          @click="showRateModal = true"
+          title="点击切换座舱数据刷新频率"
+        >
+          {{ pollRateSec }}s实时同步 ▾
+        </span>
       </div>
 
       <!-- 行 2: 四大核心客流指标矩阵 (扁平化高反差色块) -->
@@ -132,11 +138,48 @@
         </div>
       </div>
     </div>
+
+    <!-- 实时刷新频率快速切换弹窗 (与系统设置双向实时联动) -->
+    <div v-if="showRateModal" class="rate-modal-overlay" @click.self="showRateModal = false">
+      <div class="rate-modal-card">
+        <div class="rm-header">
+          <div class="rm-title-box">
+            <span class="rm-icon">⏱️</span>
+            <span class="rm-title">实时座舱数据刷新频率</span>
+          </div>
+          <button class="rm-close" @click="showRateModal = false">✕</button>
+        </div>
+        <div class="rm-body">
+          <p class="rm-desc">
+            切换实时监控流速脉冲波形与在场人数的步进采集周期：
+          </p>
+          <div class="rate-select-list">
+            <div
+              v-for="r in refreshRates"
+              :key="r.sec"
+              :class="['rate-card', pollRateSec === r.sec ? 'rate-card-active' : '']"
+              @click="handleSelectRate(r.sec)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ pollRateSec === r.sec ? '●' : '○' }}</span>
+                <div class="rc-text">
+                  <span class="rc-title">{{ r.label }}</span>
+                  <span class="rc-desc">{{ r.desc }}</span>
+                </div>
+              </div>
+              <span v-if="pollRateSec === r.sec" class="rc-tag">当前生效</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, watch } from 'vue';
+import { storeToRefs } from 'pinia';
+import { showToast } from 'vant';
 import * as echarts from 'echarts';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
@@ -146,7 +189,27 @@ const pointStore = usePointStore();
 const dashboardStore = useDashboardStore();
 const activePointId = ref<number>(0);
 
-const pollRateSec = computed(() => dashboardStore.pollRateSec);
+const { pollRateSec } = storeToRefs(dashboardStore);
+
+// 快速切换刷新频率选项卡片
+const showRateModal = ref(false);
+const refreshRates = [
+  { sec: 5, label: '5 秒 (近实时推荐)', desc: '动态流速波形每 5 秒刷新，感知极度灵敏' },
+  { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
+  { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
+];
+
+const handleSelectRate = (sec: number) => {
+  dashboardStore.setPollRate(sec);
+  showRateModal.value = false;
+  showToast({ message: `座舱刷新已设为 ${sec} 秒`, position: 'top', duration: 1000 });
+};
+
+const onStorageChange = (e: StorageEvent) => {
+  if (e.key === 'flowsight_poll_rate') {
+    dashboardStore.syncFromStorage();
+  }
+};
 
 const currentCompanyName = computed(() => {
   try {
@@ -408,6 +471,7 @@ const handleResize = () => {
 };
 
 onMounted(async () => {
+  dashboardStore.syncFromStorage();
   await loadPoints();
   if (activePointId.value) {
     syncFromHistory(activePointId.value);
@@ -416,14 +480,16 @@ onMounted(async () => {
     renderPulseChart();
   });
   await pollTick();
-  restartPollTimer(dashboardStore.pollRateSec);
+  restartPollTimer(pollRateSec.value);
   window.addEventListener('resize', handleResize);
+  window.addEventListener('storage', onStorageChange);
 });
 
 // keep-alive 页面切回唤醒钩子：立即恢复高保真波形历史，自适应重绘，更新时序
 onActivated(() => {
   isPageActive.value = true;
-  restartPollTimer(dashboardStore.pollRateSec);
+  dashboardStore.syncFromStorage();
+  restartPollTimer(pollRateSec.value);
   if (activePointId.value) {
     syncFromHistory(activePointId.value);
   }
@@ -447,6 +513,7 @@ onDeactivated(() => {
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);
   window.removeEventListener('resize', handleResize);
+  window.removeEventListener('storage', onStorageChange);
   if (pulseChart) {
     pulseChart.dispose();
     pulseChart = null;
@@ -598,10 +665,24 @@ onUnmounted(() => {
   font-size: 10px;
   color: #00D2FF;
   background: rgba(0, 210, 255, 0.12);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-weight: 600;
+  border: 1px solid rgba(0, 210, 255, 0.35);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 700;
   flex-shrink: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.poll-badge:hover,
+.poll-badge:active {
+  background: rgba(0, 210, 255, 0.25);
+  border-color: #00D2FF;
+  transform: scale(0.97);
 }
 
 /* 行 2: 四大指标矩阵 (2x2，等高自适应) */
@@ -947,5 +1028,144 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   width: 100%;
+}
+
+/* 刷新频率快捷弹窗样式 */
+.rate-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.rate-modal-card {
+  background: #111827;
+  border: 1px solid #2A364F;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 360px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+}
+
+.rm-header {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background: #182030;
+  border-bottom: 1px solid #2A364F;
+}
+
+.rm-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rm-icon {
+  font-size: 14px;
+}
+
+.rm-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.rm-close {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.rm-body {
+  padding: 14px;
+}
+
+.rm-desc {
+  font-size: 11px;
+  color: #94A3B8;
+  margin: 0 0 12px 0;
+  line-height: 150%;
+}
+
+.rate-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #0B0E14;
+  border: 1px solid #1F293D;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.rate-card:active {
+  background: #182030;
+}
+
+.rate-card-active {
+  border-color: #00D2FF;
+  background: rgba(0, 210, 255, 0.08);
+}
+
+.rc-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rc-radio {
+  color: #00D2FF;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.rc-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rc-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.rc-desc {
+  font-size: 10px;
+  color: #64748B;
+}
+
+.rc-tag {
+  font-size: 10px;
+  color: #00D2FF;
+  background: rgba(0, 210, 255, 0.15);
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
 }
 </style>
