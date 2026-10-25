@@ -229,3 +229,9 @@ struct TrackState {
 - **治理方案**：
   `PipelineController` 在属性识别收敛后发射 `event_attributes_updated` 信号，`EvidenceWidget` 实时定位表格中该 `track_id` 的行单元格并即时刷新，无需用户手动点击刷新按钮。
 
+### 8.4 时间轴拖拽跳转与时空断裂治理 (Timeline Scrub & Temporal Discontinuity Governance)
+- **痛点排查**：在本地离线视频分析或事后复盘时，用户拖拽进度条快进、倒退或跳转，造成视频画面帧时间戳发生宏观断裂跳变。若此时跟踪器（ByteTrack）与区域位移判定器（`RoiCounter`）未被同步重置，前一时刻位于画面左侧的目标在下一帧被匹配到画面右侧的新目标，会产生极大的虚假位移向量 $\vec{D} = P_{\text{after}} - P_{\text{before}}$，导致瞬间虚假触发数十个出入事件；同时切片录制器中的环形缓冲区拼接了跳转前后的跳跃帧，产生损坏切片。
+- **治理方案**：
+  在 `Worker::process` 响应 `seek_requested_` 及反向单帧步进时，原子清空 `tracker_->reset()`、`roi_counter_->reset()`、属性分类缓存以及 `clip_recorder_->clear()`，彻底根除跨时间轴跳转引发的幽灵事件与伪通行触发。
+
+
