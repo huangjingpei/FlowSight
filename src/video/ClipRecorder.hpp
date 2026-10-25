@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cmath>
 #include <QDir>
+#include <QFileInfo>
+#include <QDebug>
 
 class ClipRecorder {
 public:
@@ -35,7 +37,7 @@ public:
 
     // 每帧送入画面构建带时间戳的环形缓冲（约 3 秒）
     void push_frame(const cv::Mat& frame) {
-        if (frame.empty()) return;
+        if (frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;
         int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -57,9 +59,13 @@ public:
 
             snapshot.reserve(frame_buffer_.size());
             for (const auto& bf : frame_buffer_) {
-                snapshot.push_back(bf.frame);
+                if (!bf.frame.empty() && bf.frame.cols > 0 && bf.frame.rows > 0) {
+                    // 严格深拷贝每一帧像素，杜绝与环形缓冲区并发弹出或复用产生内存引用冲突
+                    snapshot.push_back(bf.frame.clone());
+                }
             }
         }
+        if (snapshot.empty()) return "";
 
         QDir dir(QString::fromStdString(output_dir));
         if (!dir.exists()) {
@@ -71,9 +77,9 @@ public:
 
         {
             std::lock_guard<std::mutex> lock(task_mtx_);
-            // 队列积压保护：若超过 15 个编码任务在排队，直接饱和降级返回空，杜绝已入库任务被弹出导致证据回溯 404 死链
-            if (task_queue_.size() >= 15) {
-                return "";
+            // 队列积压保护：若排队任务过多，淘汰最旧任务，杜绝内存耗尽崩溃
+            while (task_queue_.size() >= 10) {
+                task_queue_.pop();
             }
             task_queue_.push(ClipTask{std::move(snapshot), filename, actual_fps});
         }
@@ -113,26 +119,97 @@ private:
 
             if (task.snapshot.empty()) continue;
 
-            int w = task.snapshot[0].cols;
-            int h = task.snapshot[0].rows;
-            // 移动端 HTML5 <video> 强依赖 H.264 编码 (avc1 / H264)，优先使用 H.264，缺省时降级兼容
-            cv::VideoWriter writer(task.filename, cv::VideoWriter::fourcc('a', 'v', 'c', '1'), task.fps, cv::Size(w, h));
-            if (!writer.isOpened()) {
-                writer.open(task.filename, cv::VideoWriter::fourcc('H', '2', '6', '4'), task.fps, cv::Size(w, h));
+            try {
+                // 1. 寻找首个非空有效帧确定切片基准分辨率
+                int w = 0, h = 0;
+                for (const auto& f : task.snapshot) {
+                    if (!f.empty() && f.cols > 0 && f.rows > 0) {
+                        w = f.cols;
+                        h = f.rows;
+                        break;
+                    }
+                }
+                if (w <= 0 || h <= 0) {
+                    qWarning() << "[ClipRecorder] 切片任务中无可用的有效画面尺寸，跳过:" << QString::fromStdString(task.filename);
+                    continue;
+                }
+
+                // 2. 保证目标保存路径上层目录真实存在
+                QFileInfo fi(QString::fromStdString(task.filename));
+                QDir().mkpath(fi.dir().absolutePath());
+                std::string native_path = QDir::toNativeSeparators(QString::fromStdString(task.filename)).toStdString();
+
+                // 3. 逐级尝试 H.264 / MP4 兼容编码器打开 VideoWriter
+                cv::VideoWriter writer;
+                const std::vector<int> codecs = {
+                    cv::VideoWriter::fourcc('a', 'v', 'c', '1'),
+                    cv::VideoWriter::fourcc('H', '2', '6', '4'),
+                    cv::VideoWriter::fourcc('X', '2', '6', '4'),
+                    cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
+                    cv::VideoWriter::fourcc('M', 'P', '4', 'V'),
+                    cv::VideoWriter::fourcc('X', 'V', 'I', 'D')
+                };
+
+                for (int fourcc : codecs) {
+                    try {
+                        if (writer.open(native_path, cv::CAP_FFMPEG, fourcc, task.fps, cv::Size(w, h), true)) {
+                            if (writer.isOpened()) break;
+                        }
+                    } catch (...) {}
+                    try {
+                        if (writer.open(native_path, fourcc, task.fps, cv::Size(w, h), true)) {
+                            if (writer.isOpened()) break;
+                        }
+                    } catch (...) {}
+                }
+
+                // 兜底尝试 MJPG 编码
+                if (!writer.isOpened()) {
+                    try {
+                        writer.open(native_path, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), task.fps, cv::Size(w, h), true);
+                    } catch (...) {}
+                }
+
+                // 关键核心防崩校验：若未能成功打开 VideoWriter，绝不可执行 writer.write()！
+                if (!writer.isOpened()) {
+                    qWarning() << "[ClipRecorder] 警告: 无法初始化 VideoWriter 编码器，跳过保存切片:"
+                               << QString::fromStdString(native_path) << "分辨率:" << w << "x" << h << "FPS:" << task.fps;
+                    continue;
+                }
+
+                // 4. 逐帧严格校准尺寸与通道后安全写入，杜绝底层 ffmpeg sws_scale / memcpy 越界奔溃
+                for (const auto& f : task.snapshot) {
+                    if (f.empty() || f.cols <= 0 || f.rows <= 0) continue;
+
+                    cv::Mat ready_frame;
+                    if (f.cols != w || f.rows != h) {
+                        cv::resize(f, ready_frame, cv::Size(w, h));
+                    } else {
+                        ready_frame = f;
+                    }
+
+                    if (ready_frame.channels() == 1) {
+                        cv::cvtColor(ready_frame, ready_frame, cv::COLOR_GRAY2BGR);
+                    } else if (ready_frame.channels() == 4) {
+                        cv::cvtColor(ready_frame, ready_frame, cv::COLOR_BGRA2BGR);
+                    }
+
+                    try {
+                        writer.write(ready_frame);
+                    } catch (const std::exception& e) {
+                        qWarning() << "[ClipRecorder] 写入视频帧异常:" << e.what();
+                        break;
+                    } catch (...) {
+                        qWarning() << "[ClipRecorder] 写入视频帧发生未知底层异常，安全跳出写入循环";
+                        break;
+                    }
+                }
+                writer.release();
+            } catch (const std::exception& e) {
+                qWarning() << "[ClipRecorder] 处理切片任务异常:" << e.what();
+            } catch (...) {
+                qWarning() << "[ClipRecorder] 处理切片任务未知异常，继续维持工作线程运行";
             }
-            if (!writer.isOpened()) {
-                writer.open(task.filename, cv::VideoWriter::fourcc('X', '2', '6', '4'), task.fps, cv::Size(w, h));
-            }
-            if (!writer.isOpened()) {
-                writer.open(task.filename, cv::VideoWriter::fourcc('m', 'p', '4', 'v'), task.fps, cv::Size(w, h));
-            }
-            if (!writer.isOpened()) {
-                writer.open(task.filename, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), task.fps, cv::Size(w, h));
-            }
-            for (const auto& f : task.snapshot) {
-                writer.write(f);
-            }
-            writer.release();
         }
     }
 
