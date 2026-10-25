@@ -231,26 +231,35 @@ html, body {
 }
 
 /* 全局下拉选择器双主题规范 */
-select {
+select, .flat-select {
   color-scheme: dark;
 }
 
-.theme-light select {
-  color-scheme: light;
+.theme-light select,
+.theme-light .flat-select {
+  color-scheme: light !important;
 }
 
 select option,
-select optgroup {
+select optgroup,
+.flat-select option {
   color-scheme: dark;
   background-color: #121824 !important;
   color: #F8FAFC !important;
 }
 
 .theme-light select option,
-.theme-light select optgroup {
-  color-scheme: light;
+.theme-light select optgroup,
+.theme-light .flat-select option {
+  color-scheme: light !important;
   background-color: #FFFFFF !important;
   color: #0F172A !important;
+}
+
+.theme-light select option:checked,
+.theme-light .flat-select option:checked {
+  background-color: #E2E8F0 !important;
+  color: #0284C7 !important;
 }
 
 .h5-app-root {
@@ -436,6 +445,10 @@ select optgroup {
   color: #0F172A !important;
   border-color: #CBD5E1 !important;
   color-scheme: light !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-repeat: no-repeat !important;
+  background-position: right 6px center !important;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230284C7' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
 }
 
@@ -525,22 +538,43 @@ select optgroup {
   color: #DC2626 !important;
 }
 
-.theme-light .dialog-card {
+.theme-light .dialog-overlay,
+.theme-light .rate-modal-overlay {
+  background: rgba(15, 23, 42, 0.45) !important;
+}
+
+.theme-light .dialog-card,
+.theme-light .rate-modal-card {
   background: #FFFFFF !important;
   border-color: #CBD5E1 !important;
+  color: #0F172A !important;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15) !important;
 }
 
-.theme-light .dialog-header {
+.theme-light .dialog-header,
+.theme-light .rm-header {
   background: #F8FAFC !important;
   border-bottom-color: #E2E8F0 !important;
 }
 
-.theme-light .dh-title {
+.theme-light .dh-title,
+.theme-light .rm-title {
   color: #0F172A !important;
 }
 
-.theme-light .modal-desc {
+.theme-light .dh-close,
+.theme-light .rm-close {
+  color: #64748B !important;
+}
+
+.theme-light .dialog-body,
+.theme-light .rm-body {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.theme-light .modal-desc,
+.theme-light .rm-desc {
   color: #475569 !important;
 }
 

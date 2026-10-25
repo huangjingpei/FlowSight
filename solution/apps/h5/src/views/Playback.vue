@@ -391,20 +391,25 @@ onMounted(async () => {
 .flat-select {
   width: 100%;
   height: 24px;
-  background: #182030;
-  color: #FFFFFF;
-  border: 1px solid #2A364F;
+  background-color: var(--fs-select-bg, #182030);
+  color: var(--fs-select-text, #FFFFFF);
+  border: 1px solid var(--fs-select-border, #2A364F);
   border-radius: 4px;
-  padding: 0 6px;
+  padding: 0 18px 0 6px;
   font-size: 11px;
   font-weight: 600;
   outline: none;
-  color-scheme: dark;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2300D2FF' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
 }
 
 .flat-select option {
-  background-color: #121824 !important;
-  color: #FFFFFF !important;
+  background-color: var(--fs-select-option-bg, #121824);
+  color: var(--fs-select-option-text, #FFFFFF);
   font-size: 12px;
   padding: 6px 10px;
 }

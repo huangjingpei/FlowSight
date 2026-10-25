@@ -388,15 +388,14 @@ onUnmounted(() => {
 .flat-select {
   width: 100%;
   height: 26px;
-  background-color: #161D2A;
-  color: #00D2FF;
-  border: 1px solid #233048;
+  background-color: var(--fs-select-bg, #161D2A);
+  color: var(--fs-select-text, #00D2FF);
+  border: 1px solid var(--fs-select-border, #233048);
   border-radius: 4px;
   padding: 0 20px 0 8px;
   font-size: 12px;
   font-weight: 700;
   outline: none;
-  color-scheme: dark;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -407,21 +406,21 @@ onUnmounted(() => {
 }
 
 .flat-select:focus {
-  border-color: #00D2FF;
+  border-color: var(--fs-primary, #00D2FF);
   box-shadow: 0 0 0 1px rgba(0, 210, 255, 0.3);
 }
 
 .flat-select option {
-  background-color: #121824 !important;
-  color: #FFFFFF !important;
+  background-color: var(--fs-select-option-bg, #121824);
+  color: var(--fs-select-option-text, #FFFFFF);
   font-size: 13px;
   font-weight: 600;
   padding: 8px 12px;
 }
 
 .flat-select option:checked {
-  background-color: #1E293B !important;
-  color: #00D2FF !important;
+  background-color: #1E293B;
+  color: var(--fs-primary, #00D2FF);
 }
 
 /* 5 维分段选择 */

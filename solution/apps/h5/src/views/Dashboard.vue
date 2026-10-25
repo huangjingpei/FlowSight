@@ -143,16 +143,10 @@
     <div v-if="showRateModal" class="rate-modal-overlay" @click.self="showRateModal = false">
       <div class="rate-modal-card">
         <div class="rm-header">
-          <div class="rm-title-box">
-            <span class="rm-icon">⏱️</span>
-            <span class="rm-title">实时座舱数据刷新频率</span>
-          </div>
+          <span class="rm-title">数据刷新频率</span>
           <button class="rm-close" @click="showRateModal = false">✕</button>
         </div>
         <div class="rm-body">
-          <p class="rm-desc">
-            切换实时监控流速脉冲波形与在场人数的步进采集周期：
-          </p>
           <div class="rate-select-list">
             <div
               v-for="r in refreshRates"
@@ -162,12 +156,9 @@
             >
               <div class="rc-left">
                 <span class="rc-radio">{{ pollRateSec === r.sec ? '●' : '○' }}</span>
-                <div class="rc-text">
-                  <span class="rc-title">{{ r.label }}</span>
-                  <span class="rc-desc">{{ r.desc }}</span>
-                </div>
+                <span class="rc-title">{{ r.label }}</span>
               </div>
-              <span v-if="pollRateSec === r.sec" class="rc-tag">当前生效</span>
+              <span class="rc-sub">{{ r.desc }}</span>
             </div>
           </div>
         </div>
@@ -196,9 +187,9 @@ const { pollRateSec } = storeToRefs(dashboardStore);
 // 快速切换刷新频率选项卡片
 const showRateModal = ref(false);
 const refreshRates = [
-  { sec: 5, label: '5 秒 (近实时推荐)', desc: '动态流速波形每 5 秒刷新，感知极度灵敏' },
-  { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
-  { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
+  { sec: 5, label: '5 秒', desc: '近实时' },
+  { sec: 10, label: '10 秒', desc: '标准' },
+  { sec: 30, label: '30 秒', desc: '省流' }
 ];
 
 const handleSelectRate = (sec: number) => {
@@ -638,15 +629,14 @@ onUnmounted(() => {
 .flat-select {
   width: 100%;
   height: 26px;
-  background-color: #161D2A;
-  color: #00D2FF;
-  border: 1px solid #233048;
+  background-color: var(--fs-select-bg, #161D2A);
+  color: var(--fs-select-text, #00D2FF);
+  border: 1px solid var(--fs-select-border, #233048);
   border-radius: 4px;
   padding: 0 20px 0 8px;
   font-size: 12px;
   font-weight: 700;
   outline: none;
-  color-scheme: dark;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -657,21 +647,21 @@ onUnmounted(() => {
 }
 
 .flat-select:focus {
-  border-color: #00D2FF;
+  border-color: var(--fs-primary, #00D2FF);
   box-shadow: 0 0 0 1px rgba(0, 210, 255, 0.3);
 }
 
 .flat-select option {
-  background-color: #121824 !important;
-  color: #FFFFFF !important;
+  background-color: var(--fs-select-option-bg, #121824);
+  color: var(--fs-select-option-text, #FFFFFF);
   font-size: 13px;
   font-weight: 600;
   padding: 8px 12px;
 }
 
 .flat-select option:checked {
-  background-color: #1E293B !important;
-  color: #00D2FF !important;
+  background-color: #1E293B;
+  color: var(--fs-primary, #00D2FF);
 }
 
 .poll-badge {
@@ -1061,13 +1051,13 @@ onUnmounted(() => {
 }
 
 .rate-modal-card {
-  background: #111827;
-  border: 1px solid #2A364F;
+  background: var(--fs-card, #111827);
+  border: 1px solid var(--fs-card-border, #2A364F);
   border-radius: 10px;
   width: 100%;
   max-width: 360px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
 }
 
 .rm-header {
@@ -1076,8 +1066,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 14px;
-  background: #182030;
-  border-bottom: 1px solid #2A364F;
+  background: var(--fs-header-bg, #182030);
+  border-bottom: 1px solid var(--fs-card-border, #2A364F);
 }
 
 .rm-title-box {
@@ -1093,13 +1083,13 @@ onUnmounted(() => {
 .rm-title {
   font-size: 13px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
 }
 
 .rm-close {
   background: transparent;
   border: none;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   font-size: 15px;
   cursor: pointer;
   padding: 4px;
@@ -1107,11 +1097,12 @@ onUnmounted(() => {
 
 .rm-body {
   padding: 14px;
+  background: var(--fs-card, #111827);
 }
 
 .rm-desc {
   font-size: 11px;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   margin: 0 0 12px 0;
   line-height: 150%;
 }
@@ -1126,8 +1117,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #0B0E14;
-  border: 1px solid #1F293D;
+  background: var(--fs-card-secondary, #0B0E14);
+  border: 1px solid var(--fs-card-border, #1F293D);
   border-radius: 6px;
   padding: 10px 12px;
   cursor: pointer;
@@ -1135,11 +1126,11 @@ onUnmounted(() => {
 }
 
 .rate-card:active {
-  background: #182030;
+  opacity: 0.85;
 }
 
 .rate-card-active {
-  border-color: #00D2FF;
+  border-color: var(--fs-primary, #00D2FF);
   background: rgba(0, 210, 255, 0.08);
 }
 
@@ -1150,7 +1141,7 @@ onUnmounted(() => {
 }
 
 .rc-radio {
-  color: #00D2FF;
+  color: var(--fs-primary, #00D2FF);
   font-size: 14px;
   font-weight: 700;
 }
@@ -1164,17 +1155,18 @@ onUnmounted(() => {
 .rc-title {
   font-size: 12px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
 }
 
-.rc-desc {
-  font-size: 10px;
-  color: #64748B;
+.rc-desc,
+.rc-sub {
+  font-size: 11px;
+  color: var(--fs-text-dim, #64748B);
 }
 
 .rc-tag {
   font-size: 10px;
-  color: #00D2FF;
+  color: var(--fs-primary, #00D2FF);
   background: rgba(0, 210, 255, 0.15);
   border: 1px solid rgba(0, 210, 255, 0.4);
   padding: 1px 6px;

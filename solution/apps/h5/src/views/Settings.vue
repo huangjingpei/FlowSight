@@ -958,20 +958,20 @@ onUnmounted(() => {
 
 .dialog-card {
   width: 100%;
-  max-width: 440px;
-  background: #111827;
-  border: 1px solid #1F293D;
+  max-width: 360px;
+  background: var(--fs-card, #111827);
+  border: 1px solid var(--fs-card-border, #1F293D);
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
 }
 
 .dialog-header {
   height: 44px;
-  background: #182030;
-  border-bottom: 1px solid #1F293D;
+  background: var(--fs-header-bg, #182030);
+  border-bottom: 1px solid var(--fs-card-border, #1F293D);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -991,13 +991,13 @@ onUnmounted(() => {
 .dh-title {
   font-size: 13px;
   font-weight: 700;
-  color: #F8FAFC;
+  color: var(--fs-text-main, #F8FAFC);
 }
 
 .dh-close {
   background: transparent;
   border: none;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   font-size: 16px;
   cursor: pointer;
   padding: 4px;
@@ -1006,11 +1006,13 @@ onUnmounted(() => {
 .dialog-body {
   padding: 16px;
   box-sizing: border-box;
+  background: var(--fs-card, #111827);
+  color: var(--fs-text-main, #F8FAFC);
 }
 
 .modal-desc {
   font-size: 11.5px;
-  color: #94A3B8;
+  color: var(--fs-text-sub, #94A3B8);
   line-height: 150%;
   margin: 0 0 12px 0;
 }
@@ -1019,19 +1021,20 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #0B0E14;
+  background: var(--fs-card-secondary, #0B0E14);
   padding: 8px 10px;
   border-radius: 4px;
-  border: 1px solid #1A2230;
+  border: 1px solid var(--fs-card-border, #1A2230);
   margin-bottom: 12px;
 }
 .msm-k {
   font-size: 11px;
-  color: #94A3B8;
+  color: var(--fs-text-dim, #64748B);
 }
 .msm-v {
   font-size: 11px;
   font-weight: 700;
+  color: var(--fs-text-main, #FFFFFF);
 }
 .cyan-code {
   color: #00D2FF;
@@ -1164,17 +1167,17 @@ onUnmounted(() => {
 
 .mf-input {
   height: 36px;
-  background: #0B0E14;
-  border: 1px solid #2A364F;
+  background: var(--fs-card-secondary, #0B0E14);
+  border: 1px solid var(--fs-card-border, #2A364F);
   border-radius: 4px;
   padding: 0 10px;
-  color: #FFFFFF;
+  color: var(--fs-text-main, #FFFFFF);
   font-size: 12px;
   outline: none;
   box-sizing: border-box;
 }
 .mf-input:focus {
-  border-color: #00D2FF;
+  border-color: var(--fs-primary, #00D2FF);
 }
 
 .dual-pwd-hint {
@@ -1323,8 +1326,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #0B0E14;
-  border: 1px solid #1A2230;
+  background: var(--fs-card-secondary, #0B0E14);
+  border: 1px solid var(--fs-card-border, #1A2230);
   border-radius: 6px;
   padding: 10px 12px;
 }
@@ -1337,30 +1340,30 @@ onUnmounted(() => {
 }
 
 .m-k {
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
 }
 
 .m-v {
-  color: #CBD5E1;
+  color: var(--fs-text-main, #CBD5E1);
   font-weight: 600;
 }
 
 /* 字号实时预览卡片 */
 .font-preview-box {
   margin-top: 14px;
-  background: #0B0E14;
-  border: 1px dashed #00D2FF;
+  background: var(--fs-card-secondary, #0B0E14);
+  border: 1px dashed var(--fs-primary, #00D2FF);
   border-radius: 6px;
   padding: 10px 12px;
 }
 .fp-title {
   font-size: 11px;
-  color: #64748B;
+  color: var(--fs-text-dim, #64748B);
   margin-bottom: 4px;
 }
 .fp-content {
   font-size: 13px;
-  color: #F8FAFC;
+  color: var(--fs-text-main, #F8FAFC);
   line-height: 140%;
 }
 
