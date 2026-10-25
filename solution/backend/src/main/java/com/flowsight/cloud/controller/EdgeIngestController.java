@@ -112,4 +112,29 @@ public class EdgeIngestController {
         pointService.updatePoint(point.getId(), dto);
         return Result.success("边缘端点位配置已成功双向同步至云端", null);
     }
+
+    /**
+     * 边缘点位独占绑定请求 (包含排他锁核验，防止多机重复抢占同一通道)
+     */
+    @PostMapping("/bind")
+    public Result<DeviceLoginVO> bindEdgePoint(@RequestHeader(value = "X-Point-Token", required = false) String token,
+                                               @RequestBody(required = false) DeviceLoginDTO dto) {
+        BizPoint point = authenticateEdge(token);
+        String clientName = (dto != null && dto.getClientName() != null) ? dto.getClientName() : "FlowSight-Node";
+        boolean force = (dto != null && Boolean.TRUE.equals(dto.getForce()));
+        DeviceLoginVO vo = pointService.bindPoint(point.getId(), clientName, force);
+        return Result.success("点位已成功独占锁定并绑定", vo);
+    }
+
+    /**
+     * 边缘节点主动解绑与释放点位 (下线握手，杜绝换绑双在线幽灵状态)
+     */
+    @PostMapping("/unbind")
+    public Result<Void> unbindEdgePoint(@RequestHeader(value = "X-Point-Token", required = false) String token,
+                                        @RequestBody(required = false) DeviceLoginDTO dto) {
+        BizPoint point = authenticateEdge(token);
+        String clientName = (dto != null && dto.getClientName() != null) ? dto.getClientName() : "FlowSight-Node";
+        pointService.unbindPoint(point.getId(), clientName);
+        return Result.success("点位已成功解绑下线并释放独占锁", null);
+    }
 }

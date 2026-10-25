@@ -13,4 +13,6 @@ public class DeviceLoginDTO {
     private String devicePassword;
 
     private String clientName;
+
+    private Boolean force;
 }

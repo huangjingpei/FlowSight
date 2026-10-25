@@ -32,4 +32,8 @@ public interface PointService {
     // 极简 6 位动态配对码接口
     PairingCodeVO generatePairingCode(Long pointId, Long userId);
     DeviceLoginVO pairWithCode(PairingRequestDTO dto);
+
+    // 点位独占绑定与主动解绑互斥接口
+    DeviceLoginVO bindPoint(Long pointId, String clientName, boolean force);
+    void unbindPoint(Long pointId, String clientName);
 }

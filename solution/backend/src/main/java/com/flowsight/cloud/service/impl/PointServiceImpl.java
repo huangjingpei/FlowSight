@@ -19,6 +19,7 @@ import com.flowsight.cloud.vo.DeviceLoginVO;
 import com.flowsight.cloud.vo.PairingCodeVO;
 import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class PointServiceImpl implements PointService {
 
@@ -393,17 +395,23 @@ public class PointServiceImpl implements PointService {
             vo.setCompanyName(user.getCompanyName());
         }
 
-        // 查询实时心跳并实时判定在线状态 (超过 15 秒无心跳视为离线)
+        // 查询实时心跳并实时判定在线状态 (超过 15 秒无心跳视为离线，防范时区负数偏差)
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(p.getId());
         boolean isOnline = false;
-        if (hb != null && hb.getLastHeartbeat() != null) {
-            long secondsSinceLastHeartbeat = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
-            if (secondsSinceLastHeartbeat <= 15) {
-                isOnline = true;
+        String boundClient = null;
+        if (hb != null) {
+            boundClient = hb.getClientName();
+            if (hb.getLastHeartbeat() != null) {
+                long secondsSinceLastHeartbeat = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
+                if (secondsSinceLastHeartbeat >= 0 && secondsSinceLastHeartbeat <= 15) {
+                    isOnline = true;
+                }
             }
         }
         String currentStatus = isOnline ? "ONLINE" : "OFFLINE";
         vo.setStreamStatus(currentStatus);
+        vo.setIsOccupied(isOnline);
+        vo.setBoundClientName(boundClient);
 
         if (!isOnline && "ONLINE".equalsIgnoreCase(p.getStreamStatus())) {
             p.setStreamStatus("OFFLINE");
@@ -419,5 +427,84 @@ public class PointServiceImpl implements PointService {
             vo.setLastHeartbeat(hb.getLastHeartbeat());
         }
         return vo;
+    }
+
+    @Override
+    public DeviceLoginVO bindPoint(Long pointId, String clientName, boolean force) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) {
+            throw new IllegalArgumentException("点位不存在");
+        }
+
+        String targetClient = (clientName != null && !clientName.trim().isEmpty()) ? clientName.trim() : "FlowSight-Node";
+
+        // 排他互斥校验：检查当前点位是否已被其他活跃设备独占
+        BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
+        if (!force && hb != null && hb.getLastHeartbeat() != null) {
+            long seconds = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
+            if (seconds >= 0 && seconds <= 15) {
+                String existingClient = hb.getClientName() != null ? hb.getClientName() : "未知设备";
+                if (!targetClient.equalsIgnoreCase(existingClient)) {
+                    throw new IllegalStateException("点位【" + point.getPointName() + "】当前已被设备【" + existingClient + "】独占在线，请勿重复绑定！");
+                }
+            }
+        }
+
+        // 确保有长效 Token
+        if (point.getPointToken() == null || point.getPointToken().trim().isEmpty()) {
+            point.setPointToken("ptk_" + UUID.randomUUID().toString().replace("-", ""));
+        }
+        point.setStreamStatus("ONLINE");
+        pointMapper.updateById(point);
+
+        boolean isNew = (hb == null);
+        if (isNew) {
+            hb = new BizDeviceHeartbeat();
+            hb.setPointId(pointId);
+            hb.setClientVersion("v1.2.0");
+            hb.setHardwareBackend("CPU");
+        }
+        hb.setClientName(targetClient);
+        hb.setCurrentFps(30.0f);
+        hb.setCurrentOccupancy(0);
+        hb.setLastHeartbeat(LocalDateTime.now());
+        if (isNew) {
+            heartbeatMapper.insert(hb);
+        } else {
+            heartbeatMapper.updateById(hb);
+        }
+
+        log.info("[PointService] 点位 ID: {}, 点位名称: '{}' 已成功被边缘设备 '{}' 独占锁定绑定 (force={})",
+                pointId, point.getPointName(), targetClient, force);
+
+        return DeviceLoginVO.builder()
+                .pointId(point.getId())
+                .userId(point.getUserId())
+                .pointCode(point.getPointCode())
+                .pointName(point.getPointName())
+                .pointToken(point.getPointToken())
+                .cameraRtsp(point.getCameraRtsp() != null ? point.getCameraRtsp() : "")
+                .resolution(point.getResolution() != null ? point.getResolution() : "1920x1080")
+                .clientName(targetClient)
+                .build();
+    }
+
+    @Override
+    public void unbindPoint(Long pointId, String clientName) {
+        BizPoint point = pointMapper.selectById(pointId);
+        if (point == null) return;
+
+        point.setStreamStatus("OFFLINE");
+        pointMapper.updateById(point);
+
+        BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
+        if (hb != null) {
+            hb.setCurrentOccupancy(0);
+            hb.setCurrentFps(0.0f);
+            hb.setLastHeartbeat(LocalDateTime.now().minusSeconds(60));
+            heartbeatMapper.updateById(hb);
+        }
+        log.info("[PointService] 点位 ID: {}, 点位名称: '{}' 已被客户端 '{}' 主动解绑下线并释放独占锁",
+                pointId, point.getPointName(), clientName);
     }
 }

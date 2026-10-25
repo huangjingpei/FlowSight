@@ -45,7 +45,7 @@ public class HeartbeatWatchdog {
                 isTimeout = true;
             } else {
                 long elapsedSeconds = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), now);
-                if (elapsedSeconds > 15) {
+                if (elapsedSeconds < 0 || elapsedSeconds > 15) {
                     isTimeout = true;
                 }
             }

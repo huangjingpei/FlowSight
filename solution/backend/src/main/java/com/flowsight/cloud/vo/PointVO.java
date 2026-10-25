@@ -17,6 +17,8 @@ public class PointVO {
     private String resolution;
     private String streamStatus;
     private String pointToken;
+    private String boundClientName;
+    private Boolean isOccupied;
     private Float currentFps;
     private Integer currentOccupancy;
     private LocalDateTime lastHeartbeat;
