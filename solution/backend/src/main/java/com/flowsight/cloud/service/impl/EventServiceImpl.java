@@ -22,6 +22,7 @@ import com.flowsight.cloud.vo.DemographicsVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.HourlyStatVO;
 import com.flowsight.cloud.vo.TrendReportVO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class EventServiceImpl implements EventService {
 
@@ -62,6 +64,18 @@ public class EventServiceImpl implements EventService {
     // 待绑定切片池: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
     private final Map<String, String> pendingClipUrlCache = new ConcurrentHashMap<>();
 
+    // 批次 UUID 幂等缓存 (用于防网络重试、离线队列重复重放导致指标双计)
+    private final Map<String, Long> processedBatchUuids = new ConcurrentHashMap<>();
+    private static final int MAX_BATCH_CACHE_SIZE = 10000;
+    private static final long BATCH_CACHE_EXPIRE_MS = 24 * 3600 * 1000L; // 24小时
+
+    private void cleanBatchCacheIfNeeded() {
+        if (processedBatchUuids.size() > MAX_BATCH_CACHE_SIZE) {
+            long now = System.currentTimeMillis();
+            processedBatchUuids.entrySet().removeIf(entry -> (now - entry.getValue()) > BATCH_CACHE_EXPIRE_MS);
+        }
+    }
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordEdgeEvent(Long pointId, EdgeEventDTO dto) {
@@ -71,6 +85,20 @@ public class EventServiceImpl implements EventService {
         }
 
         long ts = dto.getTimestamp() != null ? dto.getTimestamp() : System.currentTimeMillis();
+
+        // 商业级端云防重保障：检查同点位、同TrackId在 15 秒内是否已有记录
+        if (dto.getTrackId() != null && dto.getTrackId() > 0) {
+            List<BizPassageEvent> existing = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
+                    .eq(BizPassageEvent::getPointId, pointId)
+                    .eq(BizPassageEvent::getTrackId, dto.getTrackId())
+                    .ge(BizPassageEvent::getTimestampMs, ts - 15000)
+                    .le(BizPassageEvent::getTimestampMs, ts + 15000));
+            if (!existing.isEmpty()) {
+                log.info("单事件端云防重拦截：点位 {} TrackId {} 在时间戳 {} 附近已存在记录，跳过入库与计数", pointId, dto.getTrackId(), ts);
+                return;
+            }
+        }
+
         String gender = "未知";
         String ageGroup = "未知";
         if (dto.getAttributes() != null) {
@@ -103,70 +131,103 @@ public class EventServiceImpl implements EventService {
             throw new IllegalArgumentException("点位不存在: " + pointId);
         }
 
-        long endTs = dto.getEndTimeMs() != null ? dto.getEndTimeMs() : System.currentTimeMillis();
-        LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(endTs), ZoneId.systemDefault());
-        LocalDate date = ldt.toLocalDate();
-        int hour = ldt.getHour();
-
-        // 1. 原子累加小时聚合表指标
-        int inInc = (dto.getHeadcount() != null && dto.getHeadcount().getInIncrement() != null) ? dto.getHeadcount().getInIncrement() : 0;
-        int outInc = (dto.getHeadcount() != null && dto.getHeadcount().getOutIncrement() != null) ? dto.getHeadcount().getOutIncrement() : 0;
-        int maleInc = (dto.getDemographics() != null && dto.getDemographics().getMaleCount() != null) ? dto.getDemographics().getMaleCount() : 0;
-        int femaleInc = (dto.getDemographics() != null && dto.getDemographics().getFemaleCount() != null) ? dto.getDemographics().getFemaleCount() : 0;
-
-        BizStatsHourly stat = statsMapper.selectOne(new LambdaQueryWrapper<BizStatsHourly>()
-                .eq(BizStatsHourly::getPointId, pointId)
-                .eq(BizStatsHourly::getStatDate, date)
-                .eq(BizStatsHourly::getStatHour, hour));
-
-        if (stat == null) {
-            stat = new BizStatsHourly();
-            stat.setPointId(pointId);
-            stat.setUserId(point.getUserId());
-            stat.setStatDate(date);
-            stat.setStatHour(hour);
-            stat.setEntryCount(inInc);
-            stat.setExitCount(outInc);
-            stat.setMaleCount(maleInc);
-            stat.setFemaleCount(femaleInc);
-            statsMapper.insert(stat);
-        } else {
-            stat.setEntryCount(stat.getEntryCount() + inInc);
-            stat.setExitCount(stat.getExitCount() + outInc);
-            stat.setMaleCount(stat.getMaleCount() + maleInc);
-            stat.setFemaleCount(stat.getFemaleCount() + femaleInc);
-            statsMapper.updateById(stat);
+        boolean isDuplicateBatch = false;
+        if (dto.getBatchUuid() != null && !dto.getBatchUuid().trim().isEmpty()) {
+            cleanBatchCacheIfNeeded();
+            Long previousTs = processedBatchUuids.putIfAbsent(dto.getBatchUuid().trim(), System.currentTimeMillis());
+            if (previousTs != null) {
+                isDuplicateBatch = true;
+                log.warn("批次 UUID [{}] 已经成功入库，触发幂等保护，跳过指标累加与明细入库", dto.getBatchUuid());
+            }
         }
 
-        // 2. 批量存储精简事件明细 (如果客户端附带了 events)
-        if (dto.getEvents() != null && !dto.getEvents().isEmpty()) {
-            for (EdgeEventDTO evDto : dto.getEvents()) {
-                long evTs = evDto.getTimestamp() != null ? evDto.getTimestamp() : endTs;
-                String gender = "未知";
-                String ageGroup = "未知";
-                if (evDto.getAttributes() != null) {
-                    gender = evDto.getAttributes().getOrDefault("gender", "未知");
-                    ageGroup = evDto.getAttributes().getOrDefault("age_group", "未知");
+        if (!isDuplicateBatch) {
+            long endTs = dto.getEndTimeMs() != null ? dto.getEndTimeMs() : System.currentTimeMillis();
+            LocalDateTime ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(endTs), ZoneId.systemDefault());
+            LocalDate date = ldt.toLocalDate();
+            int hour = ldt.getHour();
+
+            // 1. 原子累加小时聚合表指标
+            int inInc = (dto.getHeadcount() != null && dto.getHeadcount().getInIncrement() != null) ? dto.getHeadcount().getInIncrement() : 0;
+            int outInc = (dto.getHeadcount() != null && dto.getHeadcount().getOutIncrement() != null) ? dto.getHeadcount().getOutIncrement() : 0;
+            int maleInc = (dto.getDemographics() != null && dto.getDemographics().getMaleCount() != null) ? dto.getDemographics().getMaleCount() : 0;
+            int femaleInc = (dto.getDemographics() != null && dto.getDemographics().getFemaleCount() != null) ? dto.getDemographics().getFemaleCount() : 0;
+
+            BizStatsHourly stat = statsMapper.selectOne(new LambdaQueryWrapper<BizStatsHourly>()
+                    .eq(BizStatsHourly::getPointId, pointId)
+                    .eq(BizStatsHourly::getStatDate, date)
+                    .eq(BizStatsHourly::getStatHour, hour));
+
+            if (stat == null) {
+                stat = new BizStatsHourly();
+                stat.setPointId(pointId);
+                stat.setUserId(point.getUserId());
+                stat.setStatDate(date);
+                stat.setStatHour(hour);
+                stat.setEntryCount(inInc);
+                stat.setExitCount(outInc);
+                stat.setMaleCount(maleInc);
+                stat.setFemaleCount(femaleInc);
+                statsMapper.insert(stat);
+            } else {
+                stat.setEntryCount(stat.getEntryCount() + inInc);
+                stat.setExitCount(stat.getExitCount() + outInc);
+                stat.setMaleCount(stat.getMaleCount() + maleInc);
+                stat.setFemaleCount(stat.getFemaleCount() + femaleInc);
+                statsMapper.updateById(stat);
+            }
+
+            // 2. 批量存储精简事件明细 (如果客户端附带了 events)
+            if (dto.getEvents() != null && !dto.getEvents().isEmpty()) {
+                for (EdgeEventDTO evDto : dto.getEvents()) {
+                    long evTs = evDto.getTimestamp() != null ? evDto.getTimestamp() : endTs;
+
+                    // 商业级端云防重保障：检查同点位、同TrackId在 15 秒内是否已有记录
+                    if (evDto.getTrackId() != null && evDto.getTrackId() > 0) {
+                        List<BizPassageEvent> existing = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
+                                .eq(BizPassageEvent::getPointId, pointId)
+                                .eq(BizPassageEvent::getTrackId, evDto.getTrackId())
+                                .ge(BizPassageEvent::getTimestampMs, evTs - 15000)
+                                .le(BizPassageEvent::getTimestampMs, evTs + 15000));
+                        if (!existing.isEmpty()) {
+                            // 若切片先行到达，回填切片 URL 到已有记录
+                            String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + evDto.getTrackId());
+                            BizPassageEvent existEv = existing.get(0);
+                            if (pendingUrl != null && (existEv.getClipUrl() == null || existEv.getClipUrl().isEmpty())) {
+                                existEv.setClipUrl(pendingUrl);
+                                eventMapper.updateById(existEv);
+                            }
+                            log.info("点位 {} TrackId {} 在时间戳 {} 附近已存在通行记录，执行端云去重跳过重复插入", pointId, evDto.getTrackId(), evTs);
+                            continue;
+                        }
+                    }
+
+                    String gender = "未知";
+                    String ageGroup = "未知";
+                    if (evDto.getAttributes() != null) {
+                        gender = evDto.getAttributes().getOrDefault("gender", "未知");
+                        ageGroup = evDto.getAttributes().getOrDefault("age_group", "未知");
+                    }
+
+                    BizPassageEvent event = new BizPassageEvent();
+                    event.setPointId(pointId);
+                    event.setUserId(point.getUserId());
+                    event.setTrackId(evDto.getTrackId() != null ? evDto.getTrackId() : 0);
+                    event.setDirection(evDto.getDirection() != null ? evDto.getDirection() : "ENTRY");
+                    event.setConfidence(evDto.getConfidence() != null ? evDto.getConfidence() : 0.85f);
+                    event.setGender(gender);
+                    event.setAgeGroup(ageGroup);
+                    event.setTimestampMs(evTs);
+                    event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
+
+                    // 检查待绑定切片池 (若切片先行上传到达)
+                    String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + event.getTrackId());
+                    if (pendingUrl != null) {
+                        event.setClipUrl(pendingUrl);
+                    }
+
+                    eventMapper.insert(event);
                 }
-
-                BizPassageEvent event = new BizPassageEvent();
-                event.setPointId(pointId);
-                event.setUserId(point.getUserId());
-                event.setTrackId(evDto.getTrackId() != null ? evDto.getTrackId() : 0);
-                event.setDirection(evDto.getDirection() != null ? evDto.getDirection() : "ENTRY");
-                event.setConfidence(evDto.getConfidence() != null ? evDto.getConfidence() : 0.85f);
-                event.setGender(gender);
-                event.setAgeGroup(ageGroup);
-                event.setTimestampMs(evTs);
-                event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
-
-                // 检查待绑定切片池 (若切片先行上传到达)
-                String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + event.getTrackId());
-                if (pendingUrl != null) {
-                    event.setClipUrl(pendingUrl);
-                }
-
-                eventMapper.insert(event);
             }
         }
 
