@@ -1,18 +1,20 @@
 #include "AnalyticsWidget.hpp"
+#include "ui/components/RealtimeTotalChartWidget.hpp"
+#include "ui/components/RealtimeAverageChartWidget.hpp"
 #include "ui/components/AnalyticsChartWidget.hpp"
 #include "storage/DatabaseManager.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <QGroupBox>
+#include <QScrollArea>
 #include <QDateTime>
 #include <QFile>
 #include <QTextStream>
 #include <QDir>
 #include <QMessageBox>
-#include <QScrollArea>
 #include <QFileDialog>
 #include <QDesktopServices>
 #include <QUrl>
+#include <algorithm>
 
 AnalyticsWidget::AnalyticsWidget(QWidget* parent) : QWidget(parent) {
     setup_ui();
@@ -35,162 +37,317 @@ void AnalyticsWidget::setup_ui() {
     main_layout->setContentsMargins(14, 14, 14, 14);
     main_layout->setSpacing(14);
 
-    // 1. 顶部操作条
-    auto* top_bar = new QHBoxLayout();
-    auto* lbl_range = new QLabel("统计时间范围:", this);
-    lbl_range->setStyleSheet("font-weight: bold; color: #c9d1d9;");
-    top_bar->addWidget(lbl_range);
+    // ==========================================
+    // 1. 顶部操作与综合检索筛选条
+    // ==========================================
+    auto* filter_card = new QWidget(container);
+    filter_card->setStyleSheet(
+        "background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 6px 10px;"
+    );
+    auto* filter_layout = new QHBoxLayout(filter_card);
+    filter_layout->setContentsMargins(6, 4, 6, 4);
+    filter_layout->setSpacing(6);
 
-    combo_range_ = new QComboBox(this);
-    combo_range_->setFixedWidth(160);
-    combo_range_->addItems({"今日客流汇总", "最近 3 天趋势", "最近 7 天报表"});
-    top_bar->addWidget(combo_range_);
+    // 时间预设
+    auto* lbl_preset = new QLabel("统计时段:", filter_card);
+    lbl_preset->setStyleSheet("font-weight: bold; color: #c9d1d9;");
+    filter_layout->addWidget(lbl_preset);
 
-    btn_export_ = new QPushButton("📥  导出 CSV 报表", this);
+    combo_preset_ = new QComboBox(filter_card);
+    combo_preset_->setFixedWidth(115);
+    combo_preset_->addItems({"今日客流汇总", "最近 3 天趋势", "最近 7 天报表", "自定义时段"});
+    filter_layout->addWidget(combo_preset_);
+
+    // 起始时间
+    auto* lbl_from = new QLabel("从:", filter_card);
+    lbl_from->setStyleSheet("color: #8b949e;");
+    filter_layout->addWidget(lbl_from);
+
+    QDateTime now = QDateTime::currentDateTime();
+    dt_start_ = new QDateTimeEdit(filter_card);
+    dt_start_->setDisplayFormat("yyyy-MM-dd HH:mm");
+    dt_start_->setCalendarPopup(true);
+    dt_start_->setFixedWidth(140);
+    dt_start_->setDateTime(QDateTime(now.date(), QTime(0, 0, 0)));
+    filter_layout->addWidget(dt_start_);
+
+    // 结束时间
+    auto* lbl_to = new QLabel("至:", filter_card);
+    lbl_to->setStyleSheet("color: #8b949e;");
+    filter_layout->addWidget(lbl_to);
+
+    dt_end_ = new QDateTimeEdit(filter_card);
+    dt_end_->setDisplayFormat("yyyy-MM-dd HH:mm");
+    dt_end_->setCalendarPopup(true);
+    dt_end_->setFixedWidth(140);
+    dt_end_->setDateTime(now);
+    filter_layout->addWidget(dt_end_);
+
+    // 穿行方向筛选
+    auto* lbl_dir = new QLabel("方向:", filter_card);
+    lbl_dir->setStyleSheet("font-weight: bold; color: #c9d1d9;");
+    filter_layout->addWidget(lbl_dir);
+
+    combo_direction_ = new QComboBox(filter_card);
+    combo_direction_->setFixedWidth(100);
+    combo_direction_->addItem("全部方向", -1);
+    combo_direction_->addItem("🟢 仅进入 (IN)", static_cast<int>(PassageDirection::ENTRY));
+    combo_direction_->addItem("🔴 仅离开 (OUT)", static_cast<int>(PassageDirection::EXIT));
+    filter_layout->addWidget(combo_direction_);
+
+    // 客群性别筛选
+    auto* lbl_gender = new QLabel("性别:", filter_card);
+    lbl_gender->setStyleSheet("font-weight: bold; color: #c9d1d9;");
+    filter_layout->addWidget(lbl_gender);
+
+    combo_gender_ = new QComboBox(filter_card);
+    combo_gender_->setFixedWidth(75);
+    combo_gender_->addItems({"全部性别", "男", "女"});
+    filter_layout->addWidget(combo_gender_);
+
+    // 操作按钮组
+    btn_query_ = new QPushButton("🔍 筛选查询", filter_card);
+    btn_query_->setObjectName("btn_accent");
+    btn_query_->setFixedHeight(30);
+    filter_layout->addWidget(btn_query_);
+
+    btn_reset_ = new QPushButton("🔄 重置", filter_card);
+    btn_reset_->setFixedHeight(30);
+    filter_layout->addWidget(btn_reset_);
+
+    btn_export_ = new QPushButton("📥 导出报表", filter_card);
     btn_export_->setObjectName("btn_primary");
-    btn_export_->setFixedHeight(34);
-    top_bar->addWidget(btn_export_);
-    top_bar->addStretch();
-    main_layout->addLayout(top_bar);
+    btn_export_->setFixedHeight(30);
+    filter_layout->addWidget(btn_export_);
 
-    // 2. 核心指标概览卡片 (真实数据库驱动)
+    filter_layout->addStretch();
+    main_layout->addWidget(filter_card);
+
+    // ==========================================
+    // 2. 核心概览指标小卡片 (5 卡片矩阵)
+    // ==========================================
     auto* kpi_layout = new QHBoxLayout();
-    kpi_layout->setSpacing(12);
+    kpi_layout->setSpacing(10);
 
-    auto create_info_box = [](const QString& title, const QString& border_color, QLabel*& out_val, QLabel*& out_sub) -> QWidget* {
-        auto* box = new QWidget();
-        box->setStyleSheet(QString(
-            "background-color: #161b22; border: 1px solid #30363d; border-top: 3px solid %1; "
-            "border-radius: 8px; padding: 12px;"
-        ).arg(border_color));
-        auto* v = new QVBoxLayout(box);
-        v->setContentsMargins(4, 4, 4, 4);
-        v->setSpacing(4);
-
-        auto* t_lbl = new QLabel(title);
-        t_lbl->setStyleSheet("color: #8b949e; font-size: 13px; font-weight: 500;");
-        out_val = new QLabel("0 人次");
-        out_val->setStyleSheet("color: #f0f6fc; font-size: 26px; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 2px 0;");
-        out_sub = new QLabel("进: 0 │ 出: 0");
-        out_sub->setStyleSheet("color: #6e7681; font-size: 11px;");
-
-        v->addWidget(t_lbl);
-        v->addWidget(out_val);
-        v->addWidget(out_sub);
-        return box;
-    };
-
-    kpi_layout->addWidget(create_info_box("今日总客流量", "#00d2d3", total_flow_val_, total_flow_sub_));
-    kpi_layout->addWidget(create_info_box("客流高峰时段", "#ffa502", peak_hour_val_, peak_hour_sub_));
-    kpi_layout->addWidget(create_info_box("客群性别比例", "#a29bfe", gender_ratio_val_, gender_ratio_sub_));
-    kpi_layout->addWidget(create_info_box("主力年龄区间", "#2ed573", age_group_val_, age_group_sub_));
+    kpi_layout->addWidget(create_kpi_card("今日总客流量", "#00d2d3", total_flow_val_, total_flow_sub_));
+    kpi_layout->addWidget(create_kpi_card("进站/入场量", "#2ed573", entry_val_, entry_sub_));
+    kpi_layout->addWidget(create_kpi_card("出站/离场量", "#ff4757", exit_val_, exit_sub_));
+    kpi_layout->addWidget(create_kpi_card("客群性别画像", "#a29bfe", gender_val_, gender_sub_));
+    kpi_layout->addWidget(create_kpi_card("客流高峰时段", "#ffa502", peak_hour_val_, peak_hour_sub_));
 
     main_layout->addLayout(kpi_layout);
 
-    // 3. 24小时时段分布趋势 (真实矢量图表驱动，保证充足最小高度)
-    chart_widget_ = new AnalyticsChartWidget(container);
-    chart_widget_->setMinimumHeight(380);
-    main_layout->addWidget(chart_widget_, 1);
+    // ==========================================
+    // 3. 时序走势图表选项卡 (Tab 容器)
+    // ==========================================
+    tab_charts_ = new QTabWidget(container);
+    tab_charts_->setMinimumHeight(410);
+
+    // Tab 1: 实时的总计人数动态 (默认激活 Tab)
+    realtime_total_chart_ = new RealtimeTotalChartWidget(tab_charts_);
+    tab_charts_->addTab(realtime_total_chart_, "📈  实时总计走势 (动态时序)");
+
+    // Tab 2: 平均人数动态 (5s / 10s / 30s)
+    realtime_avg_chart_ = new RealtimeAverageChartWidget(tab_charts_);
+    tab_charts_->addTab(realtime_avg_chart_, "⏱️  平均人数走势 (5s/10s/30s)");
+
+    // Tab 3: 24小时时段分布
+    hourly_chart_ = new AnalyticsChartWidget(tab_charts_);
+    tab_charts_->addTab(hourly_chart_, "📊  24小时各时段进出分布");
+
+    tab_charts_->setCurrentIndex(0); // 默认选定第 1 个 Tab (实时总计人数动态)
+    main_layout->addWidget(tab_charts_, 1);
 
     scroll_area->setWidget(container);
     root_layout->addWidget(scroll_area);
 
+    // 信号槽连接
+    connect(combo_preset_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AnalyticsWidget::on_preset_changed);
+    connect(btn_query_, &QPushButton::clicked, this, &AnalyticsWidget::on_btn_query_clicked);
+    connect(btn_reset_, &QPushButton::clicked, this, &AnalyticsWidget::on_btn_reset_clicked);
     connect(btn_export_, &QPushButton::clicked, this, &AnalyticsWidget::on_btn_export_csv);
-    connect(combo_range_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &AnalyticsWidget::refresh_report);
+
+    // 默认加载一次统计数据
+    refresh_report();
+}
+
+QWidget* AnalyticsWidget::create_kpi_card(const QString& title, const QString& accent_color, QLabel*& out_val, QLabel*& out_sub) {
+    auto* box = new QWidget();
+    box->setStyleSheet(QString(
+        "background-color: #161b22; border: 1px solid #30363d; border-top: 3px solid %1; "
+        "border-radius: 8px; padding: 10px;"
+    ).arg(accent_color));
+
+    auto* v = new QVBoxLayout(box);
+    v->setContentsMargins(4, 2, 4, 2);
+    v->setSpacing(4);
+
+    auto* t_lbl = new QLabel(title);
+    t_lbl->setStyleSheet("color: #8b949e; font-size: 12px; font-weight: 500;");
+
+    out_val = new QLabel("0 人次");
+    out_val->setStyleSheet("color: #f0f6fc; font-size: 24px; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 1px 0;");
+
+    out_sub = new QLabel("--");
+    out_sub->setStyleSheet("color: #6e7681; font-size: 11px;");
+
+    v->addWidget(t_lbl);
+    v->addWidget(out_val);
+    v->addWidget(out_sub);
+    return box;
+}
+
+void AnalyticsWidget::on_preset_changed(int index) {
+    QDateTime now = QDateTime::currentDateTime();
+    dt_end_->setDateTime(now);
+
+    if (index == 0) {
+        // 今日客流汇总 (今日 00:00:00 至今)
+        dt_start_->setDateTime(QDateTime(now.date(), QTime(0, 0, 0)));
+        is_live_today_view_ = (combo_direction_->currentIndex() == 0 && combo_gender_->currentIndex() == 0);
+    } else if (index == 1) {
+        // 最近 3 天趋势
+        dt_start_->setDateTime(now.addDays(-3));
+        is_live_today_view_ = false;
+    } else if (index == 2) {
+        // 最近 7 天报表
+        dt_start_->setDateTime(now.addDays(-7));
+        is_live_today_view_ = false;
+    } else {
+        // 自定义时段
+        is_live_today_view_ = false;
+    }
 
     refresh_report();
 }
 
-void AnalyticsWidget::refresh_report() {
-    int range_idx = combo_range_ ? combo_range_->currentIndex() : 0;
-    QDateTime now = QDateTime::currentDateTime();
-    int64_t start_ms = 0;
-    int64_t end_ms = now.toMSecsSinceEpoch();
+void AnalyticsWidget::on_btn_query_clicked() {
+    is_live_today_view_ = false;
+    refresh_report();
+}
 
-    if (range_idx == 0) {
-        // 今日客流汇总 (今日 00:00:00 至今)
-        start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
-    } else if (range_idx == 1) {
-        // 最近 3 天趋势
-        start_ms = now.addDays(-3).toMSecsSinceEpoch();
-    } else {
-        // 最近 7 天报表
-        start_ms = now.addDays(-7).toMSecsSinceEpoch();
+void AnalyticsWidget::on_btn_reset_clicked() {
+    combo_preset_->setCurrentIndex(0);
+    combo_direction_->setCurrentIndex(0);
+    combo_gender_->setCurrentIndex(0);
+    QDateTime now = QDateTime::currentDateTime();
+    dt_start_->setDateTime(QDateTime(now.date(), QTime(0, 0, 0)));
+    dt_end_->setDateTime(now);
+    is_live_today_view_ = true;
+    refresh_report();
+}
+
+void AnalyticsWidget::refresh_report() {
+    AnalyticsFilterCriteria criteria;
+    criteria.start_ms = dt_start_->dateTime().toMSecsSinceEpoch();
+    criteria.end_ms = dt_end_->dateTime().toMSecsSinceEpoch();
+    criteria.direction_filter = combo_direction_->currentData().toInt();
+
+    QString sel_gender = combo_gender_->currentText();
+    if (sel_gender != "全部性别") {
+        criteria.gender_filter = sel_gender;
     }
 
-    // 优先直查 stats_hourly 预聚合加速表 (毫秒级响应，避免明细表全表扫描与数据反序列化)
-    auto hourly_data = DatabaseManager::instance().query_hourly_distribution(start_ms, end_ms);
-    int total_entry = 0;
-    int total_exit = 0;
+    // 调用底层多维综合聚合查询
+    auto summary = DatabaseManager::instance().query_analytics_summary(criteria);
 
-    int peak_h = -1;
-    int max_cnt = 0;
+    // 1. 卡片1: 总客流
+    total_flow_val_->setText(QString("%1 人次").arg(summary.total_flow));
+    int net = summary.entry_count - summary.exit_count;
+    total_flow_sub_->setText(QString("进: %1 │ 出: %2 │ 净增: %3%4")
+        .arg(summary.entry_count)
+        .arg(summary.exit_count)
+        .arg(net > 0 ? "+" : "")
+        .arg(net));
 
-    for (const auto& [h, p] : hourly_data) {
-        total_entry += p.first;
-        total_exit += p.second;
-        int sum = p.first + p.second;
-        if (sum > max_cnt) {
-            max_cnt = sum;
-            peak_h = h;
+    // 2. 卡片2: 进入人次
+    entry_val_->setText(QString("%1 人次").arg(summary.entry_count));
+    if (summary.total_flow > 0) {
+        int entry_pct = (summary.entry_count * 100) / summary.total_flow;
+        entry_sub_->setText(QString("占比: %1%").arg(entry_pct));
+    } else {
+        entry_sub_->setText("所选范围无进入");
+    }
+
+    // 3. 卡片3: 离开人次
+    exit_val_->setText(QString("%1 人次").arg(summary.exit_count));
+    if (summary.total_flow > 0) {
+        int exit_pct = (summary.exit_count * 100) / summary.total_flow;
+        exit_sub_->setText(QString("占比: %1%").arg(exit_pct));
+    } else {
+        exit_sub_->setText("所选范围无离开");
+    }
+
+    // 4. 卡片4: 客群性别比例
+    int valid_gender = summary.male_count + summary.female_count;
+    if (valid_gender > 0) {
+        int m_pct = (summary.male_count * 100) / valid_gender;
+        int f_pct = 100 - m_pct;
+        gender_val_->setText(QString("男 %1% │ 女 %2%").arg(m_pct).arg(f_pct));
+        gender_sub_->setText(QString("男: %1人 │ 女: %2人").arg(summary.male_count).arg(summary.female_count));
+    } else {
+        gender_val_->setText("暂无数据");
+        gender_sub_->setText("有效识别样本: 0 人");
+    }
+
+    // 5. 卡片5: 客流高峰时段
+    if (summary.peak_hour >= 0 && summary.peak_hour_count > 0) {
+        peak_hour_val_->setText(QString("%1:00 ~ %2:00")
+            .arg(summary.peak_hour, 2, 10, QChar('0'))
+            .arg((summary.peak_hour + 1) % 24, 2, 10, QChar('0')));
+        peak_hour_sub_->setText(QString("小时峰值: %1 人次").arg(summary.peak_hour_count));
+    } else {
+        peak_hour_val_->setText("-- : --");
+        peak_hour_sub_->setText("客流平缓或无数据");
+    }
+
+    // 同步刷新 24 小时各时段分布图表
+    if (hourly_chart_) {
+        hourly_chart_->set_data(summary.hourly_data);
+    }
+
+    // 同步初始化/更新实时走势图表的基准数值
+    if (realtime_total_chart_) {
+        int today_entry = 0, today_exit = 0;
+        DatabaseManager::instance().get_today_counts(today_entry, today_exit);
+        realtime_total_chart_->set_counts(today_entry + today_exit, today_entry, today_exit);
+    }
+}
+
+void AnalyticsWidget::update_realtime_stats(const StatisticsSnapshot& stats) {
+    if (realtime_total_chart_) {
+        realtime_total_chart_->set_counts(stats.today_total, stats.today_entry, stats.today_exit);
+    }
+
+    if (is_live_today_view_) {
+        total_flow_val_->setText(QString("%1 人次").arg(stats.today_total));
+        int net = stats.today_entry - stats.today_exit;
+        total_flow_sub_->setText(QString("进: %1 │ 出: %2 │ 净增: %3%4")
+            .arg(stats.today_entry).arg(stats.today_exit).arg(net > 0 ? "+" : "").arg(net));
+
+        entry_val_->setText(QString("%1 人次").arg(stats.today_entry));
+        exit_val_->setText(QString("%1 人次").arg(stats.today_exit));
+
+        if (stats.today_total > 0) {
+            entry_sub_->setText(QString("占比: %1%").arg((stats.today_entry * 100) / stats.today_total));
+            exit_sub_->setText(QString("占比: %1%").arg((stats.today_exit * 100) / stats.today_total));
         }
     }
+}
 
-    int total_flow = total_entry + total_exit;
-    total_flow_val_->setText(QString("%1 人次").arg(total_flow));
-    total_flow_sub_->setText(QString("进: %1 │ 出: %2").arg(total_entry).arg(total_exit));
-
-    if (total_flow == 0) {
-        peak_hour_val_->setText("-- : --");
-        peak_hour_sub_->setText("所选范围无记录");
-        gender_ratio_val_->setText("暂无数据");
-        gender_ratio_sub_->setText("统计样本: 0 人次");
-        age_group_val_->setText("暂无数据");
-        age_group_sub_->setText("等待目标穿行");
-        if (chart_widget_) chart_widget_->clear_data();
-        return;
+void AnalyticsWidget::add_realtime_passage(const PassageEvent& ev) {
+    if (realtime_total_chart_) {
+        realtime_total_chart_->add_passage(ev);
     }
-
-    // 计算小时峰值
-    if (peak_h >= 0 && max_cnt > 0) {
-        peak_hour_val_->setText(QString("%1:00 ~ %2:00").arg(peak_h, 2, 10, QChar('0')).arg((peak_h + 1) % 24, 2, 10, QChar('0')));
-        peak_hour_sub_->setText(QString("小时峰值: %1 人次").arg(max_cnt));
-    } else {
-        peak_hour_val_->setText("-- : --");
-        peak_hour_sub_->setText("客流平缓");
+    if (realtime_avg_chart_) {
+        realtime_avg_chart_->add_passage(ev);
     }
+}
 
-    // 仅在存在客流时进行轻量级性别画像统计
-    int male_cnt = 0, female_cnt = 0;
-    DatabaseManager::instance().get_demographics(start_ms, end_ms, male_cnt, female_cnt);
-
-    int valid_gender = male_cnt + female_cnt;
-    if (valid_gender > 0) {
-        int m_pct = (male_cnt * 100) / valid_gender;
-        int f_pct = 100 - m_pct;
-        gender_ratio_val_->setText(QString("男 %1% │ 女 %2%").arg(m_pct).arg(f_pct));
-        gender_ratio_sub_->setText(QString("统计样本: %1 人次").arg(valid_gender));
-    } else {
-        gender_ratio_val_->setText("全量统计中");
-        gender_ratio_sub_->setText(QString("真实样本: %1 人次").arg(total_flow));
-    }
-
-    // 主力年龄区间统计
-    std::string top_age = "暂无数据";
-    int top_age_cnt = 0;
-    DatabaseManager::instance().get_top_age_group(start_ms, end_ms, top_age, top_age_cnt);
-    if (top_age_cnt > 0 && total_flow > 0) {
-        int age_pct = (top_age_cnt * 100) / total_flow;
-        age_group_val_->setText(QString("%1 (%2%)").arg(QString::fromStdString(top_age)).arg(age_pct));
-        age_group_sub_->setText(QString("主力客群: %1/%2 人次").arg(top_age_cnt).arg(total_flow));
-    } else {
-        age_group_val_->setText("统计归集中");
-        age_group_sub_->setText(QString("有效识别样本: %1 人次").arg(total_flow));
-    }
-
-    if (chart_widget_) {
-        chart_widget_->set_data(hourly_data);
-    }
+void AnalyticsWidget::reset_realtime_data() {
+    if (realtime_total_chart_) realtime_total_chart_->reset_data();
+    if (realtime_avg_chart_) realtime_avg_chart_->reset_data();
+    refresh_report();
 }
 
 void AnalyticsWidget::on_btn_export_csv() {
@@ -212,16 +369,13 @@ void AnalyticsWidget::on_btn_export_csv() {
     QTextStream out(&file);
     out << "EventID,Timestamp,RoiID,RoiName,TrackID,Direction,Confidence,Gender,AgeGroup,ClipPath\n";
 
-    int range_idx = combo_range_ ? combo_range_->currentIndex() : 0;
-    QDateTime now = QDateTime::currentDateTime();
-    int64_t start_ms = 0;
-    int64_t end_ms = now.toMSecsSinceEpoch();
+    int64_t start_ms = dt_start_->dateTime().toMSecsSinceEpoch();
+    int64_t end_ms = dt_end_->dateTime().toMSecsSinceEpoch();
+    int dir_filter = combo_direction_->currentData().toInt();
+    QString gender_filter = combo_gender_->currentText();
+    if (gender_filter == "全部性别") gender_filter = "";
 
-    if (range_idx == 0) start_ms = QDateTime(now.date(), QTime(0, 0, 0)).toMSecsSinceEpoch();
-    else if (range_idx == 1) start_ms = now.addDays(-3).toMSecsSinceEpoch();
-    else start_ms = now.addDays(-7).toMSecsSinceEpoch();
-
-    auto events = DatabaseManager::instance().query_events_by_timerange(start_ms, end_ms, 50000);
+    auto events = DatabaseManager::instance().query_filtered_events(dir_filter, start_ms, end_ms, "", 50000, gender_filter);
     int id = 1;
     for (const auto& ev : events) {
         QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd hh:mm:ss");
@@ -237,7 +391,7 @@ void AnalyticsWidget::on_btn_export_csv() {
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle("导出成功");
-    msgBox.setText(QString("所选时段客流报表 (共 %1 条) 已成功导出至:\n%2").arg(events.size()).arg(filename));
+    msgBox.setText(QString("所选时段筛选客流报表 (共 %1 条) 已成功导出至:\n%2").arg(events.size()).arg(filename));
     auto* btn_open_dir = msgBox.addButton("打开所在文件夹", QMessageBox::ActionRole);
     msgBox.addButton("完成", QMessageBox::AcceptRole);
     msgBox.exec();

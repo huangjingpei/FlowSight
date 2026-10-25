@@ -231,7 +231,7 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
     return db.commit();
 }
 
-std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_filter, int64_t start_ms, int64_t end_ms, const QString& keyword, int limit) {
+std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_filter, int64_t start_ms, int64_t end_ms, const QString& keyword, int limit, const QString& gender_filter) {
     std::vector<PassageEvent> list;
     QString sql = "SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group, roi_id, roi_name "
                   "FROM passage_events WHERE 1=1";
@@ -244,6 +244,9 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
     }
     if (end_ms > 0) {
         sql += " AND timestamp_ms <= ?";
+    }
+    if (!gender_filter.trimmed().isEmpty()) {
+        sql += " AND gender = ?";
     }
     if (!keyword.trimmed().isEmpty()) {
         sql += " AND (CAST(track_id AS TEXT) LIKE ? OR clip_path LIKE ? OR gender LIKE ? OR age_group LIKE ? OR roi_name LIKE ?)";
@@ -261,6 +264,9 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
     }
     if (end_ms > 0) {
         q.addBindValue(static_cast<qint64>(end_ms));
+    }
+    if (!gender_filter.trimmed().isEmpty()) {
+        q.addBindValue(gender_filter.trimmed());
     }
     if (!keyword.trimmed().isEmpty()) {
         QString kw = "%" + keyword.trimmed() + "%";
@@ -615,6 +621,116 @@ std::vector<HourlyStat> DatabaseManager::query_hourly_stats(int64_t start_ms, in
         }
     }
     return list;
+}
+
+AnalyticsReportSummary DatabaseManager::query_analytics_summary(const AnalyticsFilterCriteria& criteria) {
+    AnalyticsReportSummary summary;
+    for (int h = 0; h < 24; ++h) {
+        summary.hourly_data[h] = {0, 0};
+    }
+
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return summary;
+
+    QString where_clause = " WHERE 1=1";
+    if (criteria.start_ms > 0) {
+        where_clause += " AND timestamp_ms >= ?";
+    }
+    if (criteria.end_ms > 0) {
+        where_clause += " AND timestamp_ms <= ?";
+    }
+    if (criteria.direction_filter >= 0) {
+        where_clause += " AND direction = ?";
+    }
+    if (!criteria.gender_filter.trimmed().isEmpty()) {
+        where_clause += " AND gender = ?";
+    }
+
+    auto bind_params = [&](QSqlQuery& q) {
+        if (criteria.start_ms > 0) q.addBindValue(static_cast<qint64>(criteria.start_ms));
+        if (criteria.end_ms > 0) q.addBindValue(static_cast<qint64>(criteria.end_ms));
+        if (criteria.direction_filter >= 0) q.addBindValue(criteria.direction_filter);
+        if (!criteria.gender_filter.trimmed().isEmpty()) q.addBindValue(criteria.gender_filter.trimmed());
+    };
+
+    // 1. 查询进出总计
+    {
+        QSqlQuery q(db);
+        q.prepare("SELECT direction, COUNT(*) FROM passage_events" + where_clause + " GROUP BY direction;");
+        bind_params(q);
+        if (q.exec()) {
+            while (q.next()) {
+                int dir = q.value(0).toInt();
+                int cnt = q.value(1).toInt();
+                if (dir == static_cast<int>(PassageDirection::ENTRY)) {
+                    summary.entry_count = cnt;
+                } else if (dir == static_cast<int>(PassageDirection::EXIT)) {
+                    summary.exit_count = cnt;
+                }
+            }
+        }
+        summary.total_flow = summary.entry_count + summary.exit_count;
+    }
+
+    // 2. 查询性别分布
+    {
+        QSqlQuery q(db);
+        q.prepare("SELECT gender, COUNT(*) FROM passage_events" + where_clause + " GROUP BY gender;");
+        bind_params(q);
+        if (q.exec()) {
+            while (q.next()) {
+                QString g = q.value(0).toString().trimmed();
+                int cnt = q.value(1).toInt();
+                if (g == "男") summary.male_count = cnt;
+                else if (g == "女") summary.female_count = cnt;
+            }
+        }
+    }
+
+    // 3. 查询时段进出分布与高峰时段
+    {
+        QSqlQuery q(db);
+        q.prepare("SELECT timestamp_ms, direction FROM passage_events" + where_clause + ";");
+        bind_params(q);
+        if (q.exec()) {
+            while (q.next()) {
+                qint64 ts = q.value(0).toLongLong();
+                int dir = q.value(1).toInt();
+                int hour = QDateTime::fromMSecsSinceEpoch(ts).time().hour();
+                if (hour >= 0 && hour < 24) {
+                    if (dir == static_cast<int>(PassageDirection::ENTRY)) {
+                        summary.hourly_data[hour].first++;
+                    } else if (dir == static_cast<int>(PassageDirection::EXIT)) {
+                        summary.hourly_data[hour].second++;
+                    }
+                }
+            }
+        }
+
+        int max_sum = 0;
+        for (int h = 0; h < 24; ++h) {
+            int cur_sum = summary.hourly_data[h].first + summary.hourly_data[h].second;
+            if (cur_sum > max_sum) {
+                max_sum = cur_sum;
+                summary.peak_hour = h;
+                summary.peak_hour_count = max_sum;
+            }
+        }
+    }
+
+    // 4. 查询主力年龄段
+    {
+        QSqlQuery q(db);
+        q.prepare("SELECT age_group, COUNT(*) as c FROM passage_events" + where_clause +
+                  " AND age_group != '未知' AND age_group != '' GROUP BY age_group ORDER BY c DESC LIMIT 1;");
+        bind_params(q);
+        if (q.exec() && q.next()) {
+            summary.top_age_group = q.value(0).toString().toStdString();
+            summary.top_age_count = q.value(1).toInt();
+        }
+    }
+
+    return summary;
 }
 
 std::map<int, std::pair<int, int>> DatabaseManager::query_hourly_distribution(int64_t start_ms, int64_t end_ms) {

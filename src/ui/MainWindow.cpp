@@ -80,6 +80,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         init_snap.today_exit = init_out;
         init_snap.today_total = init_in + init_out;
         view_monitor_->update_stats(init_snap);
+        if (view_analytics_) {
+            view_analytics_->update_realtime_stats(init_snap);
+        }
 
         auto recent_events = DatabaseManager::instance().query_recent_events(50);
         view_monitor_->populate_recent_events(recent_events);
@@ -138,9 +141,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         EdgeReportManager::instance().upload_snapshot(bytes);
     });
     connect(pipeline_.get(), &PipelineController::stats_updated, view_monitor_, &MonitorWidget::update_stats);
+    connect(pipeline_.get(), &PipelineController::stats_updated, view_analytics_, &AnalyticsWidget::update_realtime_stats);
     connect(pipeline_.get(), &PipelineController::stats_updated, this, &MainWindow::on_stats_updated);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
+    connect(pipeline_.get(), &PipelineController::event_occurred, view_analytics_, &AnalyticsWidget::add_realtime_passage);
     connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
         EdgeReportManager::instance().record_passage(ev);
         WebhookPusher::instance().push_event(ev);
@@ -211,7 +216,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             view_evidence_->refresh_events();
         }
         if (view_analytics_) {
-            view_analytics_->refresh_report();
+            view_analytics_->reset_realtime_data();
         }
         if (reset_rois) {
             auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
@@ -313,10 +318,10 @@ void MainWindow::setup_ui() {
     nav_sidebar_->setObjectName("nav_sidebar");
     nav_sidebar_->setFocusPolicy(Qt::NoFocus);
 
+    nav_sidebar_->addItem("📊  数据报表");
     nav_sidebar_->addItem("📹  实时监控");
     nav_sidebar_->addItem("📐  空间标定");
     nav_sidebar_->addItem("🎬  证据回溯");
-    nav_sidebar_->addItem("📊  数据报表");
     nav_sidebar_->addItem("⚙️  系统设置");
     nav_sidebar_->setCurrentRow(0);
 
@@ -335,17 +340,17 @@ void MainWindow::setup_ui() {
     // 2. 右侧多页面堆栈容器
     stacked_views_ = new QStackedWidget(this);
 
+    view_analytics_ = new AnalyticsWidget(this);
     view_monitor_ = new MonitorWidget(this);
     view_studio_ = new StudioWidget(this);
     view_evidence_ = new EvidenceWidget(this);
-    view_analytics_ = new AnalyticsWidget(this);
     view_settings_ = new SettingsWidget(this);
 
-    stacked_views_->addWidget(view_monitor_);    // Index 0
-    stacked_views_->addWidget(view_studio_);     // Index 1
-    stacked_views_->addWidget(view_evidence_);   // Index 2
-    stacked_views_->addWidget(view_analytics_);  // Index 3
-    stacked_views_->addWidget(view_settings_);   // Index 4
+    stacked_views_->addWidget(view_analytics_);  // Index 0: 📊 数据报表 (默认首页面)
+    stacked_views_->addWidget(view_monitor_);    // Index 1: 📹 实时监控
+    stacked_views_->addWidget(view_studio_);     // Index 2: 📐 空间标定
+    stacked_views_->addWidget(view_evidence_);   // Index 3: 🎬 证据回溯
+    stacked_views_->addWidget(view_settings_);   // Index 4: ⚙️ 系统设置
 
     main_layout->addWidget(sidebar_container);
     main_layout->addWidget(stacked_views_);
@@ -409,10 +414,10 @@ void MainWindow::setup_connections() {
 
 void MainWindow::on_nav_item_changed(int row) {
     stacked_views_->setCurrentIndex(row);
-    if (row == 2) {
-        view_evidence_->refresh_events();
-    } else if (row == 3) {
+    if (row == 0) {
         view_analytics_->refresh_report();
+    } else if (row == 3) {
+        view_evidence_->refresh_events();
     }
 }
 

@@ -5,6 +5,28 @@
 #include <vector>
 #include <map>
 
+// 报表检索条件
+struct AnalyticsFilterCriteria {
+    int64_t start_ms = 0;
+    int64_t end_ms = 0;
+    int direction_filter = -1; // -1: 全部, 0: 进 (ENTRY), 1: 出 (EXIT)
+    QString gender_filter = ""; // "": 全部, "男", "女"
+};
+
+// 报表多维汇总指标
+struct AnalyticsReportSummary {
+    int total_flow = 0;
+    int entry_count = 0;
+    int exit_count = 0;
+    int male_count = 0;
+    int female_count = 0;
+    int peak_hour = -1;
+    int peak_hour_count = 0;
+    std::string top_age_group = "暂无数据";
+    int top_age_count = 0;
+    std::map<int, std::pair<int, int>> hourly_data; // hour (0~23) -> {entry, exit}
+};
+
 class DatabaseManager {
 public:
     static DatabaseManager& instance();
@@ -13,7 +35,7 @@ public:
     bool insert_events(const std::vector<PassageEvent>& events);
     std::vector<PassageEvent> query_recent_events(int limit = 50);
     std::vector<PassageEvent> query_events_by_timerange(int64_t start_ms, int64_t end_ms, int limit = 5000);
-    std::vector<PassageEvent> query_filtered_events(int direction_filter = -1, int64_t start_ms = 0, int64_t end_ms = 0, const QString& keyword = "", int limit = 500);
+    std::vector<PassageEvent> query_filtered_events(int direction_filter = -1, int64_t start_ms = 0, int64_t end_ms = 0, const QString& keyword = "", int limit = 500, const QString& gender_filter = "");
     std::vector<RoiConfig> load_latest_roi_configs();
     bool save_roi_config(const RoiConfig& config);
     bool save_roi_configs(const std::vector<RoiConfig>& configs);
@@ -21,6 +43,9 @@ public:
     void prune_expired_event_clips(int64_t threshold_ms);
     bool update_event_attributes(int track_id, const std::string& gender, const std::string& age_group);
     QSqlDatabase get_database();
+
+    // 报表多维综合查询与指标统计
+    AnalyticsReportSummary query_analytics_summary(const AnalyticsFilterCriteria& criteria);
 
     // P1-6: 小时预聚合加速 (stats_hourly)
     bool sync_hourly_aggregation();

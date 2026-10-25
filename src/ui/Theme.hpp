@@ -225,6 +225,65 @@ inline QString get_global_stylesheet() {
             padding: 2px 8px;
             font-size: 11px;
         }
+
+        /* 选项卡容器 (QTabWidget) */
+        QTabWidget::pane {
+            border: 1px solid #282c34;
+            background-color: #161b22;
+            border-radius: 6px;
+            top: -1px;
+        }
+        QTabBar::tab {
+            background-color: #181b20;
+            color: #8c96a3;
+            border: 1px solid #282c34;
+            border-bottom: none;
+            padding: 8px 18px;
+            margin-right: 4px;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        QTabBar::tab:selected {
+            background-color: #161b22;
+            color: #58a6ff;
+            border-top: 2px solid #388bfd;
+            font-weight: bold;
+        }
+        QTabBar::tab:hover:!selected {
+            background-color: #20242b;
+            color: #c9d1d9;
+        }
+
+        /* 日期时间选择框 (QDateTimeEdit / QCalendarWidget) */
+        QDateTimeEdit, QDateEdit, QTimeEdit {
+            background-color: #16181d;
+            color: #c9d1d9;
+            border: 1px solid #282c34;
+            border-radius: 3px;
+            padding: 4px 8px;
+        }
+        QDateTimeEdit:focus, QDateEdit:focus, QTimeEdit:focus {
+            border: 1px solid #388bfd;
+            background-color: #1a1d22;
+        }
+        QDateTimeEdit::drop-down, QDateEdit::drop-down, QTimeEdit::drop-down {
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 18px;
+            border-left: none;
+        }
+        QCalendarWidget QWidget {
+            background-color: #161b22;
+            color: #c9d1d9;
+        }
+        QCalendarWidget QAbstractItemView:enabled {
+            color: #c9d1d9;
+            background-color: #161b22;
+            selection-background-color: #388bfd;
+            selection-color: #ffffff;
+        }
     )";
 }
 
