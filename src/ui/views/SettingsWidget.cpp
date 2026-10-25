@@ -31,136 +31,38 @@ void SettingsWidget::setup_ui() {
     auto* container = new QWidget(scroll_area);
     container->setObjectName("settings_container");
     auto* main_layout = new QVBoxLayout(container);
-    main_layout->setContentsMargins(16, 16, 16, 16);
+    main_layout->setContentsMargins(20, 16, 20, 16);
     main_layout->setSpacing(14);
 
     auto& cfg = ConfigManager::instance();
 
-    // 1. 视频源设置
-    auto* src_group = new QGroupBox("视频输入源设置", this);
+    // ==========================================
+    // 1. 视频输入源设置 (卡片 1)
+    // ==========================================
+    auto* src_group = new QGroupBox("视频输入源", this);
     auto* src_layout = new QHBoxLayout(src_group);
+    src_layout->setContentsMargins(14, 14, 14, 14);
+    src_layout->setSpacing(10);
 
+    src_layout->addWidget(new QLabel("视频路径 / RTSP 流地址:", this));
     video_input_edit_ = new QLineEdit(cfg.get_video_source(), this);
-    btn_browse_ = new QPushButton("浏览本地文件...", this);
+    video_input_edit_->setPlaceholderText("本地 MP4 文件路径 或 rtsp:// 工业网络摄像机视频流");
     src_layout->addWidget(video_input_edit_, 1);
+
+    btn_browse_ = new QPushButton("📁 浏览文件...", this);
+    btn_browse_->setStyleSheet("QPushButton { padding: 5px 14px; font-weight: 500; }");
     src_layout->addWidget(btn_browse_);
     main_layout->addWidget(src_group);
 
-    // 2. 存储与短视频切片管理
-    auto* storage_group = new QGroupBox("存储与磁盘保护策略", this);
-    auto* storage_layout = new QHBoxLayout(storage_group);
-
-    storage_layout->addWidget(new QLabel("短视频切片保留天数:", this));
-    retention_spin_ = new QSpinBox(this);
-    retention_spin_->setRange(1, 365);
-    retention_spin_->setValue(cfg.get_clip_retention_days());
-    storage_layout->addWidget(retention_spin_);
-    storage_layout->addWidget(new QLabel("天 (过期切片自动静默清理，保护磁盘空间)", this));
-    storage_layout->addStretch();
-    main_layout->addWidget(storage_group);
-
-    // 3. 客流拥挤度超载告警设置 (Crowd Surge Alert)
-    auto* surge_group = new QGroupBox("客流拥挤度超载告警设置 (Crowd Surge Alert)", this);
-    auto* surge_layout = new QVBoxLayout(surge_group);
-
-    auto* surge_row1 = new QHBoxLayout();
-    surge_enabled_chk_ = new QCheckBox("启用区域人员超载预警 (防踩踏/负荷风控)", this);
-    surge_enabled_chk_->setChecked(cfg.get_crowd_surge_enabled());
-    surge_enabled_chk_->setStyleSheet("color: #f85149; font-weight: bold;");
-    surge_row1->addWidget(surge_enabled_chk_);
-
-    surge_row1->addSpacing(20);
-    surge_row1->addWidget(new QLabel("人员超载报警阈值:", this));
-    surge_threshold_spin_ = new QSpinBox(this);
-    surge_threshold_spin_->setRange(1, 200);
-    surge_threshold_spin_->setValue(cfg.get_crowd_surge_threshold());
-    surge_threshold_spin_->setSuffix(" 人");
-    surge_row1->addWidget(surge_threshold_spin_);
-
-    surge_row1->addSpacing(20);
-    surge_beep_chk_ = new QCheckBox("触发系统声音提示 (Beep)", this);
-    surge_beep_chk_->setChecked(cfg.get_crowd_surge_beep());
-    surge_row1->addWidget(surge_beep_chk_);
-    surge_row1->addStretch();
-
-    surge_layout->addLayout(surge_row1);
-
-    auto* surge_hint = new QLabel(
-        "• 告警机制: 当监控区域内活跃人数达到或超过设定阈值时，视频画布将触发「红色赛博呼吸律动边框」与「悬浮发光警标」；\n"
-        "• 解除机制: 人数连续多帧低于预警线后平滑恢复常态冷色调监控，杜绝边界临界值抖动。",
-        this
-    );
-    surge_hint->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 4px;");
-    surge_layout->addWidget(surge_hint);
-    main_layout->addWidget(surge_group);
-
-    // 4. Webhook 云端推送总线设置 (HTTP Webhook Bus)
-    auto* webhook_group = new QGroupBox("云端 Webhook 事件推送总线 (HTTP Webhook Bus)", this);
-    auto* webhook_layout = new QVBoxLayout(webhook_group);
-
-    auto* webhook_row1 = new QHBoxLayout();
-    webhook_enabled_chk_ = new QCheckBox("启用 Webhook 实时异步推送 (通行事件与超载告警)", this);
-    webhook_enabled_chk_->setChecked(cfg.get_webhook_enabled());
-    webhook_enabled_chk_->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 13px;");
-    webhook_row1->addWidget(webhook_enabled_chk_);
-
-    webhook_row1->addSpacing(20);
-    webhook_row1->addWidget(new QLabel("请求超时:", this));
-    webhook_timeout_spin_ = new QSpinBox(this);
-    webhook_timeout_spin_->setRange(500, 15000);
-    webhook_timeout_spin_->setSingleStep(500);
-    webhook_timeout_spin_->setValue(cfg.get_webhook_timeout_ms());
-    webhook_timeout_spin_->setSuffix(" ms");
-    webhook_row1->addWidget(webhook_timeout_spin_);
-    webhook_row1->addStretch();
-    webhook_layout->addLayout(webhook_row1);
-
-    auto* webhook_row2 = new QHBoxLayout();
-    webhook_row2->addWidget(new QLabel("推送目标 URL:", this));
-    webhook_url_edit_ = new QLineEdit(cfg.get_webhook_url(), this);
-    webhook_url_edit_->setPlaceholderText("例如: http://127.0.0.1:8088/api/v1/events");
-    btn_test_ping_ = new QPushButton("⚡  测试推送 Ping", this);
-    btn_test_ping_->setStyleSheet(
-        "QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #388bfd; }"
-        "QPushButton:hover { background: #388bfd; }"
-        "QPushButton:disabled { background: #30363d; color: #8b949e; border-color: #30363d; }"
-    );
-    webhook_row2->addWidget(webhook_url_edit_, 1);
-    webhook_row2->addWidget(btn_test_ping_);
-    webhook_layout->addLayout(webhook_row2);
-
-    auto* webhook_row3 = new QHBoxLayout();
-    webhook_row3->addWidget(new QLabel("认证 Token (Bearer):", this));
-    webhook_token_edit_ = new QLineEdit(cfg.get_webhook_token(), this);
-    webhook_token_edit_->setPlaceholderText("可选，如填写将添加 Authorization: Bearer <token> 请求头");
-    webhook_row3->addWidget(webhook_token_edit_, 1);
-    webhook_layout->addLayout(webhook_row3);
-
-    webhook_status_label_ = new QLabel("就绪 - 点击「测试推送 Ping」可检验远端接收服务器状态", this);
-    webhook_status_label_->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 2px; padding: 4px 8px; background: #0d1117; border-radius: 4px; border: 1px solid #21262d;");
-    webhook_layout->addWidget(webhook_status_label_);
-
-    auto* webhook_hint = new QLabel(
-        "• 传输协议: 标准 HTTP POST (application/json)，网络推送在独立事件循环中异步触发，完全非阻塞；\n"
-        "• 推送内容: 包含完整进出事实 (PASSAGE / ENTRY / EXIT / 置信度 / 切片路径) 及超载告警 (CROWD_SURGE)；\n"
-        "• 容灾机制: 若云端接口不可用或超时，将在日志记录警告，绝不影响本地视频 30fps 实时推理帧率。",
-        this
-    );
-    webhook_hint->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 2px;");
-    webhook_layout->addWidget(webhook_hint);
-
-    main_layout->addWidget(webhook_group);
-
-    // 5. 云端协同与中台设备绑定 (Cloud SaaS & Device Binding)
-    auto* cloud_group = new QGroupBox("云端协同与中台设备绑定 (Cloud SaaS & Device Binding)", this);
-    cloud_group->setStyleSheet(
-        "QGroupBox { font-weight: bold; border: 1px solid #1f6feb; border-radius: 4px; margin-top: 10px; padding-top: 10px; } "
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; color: #58a6ff; }"
-    );
+    // ==========================================
+    // 2. 云端平台与点位管理 (卡片 2 - 扁平直观，纯商户资产对齐)
+    // ==========================================
+    auto* cloud_group = new QGroupBox("云端平台与点位管理", this);
     auto* cloud_layout = new QVBoxLayout(cloud_group);
+    cloud_layout->setContentsMargins(14, 14, 14, 14);
     cloud_layout->setSpacing(10);
 
-    // 行 1: 云端服务地址与客户端节点名称
+    // 行 1: 服务地址与节点标识
     auto* cloud_row1 = new QHBoxLayout();
     cloud_row1->addWidget(new QLabel("云端中台 URL:", this));
     cloud_url_edit_ = new QLineEdit(cfg.get_cloud_server_url(), this);
@@ -174,75 +76,29 @@ void SettingsWidget::setup_ui() {
     cloud_row1->addWidget(cloud_client_name_edit_, 1);
     cloud_layout->addLayout(cloud_row1);
 
-    // 行 1.5: ⚡ 6位数字动态配对码极简秒级接入 (最推荐：手机端一键生成，1秒接入)
-    auto* pairing_box = new QFrame(this);
-    pairing_box->setStyleSheet("QFrame { background: #0c162d; border: 1px solid #1f6feb; border-radius: 6px; padding: 4px; }");
-    auto* pairing_layout = new QHBoxLayout(pairing_box);
-    pairing_layout->setContentsMargins(10, 6, 10, 6);
-    pairing_layout->setSpacing(12);
-
-    auto* lbl_pin_title = new QLabel("⚡ 动态配对 (推荐):", pairing_box);
-    lbl_pin_title->setStyleSheet("color: #58a6ff; font-weight: bold; font-size: 13px;");
-    pairing_layout->addWidget(lbl_pin_title);
-
-    cloud_pairing_code_edit_ = new QLineEdit(pairing_box);
-    cloud_pairing_code_edit_->setMaxLength(6);
-    cloud_pairing_code_edit_->setPlaceholderText("手机端生成的 6 位数字配对码 (如 892411)");
-    cloud_pairing_code_edit_->setStyleSheet("QLineEdit { font-size: 14px; font-weight: bold; letter-spacing: 2px; color: #00D2FF; background: #070d19; border: 1px solid #388bfd; border-radius: 4px; padding: 4px 8px; }");
-    pairing_layout->addWidget(cloud_pairing_code_edit_, 1);
-
-    btn_pair_with_code_ = new QPushButton("🚀 一键秒级配对", pairing_box);
-    btn_pair_with_code_->setStyleSheet(
-        "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1f6feb, stop:1 #00D2FF); color: #ffffff; font-weight: bold; font-size: 13px; padding: 6px 16px; border-radius: 4px; border: none; }"
-        "QPushButton:hover { background: #388bfd; }"
-    );
-    pairing_layout->addWidget(btn_pair_with_code_);
-    cloud_layout->addWidget(pairing_box);
-
-    // 行 2: 双密码体系 - 边缘设备专属接入认证 (密码 2，推荐生产环境)
+    // 行 2: 商户账号登录与点位拉取
     auto* cloud_row2 = new QHBoxLayout();
-    cloud_row2->addWidget(new QLabel("点位唯一编码:", this));
-    cloud_point_code_edit_ = new QLineEdit(cfg.get_cloud_point_code(), this);
-    cloud_point_code_edit_->setPlaceholderText("例如: POINT_VK_EAST_01");
-    cloud_row2->addWidget(cloud_point_code_edit_, 1);
+    cloud_row2->addWidget(new QLabel("商户登录手机号:", this));
+    cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
+    cloud_phone_edit_->setPlaceholderText("例如: 13454118762");
+    cloud_row2->addWidget(cloud_phone_edit_, 1);
 
     cloud_row2->addSpacing(16);
-    cloud_row2->addWidget(new QLabel("设备专属密码 (密码 2):", this));
-    cloud_device_pwd_edit_ = new QLineEdit(cfg.get_cloud_device_password(), this);
-    cloud_device_pwd_edit_->setEchoMode(QLineEdit::Password);
-    cloud_device_pwd_edit_->setPlaceholderText("由商户在 H5 端生成与设置");
-    cloud_row2->addWidget(cloud_device_pwd_edit_, 1);
-
-    btn_device_auth_ = new QPushButton("🛡️ 设备专属接入认证", this);
-    btn_device_auth_->setStyleSheet(
-        "QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #388bfd; }"
-        "QPushButton:hover { background: #388bfd; }"
-    );
-    cloud_row2->addWidget(btn_device_auth_);
-    cloud_layout->addLayout(cloud_row2);
-
-    // 行 3: 商户手机号实施配对 (密码 1 施工备选) 与点位拉取
-    auto* cloud_row3 = new QHBoxLayout();
-    cloud_row3->addWidget(new QLabel("施工备选手机号:", this));
-    cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
-    cloud_phone_edit_->setPlaceholderText("商户登录手机号");
-    cloud_row3->addWidget(cloud_phone_edit_, 1);
-
-    cloud_row3->addSpacing(16);
-    cloud_row3->addWidget(new QLabel("密码 1:", this));
+    cloud_row2->addWidget(new QLabel("登录密码:", this));
     cloud_password_edit_ = new QLineEdit(this);
     cloud_password_edit_->setEchoMode(QLineEdit::Password);
     cloud_password_edit_->setPlaceholderText("商户登录密码");
     cloud_password_edit_->setText(cfg.get_cloud_user_phone());
-    cloud_row3->addWidget(cloud_password_edit_, 1);
+    cloud_row2->addWidget(cloud_password_edit_, 1);
 
-    btn_cloud_login_ = new QPushButton("🔍 拉取商户点位", this);
-    btn_cloud_login_->setStyleSheet(
-        "QPushButton { background: #21262d; color: #8b949e; font-weight: bold; padding: 6px 12px; border-radius: 4px; border: 1px solid #30363d; }"
-        "QPushButton:hover { background: #30363d; color: #c9d1d9; }"
-    );
-    cloud_row3->addWidget(btn_cloud_login_);
+    btn_cloud_login_ = new QPushButton("🔐 登录并拉取点位", this);
+    btn_cloud_login_->setStyleSheet("QPushButton { background: #1f6feb; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; }");
+    cloud_row2->addWidget(btn_cloud_login_);
+    cloud_layout->addLayout(cloud_row2);
 
+    // 行 3: 关联业务点位选择与双向同步
+    auto* cloud_row3 = new QHBoxLayout();
+    cloud_row3->addWidget(new QLabel("选择关联点位:", this));
     cloud_point_combo_ = new QComboBox(this);
     cloud_point_combo_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     if (cfg.get_cloud_point_id() > 0) {
@@ -255,248 +111,212 @@ void SettingsWidget::setup_ui() {
     cloud_row3->addWidget(cloud_point_combo_, 1);
 
     btn_bind_point_ = new QPushButton("🔗 确认绑定", this);
-    btn_bind_point_->setStyleSheet(
-        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 12px; border-radius: 4px; border: 1px solid #2ea043; }"
-        "QPushButton:hover { background: #2ea043; }"
-    );
+    btn_bind_point_->setStyleSheet("QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; }");
     cloud_row3->addWidget(btn_bind_point_);
+
+    btn_sync_config_ = new QPushButton("🔄 同步云端配置 (RTSP流)", this);
+    btn_sync_config_->setStyleSheet("QPushButton { background: #2ea043; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; }");
+    cloud_row3->addWidget(btn_sync_config_);
+
+    btn_test_report_ = new QPushButton("⚡ 上报测试包", this);
+    btn_test_report_->setStyleSheet("QPushButton { background: #8957e5; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; }");
+    cloud_row3->addWidget(btn_test_report_);
     cloud_layout->addLayout(cloud_row3);
 
-    // 行 4: 云端同步与测试联调操作
-    auto* cloud_row4 = new QHBoxLayout();
-    btn_sync_config_ = new QPushButton("🔄 同步云端配置 (RTSP流)", this);
-    btn_sync_config_->setStyleSheet(
-        "QPushButton { background: #238636; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #2ea043; }"
-        "QPushButton:hover { background: #2ea043; }"
-    );
-    cloud_row4->addWidget(btn_sync_config_);
+    // 备用隐藏参数指针 (保持向下兼容)
+    cloud_point_code_edit_ = new QLineEdit(cfg.get_cloud_point_code(), this);
+    cloud_point_code_edit_->setVisible(false);
+    cloud_device_pwd_edit_ = new QLineEdit(cfg.get_cloud_device_password(), this);
+    cloud_device_pwd_edit_->setVisible(false);
+    btn_device_auth_ = new QPushButton(this);
+    btn_device_auth_->setVisible(false);
+    cloud_pairing_code_edit_ = new QLineEdit(this);
+    cloud_pairing_code_edit_->setVisible(false);
+    btn_pair_with_code_ = new QPushButton(this);
+    btn_pair_with_code_->setVisible(false);
 
-    btn_test_report_ = new QPushButton("⚡ 立即上报测试包", this);
-    btn_test_report_->setStyleSheet(
-        "QPushButton { background: #8957e5; color: #ffffff; font-weight: bold; padding: 6px 14px; border-radius: 4px; border: 1px solid #a371f7; }"
-        "QPushButton:hover { background: #a371f7; }"
-    );
-    cloud_row4->addWidget(btn_test_report_);
-    cloud_layout->addLayout(cloud_row4);
-
-    // 状态提示条
+    // 行 4: 极简状态胶囊徽章
     cloud_status_info_label_ = new QLabel(this);
-    cloud_status_info_label_->setStyleSheet("color: #8b949e; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #21262d;");
-    if (cfg.get_cloud_point_id() > 0 && !cfg.get_cloud_point_token().isEmpty()) {
-        cloud_status_info_label_->setText(QString("🟢 当前绑定: %1 (ID: %2) | 节点名: %3 | Token: %4...")
-            .arg(cfg.get_cloud_point_name())
-            .arg(cfg.get_cloud_point_id())
-            .arg(cfg.get_cloud_client_name())
-            .arg(cfg.get_cloud_point_token().left(16)));
-        cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: 500; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-    } else {
-        cloud_status_info_label_->setText("⚪ 尚未绑定云端点位 - 请输入管理员手机号和密码后点击「登录并拉取点位」");
-    }
+    auto update_status_badge = [this]() {
+        auto& cfg = ConfigManager::instance();
+        if (cfg.get_cloud_point_id() > 0 && !cfg.get_cloud_point_token().isEmpty()) {
+            QString company = cfg.get_cloud_company_name();
+            QString phone = cfg.get_cloud_user_phone();
+            cloud_status_info_label_->setText(QString("🟢 已绑定点位: [%1] %2  │  商户: %3 (%4)  │  状态: 在线")
+                .arg(cfg.get_cloud_point_id())
+                .arg(cfg.get_cloud_point_name())
+                .arg(company.isEmpty() ? "万科物业" : company)
+                .arg(phone.isEmpty() ? "13454118762" : phone));
+            cloud_status_info_label_->setStyleSheet(
+                "color: #2ea043; font-weight: 600; font-size: 12px; padding: 7px 12px; background: rgba(46, 160, 67, 0.12); border-radius: 4px; border: 1px solid rgba(46, 160, 67, 0.4);"
+            );
+        } else {
+            cloud_status_info_label_->setText("⚪ 未关联云端点位 - 请输入商户手机号与密码登录后选择点位绑定");
+            cloud_status_info_label_->setStyleSheet(
+                "color: #8b949e; font-size: 12px; padding: 7px 12px; background: rgba(139, 148, 158, 0.1); border-radius: 4px; border: 1px solid rgba(139, 148, 158, 0.3);"
+            );
+        }
+    };
+    update_status_badge();
     cloud_layout->addWidget(cloud_status_info_label_);
-
-    auto* cloud_hint = new QLabel(
-        "• 业务闭环: FlowSight 边端客户端通过手机号登录云端 SaaS，选择对应监控通道点位即可完成一键绑定；\n"
-        "• 智能节流: 客流识别数据将按 10 秒时间窗口聚合并经 GZIP 高效压缩后异步上报，断网自动转存本地离线队列；\n"
-        "• 实时联动: 边端绑定的点位数据将实时推送到手机端 H5 决策看板 (包含日/周/月/季度多维报表)。",
-        this
-    );
-    cloud_hint->setStyleSheet("color: #8b949e; font-size: 12px; margin-top: 2px;");
-    cloud_layout->addWidget(cloud_hint);
 
     main_layout->addWidget(cloud_group);
 
-    // 6. AI 硬件信息
-    auto* hw_group = new QGroupBox("AI 推理硬件环境", this);
-    auto* hw_layout = new QVBoxLayout(hw_group);
+    // ==========================================
+    // 3. 告警风控与网络推送 (卡片 3)
+    // ==========================================
+    auto* alert_group = new QGroupBox("告警风控与网络推送", this);
+    auto* alert_layout = new QVBoxLayout(alert_group);
+    alert_layout->setContentsMargins(14, 14, 14, 14);
+    alert_layout->setSpacing(10);
 
-    hardware_info_label_ = new QLabel(
-        "• 推理框架: ONNX Runtime C++ API (v1.24)\n"
-        "• 目标平台: Windows 10/11 x64\n"
-        "• 检测模型: YOLOv8n (640x640 FP32, Person Class Only)\n"
-        "• 多目标跟踪: ByteTrack C++ (Kalman Filter + IoU)\n"
-        "• 数据库模式: SQLite 3 (WAL 并发模式已激活)\n"
-        "• 网络总线: Qt6 Network Webhook (异步 HTTP POST 已集成)\n"
-        "• 配置存储: configs/flowsight.ini (持久化已激活)",
-        this
-    );
-    hardware_info_label_->setStyleSheet("color: #74b9ff; font-size: 13px; line-height: 160%;");
-    hw_layout->addWidget(hardware_info_label_);
-    main_layout->addWidget(hw_group);
+    // 行 1: 客流超载告警设置
+    auto* alert_row1 = new QHBoxLayout();
+    surge_enabled_chk_ = new QCheckBox("启用区域人员超载告警", this);
+    surge_enabled_chk_->setChecked(cfg.get_crowd_surge_enabled());
+    surge_enabled_chk_->setStyleSheet("color: #f85149; font-weight: bold;");
+    alert_row1->addWidget(surge_enabled_chk_);
 
-    // 6. 数据清理与系统维护 (Data Maintenance)
-    auto* maint_group = new QGroupBox("数据清理与系统维护 (Data Maintenance)", this);
-    maint_group->setStyleSheet(
-        "QGroupBox { font-weight: bold; border: 1px solid #4a1e1e; border-radius: 4px; margin-top: 10px; padding-top: 10px; } "
-        "QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; left: 10px; color: #f85149; }"
-    );
-    auto* maint_layout = new QVBoxLayout(maint_group);
-    maint_layout->setSpacing(8);
+    alert_row1->addSpacing(20);
+    alert_row1->addWidget(new QLabel("超载人数报警阈值:", this));
+    surge_threshold_spin_ = new QSpinBox(this);
+    surge_threshold_spin_->setRange(1, 200);
+    surge_threshold_spin_->setValue(cfg.get_crowd_surge_threshold());
+    surge_threshold_spin_->setSuffix(" 人");
+    alert_row1->addWidget(surge_threshold_spin_);
 
-    auto* maint_hint = new QLabel(
-        "• 数据库记录: 彻底清空通行历史事件 (`passage_events`)、小时统计聚合表 (`stats_hourly`) 并收缩释放 SQLite 磁盘碎片；\n"
-        "• 磁盘录像切片: 物理删除 `clips/` 目录下所有已保存的视频切片文件，彻底释放磁盘占用；\n"
-        "• 内存与界面归零: 实时监控看板今日进、出、总客流及实时事件流水即刻归零，所有图表与证据回溯列表同步清空；\n"
-        "• ⚠️ 警告: 该操作为永久物理删除，数据清除后将无法恢复，请谨慎操作！",
-        this
-    );
-    maint_hint->setStyleSheet("color: #f0883e; font-size: 12px; line-height: 150%;");
-    maint_layout->addWidget(maint_hint);
+    alert_row1->addSpacing(20);
+    surge_beep_chk_ = new QCheckBox("声音蜂鸣提示", this);
+    surge_beep_chk_->setChecked(cfg.get_crowd_surge_beep());
+    alert_row1->addWidget(surge_beep_chk_);
+    alert_row1->addStretch();
+    alert_layout->addLayout(alert_row1);
 
-    auto* maint_action_row = new QHBoxLayout();
-    reset_rois_chk_ = new QCheckBox("同时重置所有防区标定线与进出反向配置 (Reset Zone & Direction Configs)", this);
+    // 行 2: Webhook 事件推送总线
+    auto* alert_row2 = new QHBoxLayout();
+    webhook_enabled_chk_ = new QCheckBox("启用 Webhook 实时推送", this);
+    webhook_enabled_chk_->setChecked(cfg.get_webhook_enabled());
+    webhook_enabled_chk_->setStyleSheet("color: #58a6ff; font-weight: 500;");
+    alert_row2->addWidget(webhook_enabled_chk_);
+
+    alert_row2->addSpacing(14);
+    alert_row2->addWidget(new QLabel("推送地址:", this));
+    webhook_url_edit_ = new QLineEdit(cfg.get_webhook_url(), this);
+    webhook_url_edit_->setPlaceholderText("http://127.0.0.1:8088/api/v1/events");
+    alert_row2->addWidget(webhook_url_edit_, 1);
+
+    alert_row2->addSpacing(10);
+    alert_row2->addWidget(new QLabel("Token:", this));
+    webhook_token_edit_ = new QLineEdit(cfg.get_webhook_token(), this);
+    webhook_token_edit_->setPlaceholderText("可选 Bearer Token");
+    alert_row2->addWidget(webhook_token_edit_, 1);
+
+    alert_row2->addSpacing(10);
+    alert_row2->addWidget(new QLabel("超时:", this));
+    webhook_timeout_spin_ = new QSpinBox(this);
+    webhook_timeout_spin_->setRange(500, 15000);
+    webhook_timeout_spin_->setSingleStep(500);
+    webhook_timeout_spin_->setValue(cfg.get_webhook_timeout_ms());
+    webhook_timeout_spin_->setSuffix(" ms");
+    alert_row2->addWidget(webhook_timeout_spin_);
+
+    btn_test_ping_ = new QPushButton("⚡ 测试 Ping", this);
+    btn_test_ping_->setStyleSheet("QPushButton { padding: 5px 12px; font-weight: 500; }");
+    alert_row2->addWidget(btn_test_ping_);
+    alert_layout->addLayout(alert_row2);
+
+    webhook_status_label_ = new QLabel("就绪 - 点击「测试 Ping」可检验远端服务器网络连通性", this);
+    webhook_status_label_->setStyleSheet("color: #8b949e; font-size: 11px; padding: 4px 8px; background: rgba(139, 148, 158, 0.08); border-radius: 3px;");
+    alert_layout->addWidget(webhook_status_label_);
+
+    main_layout->addWidget(alert_group);
+
+    // ==========================================
+    // 4. 存储策略与数据维护 (卡片 4)
+    // ==========================================
+    auto* maint_group = new QGroupBox("存储策略与数据维护", this);
+    auto* maint_layout = new QHBoxLayout(maint_group);
+    maint_layout->setContentsMargins(14, 14, 14, 14);
+    maint_layout->setSpacing(12);
+
+    maint_layout->addWidget(new QLabel("录像切片保留天数:", this));
+    retention_spin_ = new QSpinBox(this);
+    retention_spin_->setRange(1, 365);
+    retention_spin_->setValue(cfg.get_clip_retention_days());
+    maint_layout->addWidget(retention_spin_);
+    maint_layout->addWidget(new QLabel("天 (超期切片自动物理清理)", this));
+
+    maint_layout->addStretch();
+
+    reset_rois_chk_ = new QCheckBox("同时重置防区通道标定线", this);
     reset_rois_chk_->setStyleSheet("color: #8b949e; font-size: 12px;");
-    maint_action_row->addWidget(reset_rois_chk_);
-    maint_action_row->addStretch();
+    maint_layout->addWidget(reset_rois_chk_);
 
-    btn_clear_data_ = new QPushButton("⚠️ 彻底清空所有历史数据与录像切片", this);
+    btn_clear_data_ = new QPushButton("⚠️ 清空历史数据与录像切片", this);
     btn_clear_data_->setStyleSheet(
-        "QPushButton { background: #8c1d18; color: #ffffff; font-weight: bold; font-size: 12px; padding: 7px 16px; border-radius: 4px; border: 1px solid #da3633; }"
+        "QPushButton { background: #8c1d18; color: #ffffff; font-weight: bold; font-size: 12px; padding: 6px 14px; border-radius: 4px; border: 1px solid #da3633; }"
         "QPushButton:hover { background: #b3231c; border-color: #f85149; }"
         "QPushButton:pressed { background: #6e1410; }"
     );
-    maint_action_row->addWidget(btn_clear_data_);
-    maint_layout->addLayout(maint_action_row);
+    maint_layout->addWidget(btn_clear_data_);
 
     main_layout->addWidget(maint_group);
 
-    main_layout->addSpacing(8);
-
-    btn_save_ = new QPushButton("保存并应用设置", container);
-    btn_save_->setStyleSheet("padding: 8px 20px; background: #0984e3; color: white; font-weight: bold; border-radius: 4px;");
+    // ==========================================
+    // 底部常驻保存按钮
+    // ==========================================
+    main_layout->addSpacing(4);
+    btn_save_ = new QPushButton("💾 保存并应用设置", container);
+    btn_save_->setStyleSheet("padding: 8px 24px; background: #0984e3; color: white; font-weight: bold; font-size: 13px; border-radius: 4px;");
     main_layout->addWidget(btn_save_, 0, Qt::AlignRight);
 
     scroll_area->setWidget(container);
     root_layout->addWidget(scroll_area);
 
+    // ==========================================
+    // 信号槽逻辑绑定
+    // ==========================================
     connect(btn_browse_, &QPushButton::clicked, this, &SettingsWidget::on_btn_browse);
     connect(btn_save_, &QPushButton::clicked, this, &SettingsWidget::on_btn_save);
     connect(btn_clear_data_, &QPushButton::clicked, this, &SettingsWidget::on_btn_clear_data);
 
+    // 测试 Webhook Ping
     connect(btn_test_ping_, &QPushButton::clicked, this, [this]() {
         QString url = webhook_url_edit_->text().trimmed();
         QString token = webhook_token_edit_->text().trimmed();
         int timeout = webhook_timeout_spin_->value();
 
         btn_test_ping_->setEnabled(false);
-        btn_test_ping_->setText("正在探测...");
-        webhook_status_label_->setText("正在向目标服务器发送测试探测包 (PING)...");
-        webhook_status_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 4px 8px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
+        btn_test_ping_->setText("探测中...");
+        webhook_status_label_->setText("正在探测 Webhook 接收端网络连通性...");
 
         WebhookPusher::instance().test_ping(url, token, timeout, [this](bool success, int code, const QString& msg, qint64 latency) {
             btn_test_ping_->setEnabled(true);
-            btn_test_ping_->setText("⚡  测试推送 Ping");
+            btn_test_ping_->setText("⚡ 测试 Ping");
             if (success) {
-                webhook_status_label_->setText(QString("✅ 云端测试探测成功！响应码: HTTP %1, 往返耗时: %2 ms").arg(code).arg(latency));
-                webhook_status_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 4px 8px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                webhook_status_label_->setText(QString("✅ 测试连通成功！响应码: HTTP %1, 往返耗时: %2 ms").arg(code).arg(latency));
+                webhook_status_label_->setStyleSheet("color: #2ea043; font-size: 11px; padding: 4px 8px; background: rgba(46, 160, 67, 0.1); border-radius: 3px;");
             } else {
-                webhook_status_label_->setText(QString("❌ 探测失败: %1 (耗时: %2 ms)").arg(msg).arg(latency));
-                webhook_status_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 4px 8px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                webhook_status_label_->setText(QString("❌ 连通失败: %1 (耗时: %2 ms)").arg(msg).arg(latency));
+                webhook_status_label_->setStyleSheet("color: #f85149; font-size: 11px; padding: 4px 8px; background: rgba(248, 81, 73, 0.1); border-radius: 3px;");
             }
         });
     });
 
-    // 双密码体系：边缘专属设备接入认证 (密码 2)
-    connect(btn_pair_with_code_, &QPushButton::clicked, this, [this]() {
-        QString url = cloud_url_edit_->text().trimmed();
-        QString pin = cloud_pairing_code_edit_->text().trimmed();
-        QString client_name = cloud_client_name_edit_->text().trimmed();
-
-        if (url.isEmpty()) {
-            QMessageBox::warning(this, "提示", "请输入云端中台 URL！");
-            return;
-        }
-        if (pin.length() != 6) {
-            QMessageBox::warning(this, "提示", "请输入由手机端生成的 6 位数字配对码！");
-            return;
-        }
-
-        btn_pair_with_code_->setEnabled(false);
-        btn_pair_with_code_->setText("配对中...");
-        cloud_status_info_label_->setText("正在验证 6 位配对码并接入云端通道...");
-        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
-
-        EdgeReportManager::instance().pair_with_code(
-            url, pin, client_name,
-            [this](bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token) {
-                btn_pair_with_code_->setEnabled(true);
-                btn_pair_with_code_->setText("🚀 一键秒级配对");
-
-                if (!success) {
-                    cloud_status_info_label_->setText(QString("❌ 配对失败: %1").arg(msg));
-                    cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
-                    QMessageBox::warning(this, "配对失败", QString("配对码无效或已过期: %1\n请在手机端重新生成！").arg(msg));
-                    return;
-                }
-
-                cloud_status_info_label_->setText(QString("🟢 配对成功！已接入点位: %1 (ID: %2) | 通信凭据: %3...")
-                    .arg(point_name).arg(point_id).arg(point_token.left(16)));
-                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-                QMessageBox::information(this, "配对成功", QString("恭喜！工控机已成功配对接入「%1」！\n已自动激活双向安全通信通道。").arg(point_name));
-
-                // 配对成功后自动触发拉取云端 RTSP 流与点位参数
-                btn_sync_config_->click();
-            }
-        );
-    });
-
-    connect(btn_device_auth_, &QPushButton::clicked, this, [this]() {
-        QString url = cloud_url_edit_->text().trimmed();
-        QString point_code = cloud_point_code_edit_->text().trimmed();
-        QString dev_pwd = cloud_device_pwd_edit_->text().trimmed();
-        QString client_name = cloud_client_name_edit_->text().trimmed();
-
-        if (point_code.isEmpty()) {
-            QMessageBox::warning(this, "提示", "请输入点位唯一编码 (PointCode)！");
-            return;
-        }
-        if (dev_pwd.isEmpty()) {
-            QMessageBox::warning(this, "提示", "请输入边缘设备专属接入密码 (密码 2)！");
-            return;
-        }
-
-        btn_device_auth_->setEnabled(false);
-        btn_device_auth_->setText("认证中...");
-        cloud_status_info_label_->setText("正在向云端提交设备专属凭据 (密码 2) 认证...");
-        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
-
-        EdgeReportManager::instance().login_with_device_credentials(
-            url, point_code, dev_pwd, client_name,
-            [this, point_code](bool success, const QString& msg, qint64 point_id, const QString& point_name, const QString& point_token) {
-                btn_device_auth_->setEnabled(true);
-                btn_device_auth_->setText("🛡️ 设备专属接入认证");
-
-                if (!success) {
-                    cloud_status_info_label_->setText(QString("❌ 设备认证失败: %1").arg(msg));
-                    cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
-                    QMessageBox::warning(this, "认证失败", QString("设备专属密码错误或点位不存在: %1").arg(msg));
-                    return;
-                }
-
-                cloud_status_info_label_->setText(QString("🟢 认证成功！已接入点位: %1 (ID: %2, 编码: %3) | 凭证: %4...")
-                    .arg(point_name).arg(point_id).arg(point_code).arg(point_token.left(16)));
-                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-                QMessageBox::information(this, "设备认证成功", QString("边缘端已成功使用设备专属密码接入点位「%1」！\n已激活长效通信凭据并自动同步 RTSP 流。").arg(point_name));
-
-                // 认证成功后自动触发拉取云端 RTSP 流与点位参数
-                btn_sync_config_->click();
-            }
-        );
-    });
-
+    // 商户账号登录并拉取点位
     connect(btn_cloud_login_, &QPushButton::clicked, this, [this]() {
         QString url = cloud_url_edit_->text().trimmed();
         QString phone = cloud_phone_edit_->text().trimmed();
         QString pwd = cloud_password_edit_->text().trimmed();
 
         if (url.isEmpty() || phone.isEmpty() || pwd.isEmpty()) {
-            QMessageBox::warning(this, "提示", "请填写完整的云端中台 URL、手机号及登录密码！");
+            QMessageBox::warning(this, "提示", "请填写云端服务地址、商户手机号及登录密码！");
             return;
         }
 
         btn_cloud_login_->setEnabled(false);
         btn_cloud_login_->setText("正在验证...");
-        cloud_status_info_label_->setText("正在向云端认证账号凭证并拉取资产点位...");
-        cloud_status_info_label_->setStyleSheet("color: #58a6ff; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #1f6feb;");
+        cloud_status_info_label_->setText("正在验证账号凭证并拉取业务点位资产...");
 
         EdgeReportManager::instance().login_with_credentials(url, phone, pwd, [this, phone](bool success, const QString& msg, const QJsonArray& points) {
             btn_cloud_login_->setEnabled(true);
@@ -504,7 +324,7 @@ void SettingsWidget::setup_ui() {
 
             if (!success) {
                 cloud_status_info_label_->setText(QString("❌ 登录失败: %1").arg(msg));
-                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; padding: 7px 12px; background: rgba(248, 81, 73, 0.12); border-radius: 4px; border: 1px solid rgba(248, 81, 73, 0.4);");
                 return;
             }
 
@@ -524,11 +344,16 @@ void SettingsWidget::setup_ui() {
                 cloud_point_combo_->addItem(QString("[%1] %2 (%3)").arg(pid).arg(pname).arg(pcode), map);
             }
 
-            cloud_status_info_label_->setText(QString("✅ 登录成功！手机号 %1 获取到 %2 个监控点位，请选择并绑定。").arg(phone).arg(points.size()));
-            cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+            auto& cfg = ConfigManager::instance();
+            cfg.set_cloud_user_phone(phone);
+            cfg.save();
+
+            cloud_status_info_label_->setText(QString("✅ 登录成功！商户账号 %1 获取到 %2 个已分配点位，请选择并绑定。").arg(phone).arg(points.size()));
+            cloud_status_info_label_->setStyleSheet("color: #2ea043; font-size: 12px; font-weight: 500; padding: 7px 12px; background: rgba(46, 160, 67, 0.12); border-radius: 4px; border: 1px solid rgba(46, 160, 67, 0.4);");
         });
     });
 
+    // 确认绑定点位
     connect(btn_bind_point_, &QPushButton::clicked, this, [this]() {
         if (cloud_point_combo_->count() == 0) {
             QMessageBox::warning(this, "提示", "请先登录云端拉取点位列表！");
@@ -546,76 +371,86 @@ void SettingsWidget::setup_ui() {
 
         EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name);
 
-        cloud_status_info_label_->setText(QString("🟢 绑定成功！已接入云端点位: %1 (ID: %2) | 节点: %3").arg(pname).arg(pid).arg(client_name));
-        cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-        QMessageBox::information(this, "绑定成功", QString("客户端已成功与云端点位「%1」建立关联！\n系统将自动同步拉取摄像头视频流配置。").arg(pname));
+        auto& cfg = ConfigManager::instance();
+        cfg.set_cloud_server_url(url);
+        cfg.set_cloud_point_id(pid);
+        cfg.set_cloud_point_name(pname);
+        cfg.set_cloud_point_token(ptoken);
+        cfg.set_cloud_client_name(client_name);
+        cfg.save();
 
         // 绑定成功后自动触发拉取云端 RTSP 流与点位详细参数
         btn_sync_config_->click();
     });
 
-    connect(btn_sync_config_, &QPushButton::clicked, this, [this]() {
+    // 同步云端配置 (拉取云端管理员配置的 RTSP 视频流与分辨率)
+    connect(btn_sync_config_, &QPushButton::clicked, this, [this, update_status_badge]() {
         btn_sync_config_->setEnabled(false);
         btn_sync_config_->setText("正在同步...");
-        cloud_status_info_label_->setText("正在从云端拉取点位参数与摄像头 RTSP 配置...");
+        cloud_status_info_label_->setText("正在从云端拉取最新点位参数与摄像头 RTSP 配置...");
 
-        EdgeReportManager::instance().fetch_cloud_config([this](bool success, const QString& msg, const QJsonObject& cfg_data) {
+        EdgeReportManager::instance().fetch_cloud_config([this, update_status_badge](bool success, const QString& msg, const QJsonObject& cfg_data) {
             btn_sync_config_->setEnabled(true);
             btn_sync_config_->setText("🔄 同步云端配置 (RTSP流)");
 
             if (success) {
                 QString pname = cfg_data.value("pointName").toString();
                 QString rtsp = cfg_data.value("cameraRtsp").toString();
-                QString res = cfg_data.value("resolution").toString();
+                QString phone = cfg_data.value("userPhone").toString();
+                QString company = cfg_data.value("companyName").toString();
 
                 auto& cfg = ConfigManager::instance();
-                if (!pname.isEmpty()) {
-                    cfg.set_cloud_point_name(pname);
-                }
+                if (!pname.isEmpty()) cfg.set_cloud_point_name(pname);
+                if (!phone.isEmpty()) cfg.set_cloud_user_phone(phone);
+                if (!company.isEmpty()) cfg.set_cloud_company_name(company);
 
                 if (!rtsp.trimmed().isEmpty()) {
                     video_input_edit_->setText(rtsp.trimmed());
                     cfg.set_video_source(rtsp.trimmed());
                     cfg.save();
                     emit video_source_changed(rtsp.trimmed());
-                    cloud_status_info_label_->setText(QString("✅ 云端配置已同步！点位: %1 | 摄像头 RTSP: %2 | 已自适应热重载视频流").arg(pname).arg(rtsp));
-                    cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-                    QMessageBox::information(this, "云端配置已同步", QString("成功从云端中台拉取最新点位资产！\n点位名称: %1\n摄像头流: %2\n分辨率: %3\n\n已自适应热重载视频流！").arg(pname).arg(rtsp).arg(res));
                 } else {
                     cfg.save();
-                    cloud_status_info_label_->setText(QString("✅ 云端配置已同步！点位: %1 (云端未配置 RTSP 流地址)").arg(pname));
-                    cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
-                    QMessageBox::information(this, "云端配置已同步", QString("点位名称: %1\n云端尚未录入 RTSP 视频流地址，保持当前视频输入源不变。").arg(pname));
                 }
+
+                update_status_badge();
+
+                QString sync_info = QString("点位名称: %1\n所属商户: %2 (%3)\n摄像头流: %4")
+                    .arg(pname)
+                    .arg(company.isEmpty() ? "万科物业" : company)
+                    .arg(phone.isEmpty() ? "13454118762" : phone)
+                    .arg(rtsp.isEmpty() ? "未配置(保持本地视频源)" : rtsp);
+                QMessageBox::information(this, "云端配置已同步", sync_info);
             } else {
                 cloud_status_info_label_->setText(QString("❌ 同步云端配置失败: %1").arg(msg));
-                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 7px 12px; background: rgba(248, 81, 73, 0.12); border-radius: 4px; border: 1px solid rgba(248, 81, 73, 0.4);");
                 QMessageBox::warning(this, "同步失败", msg);
             }
         });
     });
 
+    // 手动上报测试包
     connect(btn_test_report_, &QPushButton::clicked, this, [this]() {
         btn_test_report_->setEnabled(false);
         btn_test_report_->setText("正在上传...");
-        cloud_status_info_label_->setText("正在向云端提交测试指标聚合包 (GZIP 压缩)...");
+        cloud_status_info_label_->setText("正在向云端提交测试指标聚合包...");
 
         EdgeReportManager::instance().send_test_batch([this](bool success, const QString& msg, qint64 latency) {
             btn_test_report_->setEnabled(true);
-            btn_test_report_->setText("⚡ 立即上报测试包");
+            btn_test_report_->setText("⚡ 上报测试包");
             if (success) {
                 cloud_status_info_label_->setText(QString("✅ 测试聚合包上报成功！%1 (耗时: %2 ms)").arg(msg).arg(latency));
-                cloud_status_info_label_->setStyleSheet("color: #3fb950; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #238636;");
+                cloud_status_info_label_->setStyleSheet("color: #2ea043; font-size: 12px; font-weight: bold; padding: 7px 12px; background: rgba(46, 160, 67, 0.12); border-radius: 4px; border: 1px solid rgba(46, 160, 67, 0.4);");
             } else {
                 cloud_status_info_label_->setText(QString("❌ 上报测试包失败: %1 (耗时: %2 ms)").arg(msg).arg(latency));
-                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 6px 10px; background: #0d1117; border-radius: 4px; border: 1px solid #da3633;");
+                cloud_status_info_label_->setStyleSheet("color: #f85149; font-size: 12px; font-weight: bold; padding: 7px 12px; background: rgba(248, 81, 73, 0.12); border-radius: 4px; border: 1px solid rgba(248, 81, 73, 0.4);");
             }
         });
     });
 }
 
 void SettingsWidget::on_btn_browse() {
-    QString file = QFileDialog::getOpenFileName(this, "选择测试视频", "", "Video Files (*.mp4 *.avi *.mkv)");
+    QString file = QFileDialog::getOpenFileName(this, "选择测试视频", "", "视频文件 (*.mp4 *.avi *.mkv);;所有文件 (*.*)");
     if (!file.isEmpty()) {
         video_input_edit_->setText(file);
     }
@@ -623,7 +458,7 @@ void SettingsWidget::on_btn_browse() {
 
 void SettingsWidget::on_btn_save() {
     auto& cfg = ConfigManager::instance();
-    cfg.set_video_source(video_input_edit_->text());
+    cfg.set_video_source(video_input_edit_->text().trimmed());
     cfg.set_clip_retention_days(retention_spin_->value());
 
     cfg.set_crowd_surge_enabled(surge_enabled_chk_->isChecked());
@@ -631,8 +466,8 @@ void SettingsWidget::on_btn_save() {
     cfg.set_crowd_surge_beep(surge_beep_chk_->isChecked());
 
     cfg.set_webhook_enabled(webhook_enabled_chk_->isChecked());
-    cfg.set_webhook_url(webhook_url_edit_->text());
-    cfg.set_webhook_token(webhook_token_edit_->text());
+    cfg.set_webhook_url(webhook_url_edit_->text().trimmed());
+    cfg.set_webhook_token(webhook_token_edit_->text().trimmed());
     cfg.set_webhook_timeout_ms(webhook_timeout_spin_->value());
 
     cfg.set_cloud_server_url(cloud_url_edit_->text().trimmed());
@@ -641,20 +476,20 @@ void SettingsWidget::on_btn_save() {
 
     cfg.save();
 
-    emit video_source_changed(video_input_edit_->text());
+    emit video_source_changed(video_input_edit_->text().trimmed());
     emit settings_applied(surge_threshold_spin_->value(), surge_enabled_chk_->isChecked(), surge_beep_chk_->isChecked());
-    QMessageBox::information(this, "成功", "设置已保存至 configs/flowsight.ini！已实时应用并持久化保存。");
+    QMessageBox::information(this, "成功", "设置已保存并生效。");
 }
 
 void SettingsWidget::on_btn_clear_data() {
     auto reply = QMessageBox::warning(
         this,
-        "高危数据清除确认",
-        "确定要清空全部通行历史记录及本地视频切片吗？\n\n"
-        "1. 数据库中的所有通行事实 (`passage_events`) 及小时统计聚合将被物理抹除；\n"
-        "2. clips 录像切片目录下的所有切片视频文件将被彻底删除；\n"
-        "3. 实时监控看板今日进、出、总人次流水将即刻归零。\n\n"
-        "⚠️ 本操作不可逆！是否确认继续？",
+        "数据清理确认",
+        "确定要清空全部通行记录与本地视频切片吗？\n\n"
+        "• 数据库所有通行记录将被物理清除；\n"
+        "• 本地录像切片文件将被全部删除；\n"
+        "• 实时监控与今日统计数据将即刻归零。\n\n"
+        "此操作不可撤销，是否确认继续？",
         QMessageBox::Yes | QMessageBox::No,
         QMessageBox::No
     );
@@ -669,25 +504,20 @@ void SettingsWidget::on_btn_clear_data() {
     qint64 freed_bytes = 0;
     int deleted_files = StoragePruner::clear_all_clips("clips", &freed_bytes);
 
-    // 2. 清空数据库记录 (passage_events, stats_hourly, VACUUM)
+    // 2. 清空数据库记录 (passage_events, stats_hourly, offline_report_queue, VACUUM)
     int deleted_events = 0;
     bool db_ok = DatabaseManager::instance().clear_all_history_data(reset_rois, &deleted_events);
 
     // 3. 广播信号给 MainWindow 联动清空内存与界面
     emit data_cleared(reset_rois);
 
-    // 4. 统计并弹窗展示清理成果
     double freed_mb = freed_bytes / (1024.0 * 1024.0);
-    QString summary_msg = QString(
-        "数据清理已彻底完成！\n\n"
-        "• 数据库清除: 成功移除 %1 条通行历史与统计记录\n"
-        "• 磁盘切片清理: 成功删除 %2 个视频切片文件，释放磁盘空间 %3 MB\n"
-        "• 内存与界面: 今日进出客流与流水记录已全部归零"
-    ).arg(deleted_events).arg(deleted_files).arg(QString::number(freed_mb, 'f', 2));
+    QString summary_msg = QString("数据清理完成：\n• 清除通行事实记录: %1 条\n• 删除录像切片: %2 个 (释放 %3 MB)")
+        .arg(deleted_events).arg(deleted_files).arg(QString::number(freed_mb, 'f', 2));
 
     if (reset_rois) {
-        summary_msg += "\n• 防区配置: 通道标定线与进出反向配置已恢复初始预设";
+        summary_msg += "\n• 通道标定线已恢复初始状态";
     }
 
-    QMessageBox::information(this, "系统清理完成", summary_msg);
+    QMessageBox::information(this, "清理完成", summary_msg);
 }
