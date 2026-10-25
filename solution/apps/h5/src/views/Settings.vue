@@ -406,9 +406,11 @@ import { useRouter } from 'vue-router';
 import { showToast, showDialog } from 'vant';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
+import { useDashboardStore } from '../store/dashboard';
 
 const router = useRouter();
 const pointStore = usePointStore();
+const dashboardStore = useDashboardStore();
 
 // 用户资料
 const userProfile = computed(() => {
@@ -564,11 +566,10 @@ const refreshRates = [
   { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
   { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
 ];
-const activeRate = ref(Number(localStorage.getItem('flowsight_poll_rate') || 5));
+const activeRate = computed(() => dashboardStore.pollRateSec);
 
 const handleSelectRate = (sec: number) => {
-  activeRate.value = sec;
-  localStorage.setItem('flowsight_poll_rate', String(sec));
+  dashboardStore.setPollRate(sec);
   showToast({ message: `座舱刷新已设为 ${sec} 秒`, position: 'top', duration: 1000 });
   closeModal();
 };
@@ -613,6 +614,7 @@ const handleLogout = () => {
     message: '确定要退出当前 FlowSight 决策账号吗？',
     showCancelButton: true
   }).then(() => {
+    dashboardStore.clearCache();
     localStorage.removeItem('flowsight_token');
     localStorage.removeItem('flowsight_user');
     showToast('已安全登出');

@@ -1,9 +1,13 @@
 <template>
   <div class="h5-app-root">
     <div class="app-viewport-chassis">
-      <!-- 单屏页面路由容器 (严禁页面级滚动) -->
+      <!-- 单屏页面路由容器 (keep-alive 保持导航历史与图表平滑过渡，Login 页面除外) -->
       <div class="app-router-wrapper">
-        <router-view />
+        <router-view v-slot="{ Component }">
+          <keep-alive :exclude="['Login']">
+            <component :is="Component" />
+          </keep-alive>
+        </router-view>
       </div>
 
       <!-- 扁平化底部 4 键导航栏 (完全嵌入视口内部，纯平质感无多余装饰) -->

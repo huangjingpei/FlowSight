@@ -25,7 +25,7 @@
             </option>
           </select>
         </div>
-        <span class="poll-badge">5s实时同步</span>
+        <span class="poll-badge">{{ pollRateSec }}s实时同步</span>
       </div>
 
       <!-- 行 2: 四大核心客流指标矩阵 (扁平化高反差色块) -->
@@ -100,7 +100,7 @@
         <div class="wave-header">
           <div class="wave-title-box">
             <span class="wave-dot" :class="{ 'wave-dot-flame': isSurged }"></span>
-            <span class="wave-title">通道实时流速脉冲 (5秒步进动态曲线)</span>
+            <span class="wave-title">通道实时流速脉冲 ({{ pollRateSec }}秒步进动态曲线)</span>
           </div>
           <div class="wave-legend">
             <span class="w-leg-item">
@@ -136,13 +136,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
 import { h5Api, DashboardSummaryVO } from '../api';
 import { usePointStore } from '../store/point';
+import { useDashboardStore } from '../store/dashboard';
 
 const pointStore = usePointStore();
+const dashboardStore = useDashboardStore();
 const activePointId = ref<number>(0);
+
+const pollRateSec = computed(() => dashboardStore.pollRateSec);
 
 const currentCompanyName = computed(() => {
   try {
@@ -180,18 +184,16 @@ const summary = ref<DashboardSummaryVO>({
 const showSnapshotModal = ref(false);
 const isSurged = computed(() => (summary.value.currentOccupancy || 0) >= 25);
 
-// 实时 5 秒动态波形数据
+// 实时动态波形图表实例与定时器
 const pulseChartRef = ref<HTMLDivElement | null>(null);
 let pulseChart: echarts.ECharts | null = null;
 let pollTimer: any = null;
+const isPageActive = ref<boolean>(true);
 
-// 滑动时间序列 (保持最近 12 个 5s 时间点)
+// 滑动时间序列 (与 Pinia dashboardStore 同步，跨导航与组件销毁持久保留)
 const waveTimeline = ref<string[]>([]);
 const waveEntryDelta = ref<number[]>([]);
 const waveExitDelta = ref<number[]>([]);
-
-let lastEntryCount = -1;
-let lastExitCount = -1;
 
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({
@@ -199,6 +201,18 @@ const pointOptions = computed(() => {
     value: p.id
   }));
 });
+
+// 从全局持久 Store 同步当前点位历史数据
+const syncFromHistory = (pointId: number) => {
+  if (!pointId) return;
+  const hist = dashboardStore.getPointHistory(pointId);
+  waveTimeline.value = [...hist.timeline];
+  waveEntryDelta.value = [...hist.entryDelta];
+  waveExitDelta.value = [...hist.exitDelta];
+  if (hist.lastSummary) {
+    summary.value = hist.lastSummary;
+  }
+};
 
 const loadPoints = async () => {
   try {
@@ -210,7 +224,7 @@ const loadPoints = async () => {
   } catch (e) {}
 };
 
-// 5秒轮询：拉取当前通道最新人数与变化，推入动态时序
+// 轮询：拉取当前通道最新人数与变化，推入全局持久时序
 const pollTick = async () => {
   if (!activePointId.value) return;
   try {
@@ -224,31 +238,29 @@ const pollTick = async () => {
       String(now.getSeconds()).padStart(2, '0')
     ].join(':');
 
+    const hist = dashboardStore.getPointHistory(activePointId.value);
     let inDelta = 0;
     let outDelta = 0;
 
-    if (lastEntryCount >= 0) {
-      inDelta = Math.max(0, data.todayEntry - lastEntryCount);
+    if (hist.lastEntryCount >= 0) {
+      inDelta = Math.max(0, data.todayEntry - hist.lastEntryCount);
     }
-    if (lastExitCount >= 0) {
-      outDelta = Math.max(0, data.todayExit - lastExitCount);
-    }
-
-    lastEntryCount = data.todayEntry;
-    lastExitCount = data.todayExit;
-
-    // 滑动窗口：保留最近 12 个点
-    waveTimeline.value.push(timeStr);
-    waveEntryDelta.value.push(inDelta);
-    waveExitDelta.value.push(outDelta);
-
-    if (waveTimeline.value.length > 12) {
-      waveTimeline.value.shift();
-      waveEntryDelta.value.shift();
-      waveExitDelta.value.shift();
+    if (hist.lastExitCount >= 0) {
+      outDelta = Math.max(0, data.todayExit - hist.lastExitCount);
     }
 
-    renderPulseChart();
+    // 记录到全局 Store (自动管理滑动历史窗口，并写入 sessionStorage)
+    dashboardStore.recordTick(activePointId.value, timeStr, inDelta, outDelta, data);
+
+    // 同步到视图展示
+    waveTimeline.value = [...hist.timeline];
+    waveEntryDelta.value = [...hist.entryDelta];
+    waveExitDelta.value = [...hist.exitDelta];
+
+    // 仅在页面处于激活状态下刷新图表，避免后台渲染异常
+    if (isPageActive.value) {
+      renderPulseChart();
+    }
   } catch (e) {}
 };
 
@@ -301,7 +313,7 @@ const renderPulseChart = () => {
     },
     yAxis: {
       type: 'value',
-      name: '流速(人/5s)',
+      name: `流速(人/${pollRateSec.value}s)`,
       nameLocation: 'end',
       nameTextStyle: { color: '#94A3B8', fontSize: 10, padding: [0, 0, 6, 0] },
       minInterval: 1,
@@ -366,13 +378,29 @@ const renderPulseChart = () => {
   pulseChart.setOption(option);
 };
 
+const restartPollTimer = (sec: number) => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  const intervalMs = Math.max(1, sec) * 1000;
+  pollTimer = setInterval(pollTick, intervalMs);
+};
+
+// 监听系统设置频率更改，座舱秒级响应
+watch(() => dashboardStore.pollRateSec, (newRate) => {
+  restartPollTimer(newRate);
+  if (isPageActive.value) {
+    renderPulseChart();
+  }
+});
+
 const onPointChange = () => {
-  lastEntryCount = -1;
-  lastExitCount = -1;
-  waveTimeline.value = [];
-  waveEntryDelta.value = [];
-  waveExitDelta.value = [];
-  pollTick();
+  if (activePointId.value) {
+    syncFromHistory(activePointId.value);
+    renderPulseChart();
+    pollTick();
+  }
 };
 
 const handleResize = () => {
@@ -381,27 +409,39 @@ const handleResize = () => {
 
 onMounted(async () => {
   await loadPoints();
-  // 初始化时间轴缓冲
-  const now = new Date();
-  for (let i = 5; i >= 1; i--) {
-    const t = new Date(now.getTime() - i * 5000);
-    const ts = [
-      String(t.getHours()).padStart(2, '0'),
-      String(t.getMinutes()).padStart(2, '0'),
-      String(t.getSeconds()).padStart(2, '0')
-    ].join(':');
-    waveTimeline.value.push(ts);
-    waveEntryDelta.value.push(0);
-    waveExitDelta.value.push(0);
+  if (activePointId.value) {
+    syncFromHistory(activePointId.value);
   }
-
+  nextTick(() => {
+    renderPulseChart();
+  });
   await pollTick();
-
-  // 严格 5 秒一次近实时动态刷新
-  const pollRateSec = Number(localStorage.getItem('flowsight_poll_rate') || 5);
-  pollTimer = setInterval(pollTick, pollRateSec * 1000);
-
+  restartPollTimer(dashboardStore.pollRateSec);
   window.addEventListener('resize', handleResize);
+});
+
+// keep-alive 页面切回唤醒钩子：立即恢复高保真波形历史，自适应重绘，更新时序
+onActivated(() => {
+  isPageActive.value = true;
+  restartPollTimer(dashboardStore.pollRateSec);
+  if (activePointId.value) {
+    syncFromHistory(activePointId.value);
+  }
+  nextTick(() => {
+    if (pulseChartRef.value) {
+      if (!pulseChart) {
+        pulseChart = echarts.init(pulseChartRef.value);
+      }
+      pulseChart.resize();
+      renderPulseChart();
+    }
+  });
+  pollTick();
+});
+
+// keep-alive 切出后台钩子：暂停 DOM 图表绘制，数据后台由全局 Store 自动收集
+onDeactivated(() => {
+  isPageActive.value = false;
 });
 
 onUnmounted(() => {

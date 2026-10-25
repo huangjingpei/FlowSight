@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, nextTick } from 'vue';
 import * as echarts from 'echarts';
 import { h5Api, TrendReportVO } from '../api';
 import { usePointStore } from '../store/point';
@@ -268,6 +268,12 @@ onMounted(async () => {
   }
   window.addEventListener('resize', handleResize);
   timer = setInterval(loadTrends, 10000);
+});
+
+onActivated(() => {
+  nextTick(() => {
+    if (myChart) myChart.resize();
+  });
 });
 
 onUnmounted(() => {
