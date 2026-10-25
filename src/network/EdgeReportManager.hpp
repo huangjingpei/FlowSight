@@ -29,6 +29,7 @@ public:
     static EdgeReportManager& instance();
 
     void init(QObject* parent = nullptr);
+    void shutdown();
 
     // 1. 统一手机号 + 密码登录 (商户主账号模式)
     using LoginCallback = std::function<void(bool success, const QString& msg, const QJsonArray& points)>;

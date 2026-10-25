@@ -47,6 +47,9 @@ public:
     bool increment_offline_retry(int64_t queue_id);
     int get_pending_offline_count();
 
+    // 应用程序退出时安全关闭全部线程关联的 SQLite 数据库句柄并解除锁
+    void close_all_connections();
+
 private:
     DatabaseManager() = default;
     ~DatabaseManager() = default;

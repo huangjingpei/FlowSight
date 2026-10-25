@@ -34,6 +34,21 @@ QSqlDatabase DatabaseManager::get_database() {
     return db;
 }
 
+void DatabaseManager::close_all_connections() {
+    const QStringList conn_names = QSqlDatabase::connectionNames();
+    for (const QString& name : conn_names) {
+        {
+            QSqlDatabase db = QSqlDatabase::database(name, false);
+            if (db.isOpen()) {
+                QSqlQuery q(db);
+                q.exec("PRAGMA wal_checkpoint(PASSIVE);");
+                db.close();
+            }
+        }
+        QSqlDatabase::removeDatabase(name);
+    }
+}
+
 bool DatabaseManager::init_database(const QString& db_path) {
     QString actual_path = db_path;
     if (QDir::isRelativePath(actual_path)) {

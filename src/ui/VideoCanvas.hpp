@@ -12,6 +12,7 @@ public:
     enum class EditMode { IDLE, DRAWING, EDITING };
 
     explicit VideoCanvas(QWidget* parent = nullptr);
+    ~VideoCanvas() override;
 
     void set_read_only(bool read_only);
     void update_frame(const QImage& frame, const std::vector<TrackObject>& tracks);

@@ -33,6 +33,12 @@ VideoCanvas::VideoCanvas(QWidget* parent) : QWidget(parent) {
     });
 }
 
+VideoCanvas::~VideoCanvas() {
+    if (surge_anim_timer_) {
+        surge_anim_timer_->stop();
+    }
+}
+
 void VideoCanvas::set_crowd_surge_alert(bool active, int current_count, int threshold) {
     crowd_surge_active_ = active;
     surge_occupancy_ = current_count;

@@ -22,9 +22,9 @@ EdgeReportManager::EdgeReportManager(QObject* parent) : QObject(parent) {
 }
 
 void EdgeReportManager::init(QObject* parent) {
-    if (parent && this->parent() != parent) {
-        setParent(parent);
-    }
+    Q_UNUSED(parent);
+    // 注意：单例拥有全局 static 存储期，绝不能调用 setParent(parent)，否则当 MainWindow 析构时
+    // QObject 会对 static 局部单例调用 delete 导致致命内存非法释放崩溃。
 
     if (!nam_) {
         nam_ = new QNetworkAccessManager(this);
@@ -60,6 +60,25 @@ void EdgeReportManager::init(QObject* parent) {
     if (!cloud_base_url_.trimmed().isEmpty() && !bound_point_token_.trimmed().isEmpty()) {
         is_online_ = true;
         emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));
+    }
+}
+
+void EdgeReportManager::shutdown() {
+    if (batch_timer_) {
+        batch_timer_->stop();
+    }
+    if (watchdog_timer_) {
+        watchdog_timer_->stop();
+    }
+    if (clip_upload_timer_) {
+        clip_upload_timer_->stop();
+    }
+    // 退出前将内存缓冲池中未上报的数据刷入 SQLite 本地持久化，确保 0 数据丢失
+    flush_batch();
+
+    {
+        QMutexLocker locker(&clip_mutex_);
+        pending_clips_.clear();
     }
 }
 

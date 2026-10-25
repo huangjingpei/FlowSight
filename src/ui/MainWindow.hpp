@@ -28,6 +28,9 @@ protected:
     void closeEvent(QCloseEvent* event) override;
 
 private:
+    void cleanup_on_shutdown();
+    bool is_shutting_down_ = false;
+
     void setup_ui();
     void setup_connections();
 
@@ -46,6 +49,7 @@ private:
 
     StatisticsSnapshot latest_stats_;
     QTimer* cloud_heartbeat_timer_ = nullptr;
+    QTimer* prune_timer_ = nullptr;
 
     std::unique_ptr<PipelineController> pipeline_;
 };

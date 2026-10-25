@@ -16,9 +16,8 @@ WebhookPusher::WebhookPusher(QObject* parent) : QObject(parent) {
 }
 
 void WebhookPusher::init(QObject* parent) {
-    if (parent && this->parent() != parent) {
-        setParent(parent);
-    }
+    Q_UNUSED(parent);
+    // 单例拥有 static 全局存储期，绝不可调用 setParent(parent) 防止被 Qt 错误 delete
 }
 
 void WebhookPusher::push_event(const PassageEvent& event) {

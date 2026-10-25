@@ -16,6 +16,8 @@
 #include <QApplication>
 #include <QFileInfo>
 #include <QDir>
+#include <QFile>
+#include <QTextStream>
 #include <atomic>
 #include <mutex>
 
@@ -40,12 +42,12 @@ static std::string resolve_resource_path(const std::string& path_str) {
 static bool open_video_capture(cv::VideoCapture& cap, const std::string& path_str) {
     if (path_str.empty()) return false;
 
-    // 1. 网络流 (RTSP / RTMP / HTTP) - 配置 TCP 传输与 5 秒读超时熔断
+    // 1. 网络流 (RTSP / RTMP / HTTP) - 配置 TCP 传输与 2 秒超时快速熔断
     if (path_str.find("://") != std::string::npos) {
 #if defined(_WIN32)
-        _putenv("OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp|stimeout;5000000|max_delay;500000");
+        _putenv("OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp|stimeout;2000000|max_delay;500000");
 #else
-        setenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;5000000|max_delay;500000", 1);
+        setenv("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp|stimeout;2000000|max_delay;500000", 1);
 #endif
         if (cap.open(path_str, cv::CAP_FFMPEG)) return true;
         if (cap.open(path_str, cv::CAP_ANY)) return true;
@@ -125,8 +127,12 @@ public:
     std::atomic<int64_t> live_frame_seq_{0};
     int64_t last_consumed_seq_{0};
 
+    // 核心拉流与视频捕捉句柄及线程安全保护锁
+    cv::VideoCapture cap_;
+    std::mutex cap_mtx_;
+
     ~Worker() override {
-        stop_grabber();
+        stop();
     }
 
     void stop_grabber() {
@@ -135,6 +141,21 @@ public:
             if (grabber_thread_.joinable()) {
                 grabber_thread_.join();
             }
+        }
+    }
+
+    void stop() {
+        is_running_.store(false);
+        is_paused_.store(false);
+        stop_grabber();
+        {
+            std::lock_guard<std::mutex> lk(cap_mtx_);
+            if (cap_.isOpened()) {
+                cap_.release();
+            }
+        }
+        if (clip_recorder_) {
+            clip_recorder_->stop();
         }
     }
 
@@ -254,7 +275,6 @@ public slots:
 
         std::string cur_source = video_source_;
         std::string resolved_video = resolve_resource_path(cur_source);
-        cv::VideoCapture cap;
         bool has_real_video = false;
         double video_fps = 30.0;
         double frame_count = 0.0;
@@ -263,15 +283,20 @@ public slots:
 
         auto init_capture = [&](const std::string& source_path) {
             stop_grabber();
-            if (cap.isOpened()) cap.release();
-            resolved_video = resolve_resource_path(source_path);
-            has_real_video = open_video_capture(cap, resolved_video);
+            {
+                std::lock_guard<std::mutex> lk(cap_mtx_);
+                if (cap_.isOpened()) cap_.release();
+                resolved_video = resolve_resource_path(source_path);
+                has_real_video = open_video_capture(cap_, resolved_video);
+
+                if (has_real_video) {
+                    video_fps = cap_.get(cv::CAP_PROP_FPS);
+                    if (video_fps <= 0.0 || video_fps > 120.0) video_fps = 30.0;
+                    frame_count = cap_.get(cv::CAP_PROP_FRAME_COUNT);
+                }
+            }
 
             if (has_real_video) {
-                video_fps = cap.get(cv::CAP_PROP_FPS);
-                if (video_fps <= 0.0 || video_fps > 120.0) video_fps = 30.0;
-                frame_count = cap.get(cv::CAP_PROP_FRAME_COUNT);
-
                 is_live = (source_path.find("rtsp://") != std::string::npos ||
                            source_path.find("rtmp://") != std::string::npos ||
                            frame_count <= 0);
@@ -284,18 +309,28 @@ public slots:
                     live_frame_seq_ = 0;
                     last_consumed_seq_ = 0;
                     grabber_running_ = true;
-                    grabber_thread_ = std::thread([this, &cap, resolved_video]() {
+                    grabber_thread_ = std::thread([this, resolved_video]() {
                         cv::Mat tmp_frame;
                         int failed_reads = 0;
                         int backoff_ms = 1000;
                         while (grabber_running_.load() && is_running_.load()) {
-                            if (!cap.isOpened() || !cap.read(tmp_frame) || tmp_frame.empty()) {
+                            bool read_ok = false;
+                            {
+                                std::lock_guard<std::mutex> lk(cap_mtx_);
+                                if (cap_.isOpened()) {
+                                    read_ok = cap_.read(tmp_frame);
+                                }
+                            }
+                            if (!read_ok || tmp_frame.empty()) {
                                 failed_reads++;
                                 // 连续读失败达 40 次（约 2 秒读不到有效帧，判定断流）
                                 if (failed_reads >= 40) {
                                     qWarning() << "[PipelineController] RTSP 视频流断开，正在尝试自愈重连...";
                                     emit network_state_changed(false, QString("实时流断开，正在重连 (等待 %1s)...").arg(backoff_ms / 1000));
-                                    cap.release();
+                                    {
+                                        std::lock_guard<std::mutex> lk(cap_mtx_);
+                                        if (cap_.isOpened()) cap_.release();
+                                    }
 
                                     for (int s = 0; s < backoff_ms; s += 100) {
                                         if (!grabber_running_.load() || !is_running_.load()) break;
@@ -303,7 +338,12 @@ public slots:
                                     }
                                     if (!grabber_running_.load() || !is_running_.load()) break;
 
-                                    if (open_video_capture(cap, resolved_video)) {
+                                    bool reopened = false;
+                                    {
+                                        std::lock_guard<std::mutex> lk(cap_mtx_);
+                                        reopened = open_video_capture(cap_, resolved_video);
+                                    }
+                                    if (reopened) {
                                         qInfo() << "[PipelineController] RTSP 实时流重连成功！";
                                         emit network_state_changed(true, "实时流已连接");
                                         failed_reads = 0;
@@ -378,20 +418,23 @@ public slots:
             if (is_paused_) {
                 int step = step_requested_.exchange(0);
                 if (step != 0 && has_real_video) {
-                    double cur_frame = cap.get(cv::CAP_PROP_POS_FRAMES);
-                    double target_frame = cur_frame + (step > 0 ? 1 : -2);
-                    if (target_frame < 0) target_frame = 0;
-                    cap.set(cv::CAP_PROP_POS_FRAMES, target_frame);
-                    if (cap.read(frame) && !frame.empty()) {
-                        qint64 pos_ms = static_cast<qint64>(cap.get(cv::CAP_PROP_POS_MSEC));
-                        emit position_changed(pos_ms);
+                    std::lock_guard<std::mutex> lk(cap_mtx_);
+                    if (cap_.isOpened()) {
+                        double cur_frame = cap_.get(cv::CAP_PROP_POS_FRAMES);
+                        double target_frame = cur_frame + (step > 0 ? 1 : -2);
+                        if (target_frame < 0) target_frame = 0;
+                        cap_.set(cv::CAP_PROP_POS_FRAMES, target_frame);
+                        if (cap_.read(frame) && !frame.empty()) {
+                            qint64 pos_ms = static_cast<qint64>(cap_.get(cv::CAP_PROP_POS_MSEC));
+                            emit position_changed(pos_ms);
 
-                        // 运行单帧分析并投递
-                        std::vector<Detection> detections;
-                        if (model_loaded) detector_->detect(frame, detections);
-                        auto tracks = tracker_->update(detections);
-                        QImage qimg(frame.data, frame.cols, frame.rows, static_cast<int>(frame.step), QImage::Format_BGR888);
-                        emit frame_ready(qimg.copy(), tracks);
+                            // 运行单帧分析并投递
+                            std::vector<Detection> detections;
+                            if (model_loaded) detector_->detect(frame, detections);
+                            auto tracks = tracker_->update(detections);
+                            QImage qimg(frame.data, frame.cols, frame.rows, static_cast<int>(frame.step), QImage::Format_BGR888);
+                            emit frame_ready(qimg.copy(), tracks);
+                        }
                     }
                 }
                 QThread::msleep(40);
@@ -403,10 +446,13 @@ public slots:
                 seek_requested_ = false;
                 int64_t target_ms = seek_target_ms_.load();
                 if (has_real_video && !is_live) {
-                    double target_frame = (target_ms * video_fps) / 1000.0;
-                    if (target_frame < 0) target_frame = 0;
-                    if (frame_count > 0 && target_frame >= frame_count) target_frame = frame_count - 1;
-                    cap.set(cv::CAP_PROP_POS_FRAMES, target_frame);
+                    std::lock_guard<std::mutex> lk(cap_mtx_);
+                    if (cap_.isOpened()) {
+                        double target_frame = (target_ms * video_fps) / 1000.0;
+                        if (target_frame < 0) target_frame = 0;
+                        if (frame_count > 0 && target_frame >= frame_count) target_frame = frame_count - 1;
+                        cap_.set(cv::CAP_PROP_POS_FRAMES, target_frame);
+                    }
                 }
             }
 
@@ -444,23 +490,45 @@ public slots:
                     last_consumed_seq_ = cur_seq;
                 }
             } else {
-                if (!cap.read(frame) || frame.empty()) {
+                bool read_ok = false;
+                {
+                    std::lock_guard<std::mutex> lk(cap_mtx_);
+                    if (cap_.isOpened()) {
+                        read_ok = cap_.read(frame);
+                    }
+                }
+                if (!read_ok || frame.empty()) {
                     // 本地视频循环播放
-                    cap.set(cv::CAP_PROP_POS_FRAMES, 0);
+                    {
+                        std::lock_guard<std::mutex> lk(cap_mtx_);
+                        if (cap_.isOpened()) {
+                            cap_.set(cv::CAP_PROP_POS_FRAMES, 0);
+                        }
+                    }
                     if (tracker_) tracker_->reset();
                     if (roi_counter_) roi_counter_->reset();
                     AttributeClassifier::instance().clear_cache();
                     emit loop_restarted();
-                    if (!cap.read(frame) || frame.empty()) {
+                    bool second_read_ok = false;
+                    {
+                        std::lock_guard<std::mutex> lk(cap_mtx_);
+                        if (cap_.isOpened()) {
+                            second_read_ok = cap_.read(frame);
+                        }
+                    }
+                    if (!second_read_ok || frame.empty()) {
                         QThread::msleep(40);
                         continue;
                     }
                 }
+                {
+                    std::lock_guard<std::mutex> lk(cap_mtx_);
+                    if (cap_.isOpened()) {
+                        qint64 cur_pos_ms = static_cast<qint64>(cap_.get(cv::CAP_PROP_POS_MSEC));
+                        emit position_changed(cur_pos_ms);
+                    }
+                }
             }
-
-            // 报告当前播放进度 (毫秒)
-            qint64 cur_pos_ms = static_cast<qint64>(cap.get(cv::CAP_PROP_POS_MSEC));
-            emit position_changed(cur_pos_ms);
 
             clip_recorder_->push_frame(frame);
 
@@ -617,7 +685,10 @@ public slots:
         }
 
         stop_grabber();
-        if (has_real_video) cap.release();
+        {
+            std::lock_guard<std::mutex> lk(cap_mtx_);
+            if (cap_.isOpened()) cap_.release();
+        }
     }
 
 signals:
@@ -684,9 +755,13 @@ void PipelineController::stop_pipeline() {
         audio_player_->stop();
     }
     if (worker_) {
-        worker_->is_running_ = false;
+        worker_->stop();
         worker_thread_.quit();
-        worker_thread_.wait(1000);
+        if (!worker_thread_.wait(3000)) {
+            qWarning() << "[PipelineController] Worker 线程未在 3 秒内退出，强制终止...";
+            worker_thread_.terminate();
+            worker_thread_.wait(1000);
+        }
         worker_.reset();
     }
 }

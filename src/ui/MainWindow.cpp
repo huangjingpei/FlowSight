@@ -9,6 +9,7 @@
 #include "storage/StoragePruner.hpp"
 #include "network/WebhookPusher.hpp"
 #include "network/EdgeReportManager.hpp"
+#include "ai/AttributeClassifier.hpp"
 #include <QTimer>
 #include <QThreadPool>
 
@@ -20,6 +21,9 @@
 #include <QCloseEvent>
 #include <QBuffer>
 #include <QDateTime>
+#include <QFile>
+#include <QTextStream>
+#include <QDir>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("FlowSight 智能客流分析系统 v1.2");
@@ -42,14 +46,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
 
     // 启动后台定时器: 每 6 小时自动巡检一次磁盘切片
-    auto* prune_timer = new QTimer(this);
-    connect(prune_timer, &QTimer::timeout, this, []() {
+    prune_timer_ = new QTimer(this);
+    connect(prune_timer_, &QTimer::timeout, this, []() {
         int days = ConfigManager::instance().get_clip_retention_days();
         QThreadPool::globalInstance()->start([days]() {
             StoragePruner::prune_expired_clips("clips", days);
         });
     });
-    prune_timer->start(6 * 3600 * 1000);
+    prune_timer_->start(6 * 3600 * 1000);
 
     // 启动云端协同定时心跳: 每 5 秒向云端上报一次设备在线与遥测指标
     cloud_heartbeat_timer_ = new QTimer(this);
@@ -229,7 +233,50 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     }
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    cleanup_on_shutdown();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    cleanup_on_shutdown();
+    event->accept();
+}
+
+void MainWindow::cleanup_on_shutdown() {
+    if (is_shutting_down_) return;
+    is_shutting_down_ = true;
+
+    qInfo() << "[MainWindow] 开始执行安全退出与全量资源释放流程...";
+
+    // 1. 停止主窗口自身的定时任务，防止在析构阶段异步触发
+    if (cloud_heartbeat_timer_) {
+        cloud_heartbeat_timer_->stop();
+    }
+    if (prune_timer_) {
+        prune_timer_->stop();
+    }
+
+    // 2. 切断管线与 UI/网络层的所有信号槽，优雅停止媒体播放与后台 AI 推理/抓帧线程
+    if (pipeline_) {
+        pipeline_->disconnect();
+        pipeline_->stop_pipeline();
+        pipeline_.reset();
+    }
+
+    // 3. 停止智能批量上报器所有定时器 (批量上报、看门狗重试、切片上传)，并刷新内存离线缓冲入库
+    EdgeReportManager::instance().shutdown();
+
+    // 4. 停止 MobileNetV3 二级属性分类后台工作线程
+    AttributeClassifier::instance().stop();
+
+    // 5. 等待全局线程池中正在执行的任务 (如磁盘切片清理) 安全退出
+    QThreadPool::globalInstance()->waitForDone(2000);
+
+    // 6. 刷新 SQLite WAL 检查点并安全关闭所有线程数据库句柄
+    DatabaseManager::instance().close_all_connections();
+
+    qInfo() << "[MainWindow] 全量资源清理完成，准备平滑退出。";
+}
 
 void MainWindow::setup_ui() {
     auto* central_widget = new QWidget(this);
@@ -398,11 +445,4 @@ void MainWindow::on_stats_updated(const StatisticsSnapshot& stats) {
             gpu_badge_label_->setStyleSheet("color: #58a6ff; font-size: 11px; font-weight: bold;");
         }
     }
-}
-
-void MainWindow::closeEvent(QCloseEvent* event) {
-    if (pipeline_) {
-        pipeline_->stop();
-    }
-    event->accept();
 }
