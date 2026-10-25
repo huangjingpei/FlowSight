@@ -16,6 +16,7 @@ public:
 
     void refresh_events();
     void add_new_event(const PassageEvent& ev);
+    void update_event_attributes(int track_id, const QString& gender, const QString& age_group);
 
 private slots:
     void on_cell_double_clicked(int row, int column);

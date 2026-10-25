@@ -582,6 +582,7 @@ public slots:
                     if (trk.gender != "未知") {
                         DatabaseManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
                         EdgeReportManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
+                        emit event_attributes_updated(trk.track_id, QString::fromStdString(trk.gender), QString::fromStdString(trk.age_group));
                     }
                 }
             }
@@ -695,6 +696,7 @@ signals:
     void frame_ready(const QImage& frame, const std::vector<TrackObject>& tracks);
     void stats_updated(const StatisticsSnapshot& stats);
     void event_occurred(const PassageEvent& event);
+    void event_attributes_updated(int track_id, const QString& gender, const QString& age_group);
     void media_info_ready(bool is_live, qint64 duration_ms, double fps);
     void position_changed(qint64 position_ms);
     void loop_restarted();
@@ -732,6 +734,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::frame_ready, this, &PipelineController::frame_ready);
     connect(worker_.get(), &Worker::stats_updated, this, &PipelineController::stats_updated);
     connect(worker_.get(), &Worker::event_occurred, this, &PipelineController::event_occurred);
+    connect(worker_.get(), &Worker::event_attributes_updated, this, &PipelineController::event_attributes_updated);
     connect(worker_.get(), &Worker::media_info_ready, this, [this](bool is_live, qint64 d, double fps) {
         is_live_ = is_live;
         duration_ms_ = d;

@@ -146,6 +146,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::stats_updated, this, &MainWindow::on_stats_updated);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
+    connect(pipeline_.get(), &PipelineController::event_attributes_updated, view_evidence_, &EvidenceWidget::update_event_attributes);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_analytics_, &AnalyticsWidget::add_realtime_passage);
     connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
         EdgeReportManager::instance().record_passage(ev);
@@ -228,6 +229,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (view_analytics_) {
             view_analytics_->reset_realtime_data();
         }
+        EdgeReportManager::instance().reset_batch();
         if (reset_rois) {
             auto saved_rois = DatabaseManager::instance().load_latest_roi_configs();
             if (view_monitor_) view_monitor_->update_active_rois(saved_rois);

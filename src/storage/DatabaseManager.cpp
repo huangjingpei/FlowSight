@@ -176,6 +176,28 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
     std::map<QString, HourlyDelta> hourly_deltas;
 
     for (const auto& ev : events) {
+        if (ev.track_id > 0) {
+            QSqlQuery check_q(db);
+            check_q.prepare("SELECT event_id, clip_path FROM passage_events "
+                            "WHERE track_id = ? AND timestamp_ms >= ? AND timestamp_ms <= ? LIMIT 1");
+            check_q.addBindValue(ev.track_id);
+            check_q.addBindValue(static_cast<qint64>(ev.timestamp_ms - 10000));
+            check_q.addBindValue(static_cast<qint64>(ev.timestamp_ms + 10000));
+            if (check_q.exec() && check_q.next()) {
+                // 已存在该目标在相近时间窗的记录，若原记录无切片而新记录有切片，则回填切片路径
+                int exist_id = check_q.value(0).toInt();
+                QString exist_clip = check_q.value(1).toString();
+                if (exist_clip.isEmpty() && !ev.clip_path.empty()) {
+                    QSqlQuery update_q(db);
+                    update_q.prepare("UPDATE passage_events SET clip_path = ? WHERE event_id = ?");
+                    update_q.addBindValue(QString::fromStdString(ev.clip_path));
+                    update_q.addBindValue(exist_id);
+                    update_q.exec();
+                }
+                continue; // 跳过重复插入与指标重复累加
+            }
+        }
+
         q.bindValue(0, QString::fromStdString(ev.source_id));
         q.bindValue(1, static_cast<qint64>(ev.timestamp_ms));
         q.bindValue(2, ev.track_id);
@@ -828,7 +850,9 @@ bool DatabaseManager::clear_all_history_data(bool reset_roi_configs, int* out_de
     QSqlQuery q(db);
     q.exec("DELETE FROM passage_events;");
     q.exec("DELETE FROM stats_hourly;");
+    q.exec("DELETE FROM offline_report_queue;");
     q.exec("DELETE FROM sqlite_sequence WHERE name='passage_events';");
+    q.exec("DELETE FROM sqlite_sequence WHERE name='offline_report_queue';");
 
     if (reset_roi_configs) {
         q.exec("DELETE FROM roi_configs;");

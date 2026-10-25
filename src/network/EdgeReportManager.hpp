@@ -58,6 +58,9 @@ public:
     // 手动/定时触发聚合包刷新上报
     void flush_batch();
 
+    // 清空重置当前内存待上报缓冲池 (用于清除历史数据时重置端云同步上下文)
+    void reset_batch();
+
     // 3. 硬件与性能遥测心跳上报
     void send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend = "CPU", const QString& status = "ONLINE");
 

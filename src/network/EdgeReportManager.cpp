@@ -441,6 +441,23 @@ QByteArray EdgeReportManager::compress_data(const QByteArray& raw_json) {
     return raw_json;
 }
 
+void EdgeReportManager::reset_batch() {
+    QMutexLocker locker(&mutex_);
+    in_increment_ = 0;
+    out_increment_ = 0;
+    male_count_ = 0;
+    female_count_ = 0;
+    child_count_ = 0;
+    adult_count_ = 0;
+    senior_count_ = 0;
+    batch_events_.clear();
+    window_start_ts_ = QDateTime::currentMSecsSinceEpoch();
+
+    QMutexLocker clip_locker(&clip_mutex_);
+    pending_clips_.clear();
+    qInfo() << "[EdgeReportManager] In-memory batch buffers and pending clip queue successfully reset.";
+}
+
 void EdgeReportManager::flush_batch() {
     QMutexLocker locker(&mutex_);
     if (batch_events_.empty() && in_increment_ == 0 && out_increment_ == 0) {

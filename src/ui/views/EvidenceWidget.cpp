@@ -426,6 +426,30 @@ void EvidenceWidget::add_new_event(const PassageEvent& ev) {
     count_badge_->setText(QString("共 %1 条证据流水").arg(table_->rowCount()));
 }
 
+void EvidenceWidget::update_event_attributes(int track_id, const QString& gender, const QString& age_group) {
+    if (track_id <= 0 || !table_) return;
+    QString target_track = QString("#%1").arg(track_id);
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* track_item = table_->item(r, 3);
+        if (track_item && track_item->text() == target_track) {
+            auto* gender_item = table_->item(r, 4);
+            if (gender_item && (gender_item->text() == "未知" || gender_item->text().isEmpty())) {
+                gender_item->setText(gender);
+                gender_item->setToolTip(gender);
+            }
+            auto* age_item = table_->item(r, 5);
+            if (age_item && (age_item->text() == "未知" || age_item->text().isEmpty())) {
+                age_item->setText(age_group);
+                age_item->setToolTip(age_group);
+            }
+            if (table_->currentRow() == r) {
+                update_metadata_inspector(r);
+            }
+            break;
+        }
+    }
+}
+
 void EvidenceWidget::on_table_selection_changed() {
     int row = table_->currentRow();
     update_metadata_inspector(row);
