@@ -147,6 +147,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_monitor_, &MonitorWidget::add_passage_event);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
     connect(pipeline_.get(), &PipelineController::event_attributes_updated, view_evidence_, &EvidenceWidget::update_event_attributes);
+    connect(pipeline_.get(), &PipelineController::event_attributes_updated, view_monitor_, &MonitorWidget::update_event_attributes);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_analytics_, &AnalyticsWidget::add_realtime_passage);
     connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
         EdgeReportManager::instance().record_passage(ev);

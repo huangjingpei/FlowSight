@@ -500,6 +500,33 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
     }
 }
 
+void MonitorWidget::update_event_attributes(int track_id, const QString& gender, const QString& age_group) {
+    if (track_id <= 0 || !ticker_list_) return;
+    if (gender.isEmpty() || gender == "未知") return;
+
+    QString attr_str = gender;
+    if (!age_group.isEmpty() && age_group != "未知") {
+        attr_str += "/" + age_group;
+    }
+
+    QString id_tag1 = QString("ID:%1").arg(track_id);
+    QString id_tag2 = QString("目标#%1").arg(track_id);
+
+    for (int i = 0; i < ticker_list_->count(); ++i) {
+        auto* item = ticker_list_->item(i);
+        if (!item) continue;
+        QString text = item->text();
+        if ((text.contains(id_tag1) || text.contains(id_tag2)) &&
+            (text.contains("(分析中)") || text.contains("(已记录)"))) {
+            text.replace("(分析中)", QString("(%1)").arg(attr_str));
+            text.replace("(已记录)", QString("(%1)").arg(attr_str));
+            item->setText(text);
+            item->setToolTip(text);
+            break;
+        }
+    }
+}
+
 void MonitorWidget::update_active_rois(const std::vector<RoiConfig>& rois) {
     if (canvas_) {
         canvas_->set_rois(rois);

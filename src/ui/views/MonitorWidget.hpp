@@ -24,6 +24,7 @@ public:
     void update_surge_threshold(int threshold);
     void clear_display_records();
     void populate_recent_events(const std::vector<PassageEvent>& events);
+    void update_event_attributes(int track_id, const QString& gender, const QString& age_group);
 
     // 播放控制条状态同步
     void set_media_info(bool is_live, qint64 duration_ms, double fps);

@@ -261,6 +261,8 @@ public slots:
         if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
             resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
         }
+        AttributeClassifier::instance().init(resolved_attr_model);
+
         // 开机恢复今日已入库的进出累计客流数并立即广播同步大屏
         DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
         {
