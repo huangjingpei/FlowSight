@@ -43,6 +43,7 @@ const showTabBar = computed(() => {
 <style>
 /* 扁平化极简主题规范 (去除光晕环套，注重对比与数据焦点) */
 :root {
+  color-scheme: dark;
   --fs-bg: #0A0D14;
   --fs-card: #121722;
   --fs-card-border: #1E2636;
@@ -89,9 +90,22 @@ html, body {
   width: 100%;
   overflow: hidden;
   background-color: #000000;
+  color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
   color: #FFFFFF;
   -webkit-font-smoothing: antialiased;
+}
+
+/* 全局下拉选择器暗黑规范：彻底杜绝 Chrome/Edge 原生弹出层白底白字不可读问题 */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  color-scheme: dark;
+  background-color: #121824 !important;
+  color: #F8FAFC !important;
 }
 
 .h5-app-root {

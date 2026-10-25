@@ -399,6 +399,14 @@ onMounted(async () => {
   font-size: 11px;
   font-weight: 600;
   outline: none;
+  color-scheme: dark;
+}
+
+.flat-select option {
+  background-color: #121824 !important;
+  color: #FFFFFF !important;
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
 .dir-group {
