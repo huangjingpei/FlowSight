@@ -206,3 +206,26 @@ struct TrackState {
   [`solution/backend/src/main/java/com/flowsight/cloud/service/impl/EventServiceImpl.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/service/impl/EventServiceImpl.java) (`processedBatchUuids`, `15s` 窗口查重)
 - **边缘批量上报与心跳组件**:  
   [`src/network/EdgeReportManager.cpp`](file:///e:/FlowSight/src/network/EdgeReportManager.cpp) (`batchUuid` 全局生成与本地重放管理)
+
+---
+
+## 8. 三大功能协同排查与全生命周期治理机制
+
+在视频算法、本地存储与端云上报三大功能的联调配合中，FlowSight 进一步落实了三项深水区协同闭环：
+
+### 8.1 数据清空与生命周期重置闭环 (Clean State Synchronization)
+- **痛点排查**：以往用户在系统设置执行“清空历史数据”时，仅清空了 SQLite 的业务事件表，但**遗漏了清空本地离线队列表 `offline_report_queue`**；同时 `EdgeReportManager` 的内存待上报缓冲池（尚未触发 5 秒周期的增量）仍然留存。导致清空操作后，离线批次或内存旧数据被再次推送至云端，产生“清空后数据离奇复活”的协同假象。
+- **治理方案**：
+  1. `DatabaseManager::clear_all_history_data` 同步执行 `DELETE FROM offline_report_queue;`，杜绝任何历史离线报文的二次重放；
+  2. `EdgeReportManager` 新增 `reset_batch()` 方法，在监听到客户端 `data_cleared` 信号时，原子重置内存中的 `in_increment_`、`out_increment_`、`batch_events_` 与待上传切片队列 `pending_clips_`。
+
+### 8.2 本地 SQLite 存储层终极防重兜底
+- **痛点排查**：在极端多线程时序或重放调试下，若 `insert_events` 收到重复事件对象，SQLite 会盲目执行 `INSERT` 产生重复记录。
+- **治理方案**：
+  在 `DatabaseManager::insert_events` 中增加前置查重与切片回填逻辑：当 `(track_id, timestamp_ms ± 10s)` 已存在于 `passage_events` 时，若旧记录缺少 `clip_path` 则原地 `UPDATE` 补齐切片路径，跳过二次插入，从存储底层彻底杜绝重复。
+
+### 8.3 属性识别延迟异步校准与 UI 证据表格实时更新
+- **痛点排查**：行人在刚进入 ROI 判定区时可能处于侧脸或低头状态，通行事件先行以 `gender='未知'` 生成。当目标继续前行正对摄像头后，二级分类器成功识别出性别与年龄并更新了数据库，但前端 `EvidenceWidget` 的实时表格未能同步反映最新属性。
+- **治理方案**：
+  `PipelineController` 在属性识别收敛后发射 `event_attributes_updated` 信号，`EvidenceWidget` 实时定位表格中该 `track_id` 的行单元格并即时刷新，无需用户手动点击刷新按钮。
+
