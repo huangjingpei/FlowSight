@@ -35,7 +35,7 @@ private slots:
 
 private:
     void setup_ui();
-    QWidget* create_kpi_card(const QString& title, const QString& accent_color, QLabel*& out_val, QLabel*& out_sub);
+    QWidget* create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub);
 
     // 顶部综合筛选控件
     QComboBox* combo_preset_ = nullptr;

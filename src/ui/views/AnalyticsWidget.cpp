@@ -124,16 +124,16 @@ void AnalyticsWidget::setup_ui() {
     main_layout->addWidget(filter_card);
 
     // ==========================================
-    // 2. 核心概览指标小卡片 (5 卡片矩阵)
+    // 2. 核心概览指标小卡片 (5 卡片素净极简矩阵)
     // ==========================================
     auto* kpi_layout = new QHBoxLayout();
     kpi_layout->setSpacing(10);
 
-    kpi_layout->addWidget(create_kpi_card("今日总客流量", "#00d2d3", total_flow_val_, total_flow_sub_));
-    kpi_layout->addWidget(create_kpi_card("进站/入场量", "#2ed573", entry_val_, entry_sub_));
-    kpi_layout->addWidget(create_kpi_card("出站/离场量", "#ff4757", exit_val_, exit_sub_));
-    kpi_layout->addWidget(create_kpi_card("客群性别画像", "#a29bfe", gender_val_, gender_sub_));
-    kpi_layout->addWidget(create_kpi_card("客流高峰时段", "#ffa502", peak_hour_val_, peak_hour_sub_));
+    kpi_layout->addWidget(create_kpi_card("今日总客流量", total_flow_val_, total_flow_sub_));
+    kpi_layout->addWidget(create_kpi_card("进站/入场量", entry_val_, entry_sub_));
+    kpi_layout->addWidget(create_kpi_card("出站/离场量", exit_val_, exit_sub_));
+    kpi_layout->addWidget(create_kpi_card("客群性别画像", gender_val_, gender_sub_));
+    kpi_layout->addWidget(create_kpi_card("客流高峰时段", peak_hour_val_, peak_hour_sub_));
 
     main_layout->addLayout(kpi_layout);
 
@@ -171,25 +171,29 @@ void AnalyticsWidget::setup_ui() {
     refresh_report();
 }
 
-QWidget* AnalyticsWidget::create_kpi_card(const QString& title, const QString& accent_color, QLabel*& out_val, QLabel*& out_sub) {
+QWidget* AnalyticsWidget::create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub) {
     auto* box = new QWidget();
-    box->setStyleSheet(QString(
-        "background-color: #161b22; border: 1px solid #30363d; border-top: 3px solid %1; "
-        "border-radius: 8px; padding: 10px;"
-    ).arg(accent_color));
+    box->setObjectName("kpi_card");
+    box->setStyleSheet(
+        "QWidget#kpi_card {"
+        "  background-color: #161b22;"
+        "  border: 1px solid #282c34;"
+        "  border-radius: 6px;"
+        "}"
+    );
 
     auto* v = new QVBoxLayout(box);
-    v->setContentsMargins(4, 2, 4, 2);
+    v->setContentsMargins(14, 12, 14, 12);
     v->setSpacing(4);
 
-    auto* t_lbl = new QLabel(title);
-    t_lbl->setStyleSheet("color: #8b949e; font-size: 12px; font-weight: 500;");
+    auto* t_lbl = new QLabel(title, box);
+    t_lbl->setStyleSheet("color: #8c96a3; font-size: 12px; font-weight: 500; border: none; background: transparent;");
 
-    out_val = new QLabel("0 人次");
-    out_val->setStyleSheet("color: #f0f6fc; font-size: 24px; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 1px 0;");
+    out_val = new QLabel("0 人次", box);
+    out_val->setStyleSheet("color: #f0f6fc; font-size: 24px; font-weight: 700; font-family: 'Segoe UI', sans-serif; border: none; background: transparent; margin: 2px 0;");
 
-    out_sub = new QLabel("--");
-    out_sub->setStyleSheet("color: #6e7681; font-size: 11px;");
+    out_sub = new QLabel("--", box);
+    out_sub->setStyleSheet("color: #6e7681; font-size: 11px; border: none; background: transparent;");
 
     v->addWidget(t_lbl);
     v->addWidget(out_val);
