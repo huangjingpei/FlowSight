@@ -65,6 +65,9 @@ public:
     QString get_cloud_user_phone() const { return cloud_user_phone_; }
     void set_cloud_user_phone(const QString& val) { cloud_user_phone_ = val; }
 
+    QString get_cloud_company_name() const { return cloud_company_name_; }
+    void set_cloud_company_name(const QString& val) { cloud_company_name_ = val; }
+
     qint64 get_cloud_point_id() const { return cloud_point_id_; }
     void set_cloud_point_id(qint64 val) { cloud_point_id_ = val; }
 
@@ -111,7 +114,8 @@ private:
     // 云端中台持久化配置 (双密码体系)
     QString cloud_server_url_ = "http://localhost:8080";
     QString cloud_client_name_ = "FlowSight-Node-1";
-    QString cloud_user_phone_ = "13800000000";
+    QString cloud_user_phone_ = "13454118762";
+    QString cloud_company_name_ = "万科物业";
     qint64 cloud_point_id_ = 1;
     QString cloud_point_name_ = "万科西区东门主入口";
     QString cloud_point_code_ = "POINT_VK_EAST_01";

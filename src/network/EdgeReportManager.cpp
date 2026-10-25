@@ -115,6 +115,12 @@ void EdgeReportManager::login_with_credentials(const QString& base_url, const QS
 
         QJsonObject data = root["data"].toObject();
         QString token = data["token"].toString();
+        QString login_phone = data["phone"].toString();
+        QString company_name = data["companyName"].toString();
+        auto& cfg = ConfigManager::instance();
+        if (!login_phone.isEmpty()) cfg.set_cloud_user_phone(login_phone);
+        if (!company_name.isEmpty()) cfg.set_cloud_company_name(company_name);
+        cfg.save();
 
         // 登录成功后，以颁发的 JWT 凭据获取该手机账号关联的点位列表
         QUrl points_url(base_url.trimmed() + "/api/v1/h5/points");
@@ -350,8 +356,20 @@ void EdgeReportManager::fetch_cloud_config(ConfigCallback callback) {
             int code = root.value("code").toInt(200);
             if (code == 200 && root.contains("data")) {
                 QJsonObject point_cfg = root.value("data").toObject();
-                // 同步本地点位名称与状态
+                // 同步本地点位名称与属主商户账号、公司名称
                 bound_point_name_ = point_cfg.value("pointName").toString(bound_point_name_);
+                QString phone = point_cfg.value("userPhone").toString();
+                QString company = point_cfg.value("companyName").toString();
+                auto& cfg = ConfigManager::instance();
+                if (!phone.isEmpty()) {
+                    cfg.set_cloud_user_phone(phone);
+                }
+                if (!company.isEmpty()) {
+                    cfg.set_cloud_company_name(company);
+                }
+                cfg.set_cloud_point_name(bound_point_name_);
+                cfg.save();
+
                 is_online_ = true;
                 is_point_deactivated_ = false;
                 emit cloud_status_changed(true, QString("已绑定点位: %1 [在线]").arg(bound_point_name_));

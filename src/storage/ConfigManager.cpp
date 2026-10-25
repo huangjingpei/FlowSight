@@ -41,7 +41,8 @@ void ConfigManager::load(const QString& ini_path) {
 
     cloud_server_url_ = settings.value("Cloud/ServerUrl", "http://localhost:8080").toString();
     cloud_client_name_ = settings.value("Cloud/ClientName", "FlowSight-Node-1").toString();
-    cloud_user_phone_ = settings.value("Cloud/UserPhone", "13800000000").toString();
+    cloud_user_phone_ = settings.value("Cloud/UserPhone", "13454118762").toString();
+    cloud_company_name_ = settings.value("Cloud/CompanyName", "万科物业服务有限公司").toString();
     cloud_point_id_ = settings.value("Cloud/PointId", 1).toLongLong();
     cloud_point_name_ = settings.value("Cloud/PointName", "万科西区东门主入口").toString();
     cloud_point_code_ = settings.value("Cloud/PointCode", "POINT_VK_EAST_01").toString();
@@ -78,6 +79,7 @@ void ConfigManager::save() {
     settings.setValue("Cloud/ServerUrl", cloud_server_url_);
     settings.setValue("Cloud/ClientName", cloud_client_name_);
     settings.setValue("Cloud/UserPhone", cloud_user_phone_);
+    settings.setValue("Cloud/CompanyName", cloud_company_name_);
     settings.setValue("Cloud/PointId", cloud_point_id_);
     settings.setValue("Cloud/PointName", cloud_point_name_);
     settings.setValue("Cloud/PointCode", cloud_point_code_);
