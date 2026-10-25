@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "VideoCanvas.hpp"
 #include "views/MonitorWidget.hpp"
 #include "views/StudioWidget.hpp"
 #include "views/EvidenceWidget.hpp"
@@ -187,15 +188,24 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         }
     });
     connect(view_monitor_, &MonitorWidget::flow_direction_changed, this, [this](float angle, bool invert) {
-        if (pipeline_) {
-            pipeline_->set_roi_flow_direction(angle, invert);
+        if (!view_monitor_ || !view_monitor_->canvas()) return;
+        auto rois = view_monitor_->canvas()->get_rois();
+        if (rois.empty()) return;
+
+        int active_idx = view_monitor_->canvas()->active_roi_index();
+        if (active_idx >= 0 && active_idx < static_cast<int>(rois.size())) {
+            rois[active_idx].flow_angle_deg = angle;
+            rois[active_idx].invert_direction = invert;
+        } else {
+            rois.front().flow_angle_deg = angle;
+            rois.front().invert_direction = invert;
         }
-        auto rois = DatabaseManager::instance().load_latest_roi_configs();
-        for (auto& r : rois) {
-            r.flow_angle_deg = angle;
-            r.invert_direction = invert;
-        }
+
+        view_monitor_->canvas()->set_rois(rois);
         DatabaseManager::instance().save_roi_configs(rois);
+        if (pipeline_) {
+            pipeline_->update_roi_configs(rois);
+        }
         if (view_studio_) {
             view_studio_->set_rois(rois);
         }

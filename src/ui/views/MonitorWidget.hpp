@@ -31,6 +31,7 @@ public:
     void set_playback_state(bool is_playing);
 
     PlaybackControlBar* control_bar() const { return control_bar_; }
+    VideoCanvas* canvas() const { return canvas_; }
 
 signals:
     void request_change_video(const QString& path);
