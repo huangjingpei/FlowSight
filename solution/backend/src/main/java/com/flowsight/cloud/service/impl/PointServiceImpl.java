@@ -24,6 +24,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -380,7 +382,6 @@ public class PointServiceImpl implements PointService {
         vo.setAddress(p.getAddress());
         vo.setCameraRtsp(p.getCameraRtsp());
         vo.setResolution(p.getResolution());
-        vo.setStreamStatus(p.getStreamStatus());
         vo.setPointToken(p.getPointToken());
         vo.setCreateTime(p.getCreateTime());
 
@@ -392,11 +393,29 @@ public class PointServiceImpl implements PointService {
             vo.setCompanyName(user.getCompanyName());
         }
 
-        // 查询实时心跳
+        // 查询实时心跳并实时判定在线状态 (超过 15 秒无心跳视为离线)
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(p.getId());
+        boolean isOnline = false;
+        if (hb != null && hb.getLastHeartbeat() != null) {
+            long secondsSinceLastHeartbeat = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
+            if (secondsSinceLastHeartbeat <= 15) {
+                isOnline = true;
+            }
+        }
+        String currentStatus = isOnline ? "ONLINE" : "OFFLINE";
+        vo.setStreamStatus(currentStatus);
+
+        if (!isOnline && "ONLINE".equalsIgnoreCase(p.getStreamStatus())) {
+            p.setStreamStatus("OFFLINE");
+            pointMapper.updateById(p);
+        } else if (isOnline && !"ONLINE".equalsIgnoreCase(p.getStreamStatus())) {
+            p.setStreamStatus("ONLINE");
+            pointMapper.updateById(p);
+        }
+
         if (hb != null) {
-            vo.setCurrentFps(hb.getCurrentFps());
-            vo.setCurrentOccupancy(hb.getCurrentOccupancy());
+            vo.setCurrentFps(isOnline ? hb.getCurrentFps() : 0.0f);
+            vo.setCurrentOccupancy(isOnline ? hb.getCurrentOccupancy() : 0);
             vo.setLastHeartbeat(hb.getLastHeartbeat());
         }
         return vo;

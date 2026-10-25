@@ -59,7 +59,7 @@ public:
     void flush_batch();
 
     // 3. 硬件与性能遥测心跳上报
-    void send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend = "CPU");
+    void send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend = "CPU", const QString& status = "ONLINE");
 
     // 4. 手动发送测试聚合上报包 (用于设置界面联调验证)
     void send_test_batch(std::function<void(bool success, const QString& msg, qint64 latency_ms)> callback);

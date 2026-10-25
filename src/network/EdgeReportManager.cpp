@@ -64,6 +64,9 @@ void EdgeReportManager::init(QObject* parent) {
 }
 
 void EdgeReportManager::shutdown() {
+    // 退出前主动向云端发送离线声明，使大屏/H5 0 秒无延迟感知设备已离线
+    send_heartbeat(0.0f, 0.0f, 0, "CPU", "OFFLINE");
+
     if (batch_timer_) {
         batch_timer_->stop();
     }
@@ -643,7 +646,7 @@ void EdgeReportManager::drain_offline_queue() {
         });
 }
 
-void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend) {
+void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_occupancy, const QString& backend, const QString& status) {
     current_occupancy_ = current_occupancy;
     if (is_point_deactivated_) return;
     if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) return;
@@ -652,7 +655,7 @@ void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_
     QNetworkRequest request(hb_url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
-    request.setTransferTimeout(3000);
+    request.setTransferTimeout(2000);
 
     QJsonObject obj;
     obj["clientName"] = client_name_;
@@ -661,6 +664,7 @@ void EdgeReportManager::send_heartbeat(float fps, float latency_ms, int current_
     obj["inferLatencyMs"] = static_cast<double>(latency_ms);
     obj["hardwareBackend"] = backend;
     obj["currentOccupancy"] = current_occupancy;
+    obj["status"] = status;
 
     QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
     QNetworkReply* reply = nam_->post(request, body);

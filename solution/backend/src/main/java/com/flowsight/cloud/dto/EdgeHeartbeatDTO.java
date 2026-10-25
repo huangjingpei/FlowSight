@@ -27,4 +27,8 @@ public class EdgeHeartbeatDTO {
     @JsonProperty("current_occupancy")
     @JsonAlias({"currentOccupancy", "current_occupancy"})
     private Integer currentOccupancy;
+
+    @JsonProperty("status")
+    @JsonAlias({"status", "streamStatus", "stream_status"})
+    private String status;
 }

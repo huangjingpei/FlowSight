@@ -33,6 +33,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -315,8 +316,15 @@ public class EventServiceImpl implements EventService {
             heartbeatMapper.updateById(hb);
         }
 
-        // 更新点位状态为 ONLINE
-        point.setStreamStatus("ONLINE");
+        // 根据状态标志判断是否下线
+        if ("OFFLINE".equalsIgnoreCase(dto.getStatus())) {
+            point.setStreamStatus("OFFLINE");
+            hb.setCurrentOccupancy(0);
+            hb.setCurrentFps(0.0f);
+            heartbeatMapper.updateById(hb);
+        } else {
+            point.setStreamStatus("ONLINE");
+        }
         pointMapper.updateById(point);
     }
 
@@ -382,9 +390,27 @@ public class EventServiceImpl implements EventService {
                     .ifPresent(entry -> demo.setTopAgeGroup(entry.getKey()));
         }
 
-        // 获取最新心跳滞留
+        // 获取最新心跳滞留并进行实时在线超时判断 (若超 15s 未上报则判定 OFFLINE)
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
-        int occupancy = hb != null ? hb.getCurrentOccupancy() : 0;
+        boolean isOnline = false;
+        if (hb != null && hb.getLastHeartbeat() != null) {
+            long secondsSinceLastHeartbeat = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
+            if (secondsSinceLastHeartbeat <= 15) {
+                isOnline = true;
+            }
+        }
+
+        String currentStatus = isOnline ? "ONLINE" : "OFFLINE";
+        // 同步校准数据库状态
+        if (!isOnline && "ONLINE".equalsIgnoreCase(point.getStreamStatus())) {
+            point.setStreamStatus("OFFLINE");
+            pointMapper.updateById(point);
+        } else if (isOnline && !"ONLINE".equalsIgnoreCase(point.getStreamStatus())) {
+            point.setStreamStatus("ONLINE");
+            pointMapper.updateById(point);
+        }
+
+        int occupancy = (isOnline && hb != null) ? hb.getCurrentOccupancy() : 0;
 
         DashboardSummaryVO vo = new DashboardSummaryVO();
         vo.setPointId(point.getId());
@@ -396,7 +422,7 @@ public class EventServiceImpl implements EventService {
         } else {
             vo.setLastHeartbeat("暂无上报记录");
         }
-        vo.setStreamStatus(point.getStreamStatus());
+        vo.setStreamStatus(currentStatus);
         vo.setCurrentOccupancy(occupancy);
         vo.setTodayEntry(todayIn);
         vo.setTodayExit(todayOut);
