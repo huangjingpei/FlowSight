@@ -1,17 +1,14 @@
 <template>
   <div class="settings-viewport">
-    <!-- 1. 顶部嵌入式标题栏 -->
+    <!-- 顶部标题栏 -->
     <header class="flat-header">
       <div class="header-left">
         <span class="header-dot"></span>
-        <span class="header-title">系统设置与商户中心</span>
-      </div>
-      <div class="role-badge">
-        <span>商户认证</span>
+        <span class="header-title">系统设置</span>
       </div>
     </header>
 
-    <!-- 2. 主体内容区 (纯平菜单列表，拒绝页面内折叠跳动) -->
+    <!-- 主体内容区 (纯平菜单列表) -->
     <main class="settings-scroll-body">
       <!-- 商户租户卡片 -->
       <div class="profile-card">
@@ -19,255 +16,203 @@
           <div class="avatar-box">🏢</div>
           <div class="profile-meta">
             <div class="company-name">{{ userProfile.companyName || '万科物业服务有限公司' }}</div>
-            <div class="phone-str">📱 绑定账号: {{ userProfile.phone || '13454118762' }}</div>
+            <div class="phone-str">账号：{{ userProfile.phone || '13454118762' }}</div>
           </div>
           <div class="auth-pill">已认证</div>
         </div>
       </div>
 
-      <!-- 设置分组 1: 边端接入与安全凭据 -->
-      <div class="group-title">边端接入与安全凭据</div>
+      <!-- 分组 1: 设备与安全 -->
+      <div class="group-title">设备与安全</div>
       <div class="menu-group">
-        <!-- 条目 1: 6 位动态配对码 -->
         <div class="menu-cell" @click="openModal('pairing')">
           <div class="cell-left">
             <span class="cell-icon">⚡</span>
-            <div class="cell-text">
-              <span class="cell-title">现场设备 6 位动态配对码</span>
-              <span class="cell-sub">5 分钟动态 PIN 码 · 工控机 1 秒接入免输密码</span>
-            </div>
+            <span class="cell-title">设备配对码</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill cyan-pill">生成 PIN ➔</span>
+            <span class="cell-value">生成</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
 
-        <!-- 条目 2: 边缘设备专属接入密码 (密码 2) -->
         <div class="menu-cell" @click="openModal('devicePwd')">
           <div class="cell-left">
             <span class="cell-icon">🛡️</span>
-            <div class="cell-text">
-              <span class="cell-title">边缘专属设备密码 (密码 2)</span>
-              <span class="cell-sub">编码: {{ pointCredential.pointCode || 'POINT_VK_EAST_01' }} · 与主账号解耦</span>
-            </div>
+            <span class="cell-title">设备密码</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill blue-pill">管理/重置 ➔</span>
+            <span class="cell-value">修改</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
 
-        <!-- 条目 3: 修改登录密码 -->
         <div class="menu-cell" @click="openModal('password')">
           <div class="cell-left">
             <span class="cell-icon">🔐</span>
-            <div class="cell-text">
-              <span class="cell-title">修改账号登录密码</span>
-              <span class="cell-sub">商户主账号登录与决策中台安全保护</span>
-            </div>
+            <span class="cell-title">登录密码</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill gray-pill">修改 ➔</span>
+            <span class="cell-value">修改</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
       </div>
 
-      <!-- 设置分组 2: 数据洞察与座舱偏好 -->
-      <div class="group-title">数据洞察与座舱偏好</div>
+      <!-- 分组 2: 监控与数据 -->
+      <div class="group-title">监控与数据</div>
       <div class="menu-group">
-        <!-- 条目 4: 通道客群属性洞察画像 -->
         <div class="menu-cell" @click="openModal('demographics')">
           <div class="cell-left">
             <span class="cell-icon">👥</span>
-            <div class="cell-text">
-              <span class="cell-title">通道客群属性洞察画像</span>
-              <span class="cell-sub">AI 年龄段与性别构成 · 商业客群特征</span>
-            </div>
+            <span class="cell-title">客群画像</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill green-pill">查看洞察 ➔</span>
+            <span class="cell-value">查看</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
 
-        <!-- 条目 5: 实时座舱刷新频率 -->
         <div class="menu-cell" @click="openModal('refreshRate')">
           <div class="cell-left">
             <span class="cell-icon">⏱️</span>
-            <div class="cell-text">
-              <span class="cell-title">实时座舱数据刷新频率</span>
-              <span class="cell-sub">流速脉冲曲线与在场滞留步进周期</span>
-            </div>
+            <span class="cell-title">数据刷新</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill purple-pill">{{ activeRate }} 秒 ➔</span>
+            <span class="cell-value">{{ activeRate }}秒</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
 
-        <!-- 条目 6: 边端通道与设备信息 -->
         <div class="menu-cell" @click="openModal('deviceInfo')">
           <div class="cell-left">
             <span class="cell-icon">📡</span>
-            <div class="cell-text">
-              <span class="cell-title">边端连接与通道管理</span>
-              <span class="cell-sub">{{ summary.pointName || '万科西区东门主入口' }}</span>
-            </div>
+            <span class="cell-title">通道设备</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill" :class="summary.streamStatus === 'ONLINE' ? 'green-pill' : 'red-pill'">
-              {{ summary.streamStatus === 'ONLINE' ? '● 在线' : '○ 离线' }} ➔
+            <span class="status-dot" :class="summary.streamStatus === 'ONLINE' ? 'online' : 'offline'">
+              {{ summary.streamStatus === 'ONLINE' ? '● 在线' : '○ 离线' }}
             </span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
       </div>
 
-      <!-- 设置分组 3: 显示风格与适老无障碍 -->
-      <div class="group-title">界面视觉与适老无障碍</div>
+      <!-- 分组 3: 界面显示 -->
+      <div class="group-title">界面显示</div>
       <div class="menu-group">
-        <!-- 条目 7: 界面主题模式切换 -->
         <div class="menu-cell" @click="openModal('themeMode')">
           <div class="cell-left">
             <span class="cell-icon">🎨</span>
-            <div class="cell-text">
-              <span class="cell-title">界面显示主题风格</span>
-              <span class="cell-sub">深色科技夜间 / 明亮浅色适老高对比度</span>
-            </div>
+            <span class="cell-title">显示主题</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill" :class="currentTheme === 'light' ? 'cyan-pill' : 'gray-pill'">
-              {{ currentTheme === 'light' ? '明亮浅色 ➔' : '深邃暗黑 ➔' }}
-            </span>
+            <span class="cell-value">{{ currentThemeLabel }}</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
 
-        <!-- 条目 8: 界面字号大小与无障碍放大 -->
         <div class="menu-cell" @click="openModal('fontSize')">
           <div class="cell-left">
             <span class="cell-icon">🔠</span>
-            <div class="cell-text">
-              <span class="cell-title">界面字号大小与无障碍</span>
-              <span class="cell-sub">标准 100% / 中等 110% / 关爱大字 120% 放大</span>
-            </div>
+            <span class="cell-title">字号大小</span>
           </div>
           <div class="cell-right">
-            <span class="cell-action-pill purple-pill">
-              {{ fontScaleLabel }} ➔
-            </span>
+            <span class="cell-value">{{ fontScaleLabel }}</span>
+            <span class="cell-chevron">›</span>
           </div>
         </div>
       </div>
 
-      <!-- 安全登出按钮 -->
+      <!-- 退出登录按钮 -->
       <div class="logout-btn-box">
         <button class="btn-logout" @click="handleLogout">
-          <span>安全退出当前决策账号</span>
+          <span>退出登录</span>
         </button>
       </div>
     </main>
 
     <!-- ==================== 统一弹窗对话框区域 (Modal Dialogs) ==================== -->
 
-    <!-- 弹窗 1: 6 位动态配对码 (极速接入) -->
+    <!-- 弹窗 1: 设备配对码 -->
     <div v-if="activeModal === 'pairing'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">⚡</span>
-            <span class="dh-title">现场设备 6 位动态配对码</span>
-          </div>
+          <span class="dh-title">设备配对码</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="modal-sub-meta">
-            <span class="msm-k">目标通道:</span>
-            <span class="msm-v cyan-code">{{ pointCredential.pointName || summary.pointName || '当前通道' }} ({{ pointCredential.pointCode || 'POINT_01' }})</span>
+            <span class="msm-k">当前通道</span>
+            <span class="msm-v">{{ pointCredential.pointName || summary.pointName || '当前通道' }}</span>
           </div>
 
           <div v-if="!pairingData" class="pairing-init-box">
-            <p class="modal-desc">
-              无需向施工人员透露账号主密码。点击下方按钮即可生成 5 分钟有效的一次性 6 位数字配对码，工控机输入后即可自动完成身份鉴权与点位绑定。
-            </p>
             <button class="btn-modal-action btn-cyan-fill" :disabled="pairingLoading" @click="handleGeneratePairingCode">
-              {{ pairingLoading ? '正在生成配对码...' : '⚡ 立即生成 6 位接入配对码' }}
+              {{ pairingLoading ? '正在生成...' : '生成 6 位配对码' }}
             </button>
           </div>
 
           <div v-else class="pairing-active-box">
             <div class="pairing-countdown">
-              <span>⏳ 配对码有效期剩余: <b class="text-orange">{{ pairingRemainingSec }}秒</b></span>
+              <span>有效时间剩余 <b class="text-orange">{{ pairingRemainingSec }}秒</b></span>
             </div>
-            <!-- 6 位大字号排版卡片 -->
             <div class="pin-digits-row">
               <span v-for="(digit, idx) in pairingDigits" :key="idx" class="pin-digit-box">
                 {{ digit }}
               </span>
             </div>
-            <div class="pairing-tip">
-              💡 施工人员在工控机客户端「设置 → 云端协同」中输入上述 6 位数字即可 1 秒接入。
-            </div>
             <div class="modal-action-row">
-              <button class="btn-copy-pin" @click="handleCopyPin">
-                📋 复制 6 位配对码
-              </button>
-              <button class="btn-refresh-pin" :disabled="pairingLoading" @click="handleGeneratePairingCode">
-                🔄 重新生成
-              </button>
+              <button class="btn-copy-pin" @click="handleCopyPin">复制</button>
+              <button class="btn-refresh-pin" :disabled="pairingLoading" @click="handleGeneratePairingCode">重新生成</button>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 2: 边缘专属设备密码 (密码 2) -->
+    <!-- 弹窗 2: 设备密码 -->
     <div v-if="activeModal === 'devicePwd'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">🛡️</span>
-            <span class="dh-title">边缘专属设备密码 (密码 2)</span>
-          </div>
+          <span class="dh-title">修改设备密码</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="modal-sub-meta">
-            <span class="msm-k">点位唯一编码:</span>
+            <span class="msm-k">通道编码</span>
             <span class="msm-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
-          </div>
-
-          <div class="dual-pwd-hint">
-            💡 <b>双密码安全隔离说明</b>：此密码仅供现场摄像头工控机接入鉴权，与您的商户主账号完全解耦。现场设备报废或移机时，在此重置即可吊销旧凭据。
           </div>
 
           <div class="modal-form">
             <div class="modal-form-item">
-              <label class="mf-label">新设备专属密码:</label>
+              <label class="mf-label">新设备密码</label>
               <input
                 v-model="newDevicePassword"
                 type="password"
-                placeholder="请输入新设备密码（至少6位）"
+                placeholder="请输入至少6位密码"
                 class="mf-input"
               />
             </div>
             <button class="btn-modal-action btn-cyan-fill" :disabled="devPwdLoading" @click="handleResetDevicePassword">
-              {{ devPwdLoading ? '正在重置凭证...' : '确认重置边缘专属密码 (密码 2)' }}
+              {{ devPwdLoading ? '正在保存...' : '保存密码' }}
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 3: 修改登录密码 -->
+    <!-- 弹窗 3: 登录密码 -->
     <div v-if="activeModal === 'password'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">🔐</span>
-            <span class="dh-title">修改账号登录密码</span>
-          </div>
+          <span class="dh-title">修改登录密码</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="modal-form">
             <div class="modal-form-item">
-              <label class="mf-label">当前原密码:</label>
+              <label class="mf-label">原密码</label>
               <input
                 v-model="pwdForm.oldPassword"
                 type="password"
@@ -276,46 +221,43 @@
               />
             </div>
             <div class="modal-form-item">
-              <label class="mf-label">新密码:</label>
+              <label class="mf-label">新密码</label>
               <input
                 v-model="pwdForm.newPassword"
                 type="password"
-                placeholder="请输入新密码（至少6位）"
+                placeholder="请输入至少6位新密码"
                 class="mf-input"
               />
             </div>
             <div class="modal-form-item">
-              <label class="mf-label">确认新密码:</label>
+              <label class="mf-label">确认密码</label>
               <input
                 v-model="pwdForm.confirmPassword"
                 type="password"
-                placeholder="再次输入新密码"
+                placeholder="请再次输入新密码"
                 class="mf-input"
               />
             </div>
             <button class="btn-modal-action btn-blue-fill" :disabled="pwdLoading" @click="handleChangePassword">
-              {{ pwdLoading ? '密码验签提交中...' : '确认修改登录密码' }}
+              {{ pwdLoading ? '正在保存...' : '确认修改' }}
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 4: 通道客群属性洞察画像 -->
+    <!-- 弹窗 4: 客群画像 -->
     <div v-if="activeModal === 'demographics'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">👥</span>
-            <span class="dh-title">通道客群属性洞察画像</span>
-          </div>
+          <span class="dh-title">客群画像</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="demo-modal-content">
             <div class="gender-text-row" v-if="summary.demographics">
-              <span class="text-cyan">👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
-              <span class="text-pink">👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+              <span class="text-cyan">男 {{ (summary.demographics.maleRatio * 100).toFixed(0) }}% ({{ summary.demographics.maleCount }}人)</span>
+              <span class="text-pink">女 {{ (summary.demographics.femaleRatio * 100).toFixed(0) }}% ({{ summary.demographics.femaleCount }}人)</span>
             </div>
 
             <div class="flat-progress-bar" v-if="summary.demographics">
@@ -324,47 +266,30 @@
             </div>
 
             <div class="age-info-row" v-if="summary.demographics">
-              <span class="info-lbl">主力到场客群:</span>
+              <span class="info-lbl">主力年龄段:</span>
               <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
             </div>
 
-            <div class="ai-meta-box">
-              <div class="amb-item">
-                <span class="amb-k">AI 多属性识别精度</span>
-                <span class="amb-v text-cyan">94.6% 置信度</span>
-              </div>
-              <div class="amb-item">
-                <span class="amb-k">今日抓拍样本量</span>
-                <span class="amb-v">{{ summary.todayTotal || 0 }} 样本</span>
-              </div>
-              <div class="amb-item">
-                <span class="amb-k">数据模型</span>
-                <span class="amb-v">Edge YOLOv8n + ByteTrack</span>
-              </div>
+            <div class="demo-count-row">
+              <span>今日累计样本：<b>{{ summary.todayTotal || 0 }}</b> 人次</span>
             </div>
 
-            <button class="btn-modal-action btn-gray-fill" @click="closeModal">
-              关闭洞察
+            <button class="btn-modal-action btn-gray-fill" style="margin-top: 14px;" @click="closeModal">
+              完成
             </button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 5: 实时座舱数据刷新频率 -->
+    <!-- 弹窗 5: 数据刷新频率 -->
     <div v-if="activeModal === 'refreshRate'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">⏱️</span>
-            <span class="dh-title">实时座舱数据刷新频率</span>
-          </div>
+          <span class="dh-title">数据刷新频率</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
-          <p class="modal-desc">
-            选择手机端决策座舱近实时同步流速脉冲折线与滞留人数的刷新步进周期：
-          </p>
           <div class="rate-select-list">
             <div
               v-for="r in refreshRates"
@@ -374,79 +299,63 @@
             >
               <div class="rc-left">
                 <span class="rc-radio">{{ activeRate === r.sec ? '●' : '○' }}</span>
-                <div class="rc-text">
-                  <span class="rc-title">{{ r.label }}</span>
-                  <span class="rc-desc">{{ r.desc }}</span>
-                </div>
+                <span class="rc-title">{{ r.label }}</span>
               </div>
-              <span v-if="activeRate === r.sec" class="rc-tag">当前生效</span>
+              <span class="rc-sub">{{ r.desc }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 6: 边端通道与设备详情 -->
+    <!-- 弹窗 6: 通道设备详情 -->
     <div v-if="activeModal === 'deviceInfo'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">📡</span>
-            <span class="dh-title">边端连接与通道详情</span>
-          </div>
+          <span class="dh-title">通道设备</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="node-meta-list">
             <div class="meta-row">
-              <span class="m-k">当前点位:</span>
-              <span class="m-v">{{ summary.pointName || '万科西区东门主入口' }} [ID: {{ summary.pointId || 1 }}]</span>
+              <span class="m-k">通道名称</span>
+              <span class="m-v">{{ summary.pointName || '万科西区东门主入口' }}</span>
             </div>
             <div class="meta-row">
-              <span class="m-k">通道编码:</span>
+              <span class="m-k">通道编码</span>
               <span class="m-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
             </div>
             <div class="meta-row">
-              <span class="m-k">边端节点:</span>
-              <span class="m-v">{{ summary.clientName || 'FlowSight-Edge-Node-01' }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="m-k">推流状态:</span>
+              <span class="m-k">连接状态</span>
               <span class="m-v" :class="summary.streamStatus === 'ONLINE' ? 'text-green' : 'text-orange'">
-                {{ summary.streamStatus === 'ONLINE' ? '🟢 ONLINE (正常)' : '🔴 OFFLINE (离线)' }}
+                {{ summary.streamStatus === 'ONLINE' ? '● 在线' : '○ 离线' }}
               </span>
             </div>
             <div class="meta-row">
-              <span class="m-k">软件版本:</span>
-              <span class="m-v">{{ summary.appVersion || 'v1.2.0' }}</span>
+              <span class="m-k">边端节点</span>
+              <span class="m-v">{{ summary.clientName || 'FlowSight-Edge-Node-01' }}</span>
             </div>
             <div class="meta-row">
-              <span class="m-k">最近心跳:</span>
-              <span class="m-v">{{ summary.lastHeartbeat || '实时心跳正常' }}</span>
+              <span class="m-k">软件版本</span>
+              <span class="m-v">{{ summary.appVersion || 'v1.2.0' }}</span>
             </div>
           </div>
 
           <button class="btn-modal-action btn-gray-fill" style="margin-top: 14px;" @click="closeModal">
-            关闭
+            完成
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 7: 界面显示主题模式切换 (深色 / 浅色高对比适老) -->
+    <!-- 弹窗 7: 显示主题模式 -->
     <div v-if="activeModal === 'themeMode'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">🎨</span>
-            <span class="dh-title">界面显示主题模式</span>
-          </div>
+          <span class="dh-title">显示主题</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
-          <p class="modal-desc">
-            选择决策看板视觉主题风格。推荐视力不佳或长辈用户切换至明亮浅色：
-          </p>
           <div class="rate-select-list">
             <div
               v-for="t in themeOptions"
@@ -456,32 +365,23 @@
             >
               <div class="rc-left">
                 <span class="rc-radio">{{ currentTheme === t.key ? '●' : '○' }}</span>
-                <div class="rc-text">
-                  <span class="rc-title">{{ t.label }}</span>
-                  <span class="rc-desc">{{ t.desc }}</span>
-                </div>
+                <span class="rc-title">{{ t.label }}</span>
               </div>
-              <span v-if="currentTheme === t.key" class="rc-tag">当前生效</span>
+              <span class="rc-sub">{{ t.desc }}</span>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 弹窗 8: 界面字号大小与无障碍放大 (标准 / 中等 / 关爱大字) -->
+    <!-- 弹窗 8: 字号大小 -->
     <div v-if="activeModal === 'fontSize'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <div class="dh-title-box">
-            <span class="dh-icon">🔠</span>
-            <span class="dh-title">界面字号大小与无障碍</span>
-          </div>
+          <span class="dh-title">字号大小</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
-          <p class="modal-desc">
-            根据使用者的视力舒适度手动调整全局字号大小，保障中长辈用户轻松阅读：
-          </p>
           <div class="rate-select-list">
             <div
               v-for="f in fontScaleOptions"
@@ -491,20 +391,16 @@
             >
               <div class="rc-left">
                 <span class="rc-radio">{{ currentFontScale === f.key ? '●' : '○' }}</span>
-                <div class="rc-text">
-                  <span class="rc-title">{{ f.label }}</span>
-                  <span class="rc-desc">{{ f.desc }}</span>
-                </div>
+                <span class="rc-title">{{ f.label }}</span>
               </div>
-              <span v-if="currentFontScale === f.key" class="rc-tag">当前生效</span>
+              <span class="rc-sub">{{ f.desc }}</span>
             </div>
           </div>
 
-          <!-- 实时字号预览卡片 -->
           <div class="font-preview-box">
-            <div class="fp-title">字号实时预览效果：</div>
+            <div class="fp-title">字号效果预览</div>
             <div class="fp-content">
-              瞬时在场 <b class="text-cyan">18人</b> · 累计客流 <b>1,250人次</b> (通行状态感知正常)
+              累计通行 <b class="text-cyan">1,280 人次</b>
             </div>
           </div>
         </div>
@@ -534,9 +430,13 @@ const { currentTheme, currentFontScale } = storeToRefs(themeStore);
 const activeRate = pollRateSec;
 
 const fontScaleLabel = computed(() => {
-  if (currentFontScale.value === 'large') return '关爱大字 120%';
-  if (currentFontScale.value === 'medium') return '中等 110%';
-  return '标准 100%';
+  if (currentFontScale.value === 'large') return '关爱大字';
+  if (currentFontScale.value === 'medium') return '中等';
+  return '标准';
+});
+
+const currentThemeLabel = computed(() => {
+  return currentTheme.value === 'light' ? '明亮浅色' : '深邃暗黑';
 });
 
 // 用户资料
@@ -689,9 +589,9 @@ const handleResetDevicePassword = async () => {
 
 // 刷新频率选项
 const refreshRates = [
-  { sec: 5, label: '5 秒 (近实时推荐)', desc: '动态流速波形每 5 秒刷新，感知极度灵敏' },
-  { sec: 10, label: '10 秒 (标准模式)', desc: '标准中台步进周期，平衡设备与数据通量' },
-  { sec: 30, label: '30 秒 (省流模式)', desc: '低频后台巡检，适合长期待机与节约流量' }
+  { sec: 5, label: '5 秒', desc: '近实时' },
+  { sec: 10, label: '10 秒', desc: '标准' },
+  { sec: 30, label: '30 秒', desc: '省流' }
 ];
 
 const handleSelectRate = (sec: number) => {
@@ -703,14 +603,14 @@ const handleSelectRate = (sec: number) => {
 // 主题模式选项
 const themeOptions = [
   {
-    key: 'dark' as ThemeMode,
-    label: '深邃暗黑 (默认科技夜间)',
-    desc: '低发光柔和护眼，纯平极简暗黑中台，夜间环境首选'
+    key: 'light' as ThemeMode,
+    label: '明亮浅色',
+    desc: '白底黑字 高对比'
   },
   {
-    key: 'light' as ThemeMode,
-    label: '明亮浅色 (高对比适老推荐)',
-    desc: '白底纯黑字高反差，光线充足环境易读，专为中长辈与视力欠佳者优化'
+    key: 'dark' as ThemeMode,
+    label: '深邃暗黑',
+    desc: '黑底科技 夜间柔和'
   }
 ];
 
@@ -724,18 +624,18 @@ const handleSelectTheme = (mode: ThemeMode) => {
 const fontScaleOptions = [
   {
     key: 'standard' as FontSizeScale,
-    label: '标准字号 (100%)',
-    desc: '紧凑精炼，适合常规移动端查看与高信息密度展示'
+    label: '标准',
+    desc: '100% 默认'
   },
   {
     key: 'medium' as FontSizeScale,
-    label: '中等字号 (110%)',
-    desc: '适度放大 10%，字体更饱满清晰，长时间阅读不易眼疲劳'
+    label: '中等',
+    desc: '110% 放大'
   },
   {
     key: 'large' as FontSizeScale,
-    label: '关爱大字 (120% 适老化推荐)',
-    desc: '界面字号显著放大加粗，高对比度呈现，长辈与视力障碍友好'
+    label: '关爱大字',
+    desc: '120% 适老'
   }
 ];
 
@@ -979,61 +879,45 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.cell-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .cell-title {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #E2E8F0;
-}
-
-.cell-sub {
-  font-size: 10px;
-  color: #64748B;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fs-text-main, #E2E8F0);
 }
 
 .cell-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
-  margin-left: 8px;
 }
 
-.cell-action-pill {
+.cell-value {
+  font-size: 12px;
+  color: var(--fs-text-sub, #94A3B8);
+  font-weight: 500;
+}
+
+.cell-chevron {
+  font-size: 16px;
+  color: var(--fs-text-dim, #64748B);
+  font-weight: 300;
+  line-height: 1;
+}
+
+.status-dot {
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 1px 6px;
+  border-radius: 3px;
 }
-.cyan-pill {
-  background: rgba(0, 210, 255, 0.12);
-  color: #00D2FF;
+.status-dot.online {
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.12);
 }
-.blue-pill {
-  background: rgba(31, 111, 235, 0.15);
-  color: #58A6FF;
-}
-.gray-pill {
-  background: #1A2230;
-  color: #94A3B8;
-}
-.green-pill {
-  background: rgba(0, 230, 118, 0.12);
-  color: #00E676;
-}
-.purple-pill {
-  background: rgba(157, 78, 221, 0.15);
-  color: #BC8CFF;
-}
-.red-pill {
-  background: rgba(255, 61, 113, 0.15);
-  color: #FF3D71;
+.status-dot.offline {
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 /* 登出按钮 */
@@ -1044,11 +928,11 @@ onUnmounted(() => {
 .btn-logout {
   width: 100%;
   height: 40px;
-  background: #182030;
-  border: 1px solid #2A364F;
+  background: var(--fs-card, #182030);
+  border: 1px solid var(--fs-card-border, #2A364F);
   border-radius: 6px;
   color: #FF3D71;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
@@ -1390,19 +1274,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #0B0E14;
-  border: 1px solid #1F293D;
-  border-radius: 6px;
-  padding: 10px 12px;
+  background: var(--fs-card-secondary, #182030);
+  border: 1px solid var(--fs-card-border, #1F293D);
+  border-radius: 8px;
+  padding: 11px 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 .rate-card:active {
-  background: #182030;
+  opacity: 0.85;
 }
 .rate-card-active {
-  border-color: #00D2FF;
-  background: rgba(0, 210, 255, 0.06);
+  border-color: var(--fs-primary, #00D2FF);
+  background: rgba(0, 210, 255, 0.08);
 }
 
 .rc-left {
@@ -1412,34 +1296,26 @@ onUnmounted(() => {
 }
 
 .rc-radio {
-  color: #00D2FF;
-  font-size: 14px;
-}
-
-.rc-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  color: var(--fs-primary, #00D2FF);
+  font-size: 13px;
 }
 
 .rc-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #F8FAFC;
-}
-
-.rc-desc {
-  font-size: 10px;
-  color: #64748B;
-}
-
-.rc-tag {
-  font-size: 9px;
-  color: #00D2FF;
-  background: rgba(0, 210, 255, 0.15);
-  padding: 2px 6px;
-  border-radius: 3px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--fs-text-main, #F8FAFC);
+}
+
+.rc-sub {
+  font-size: 11px;
+  color: var(--fs-text-dim, #64748B);
+}
+
+.demo-count-row {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--fs-text-sub, #94A3B8);
+  text-align: center;
 }
 
 /* 节点详情元数据列表 */

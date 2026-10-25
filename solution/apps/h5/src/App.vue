@@ -559,8 +559,17 @@ select optgroup {
   color: #0F172A !important;
 }
 
-.theme-light .rc-desc {
+.theme-light .rc-desc,
+.theme-light .rc-sub {
   color: #64748B !important;
+}
+
+.theme-light .cell-value {
+  color: #64748B !important;
+}
+
+.theme-light .cell-chevron {
+  color: #94A3B8 !important;
 }
 
 .theme-light .mf-input,
