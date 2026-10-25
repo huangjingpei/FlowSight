@@ -391,6 +391,43 @@ void EdgeReportManager::fetch_cloud_config(ConfigCallback callback) {
     });
 }
 
+void EdgeReportManager::update_cloud_point_config(const QString& point_name, const QString& camera_rtsp, SyncCallback callback) {
+    if (cloud_base_url_.trimmed().isEmpty() || bound_point_token_.trimmed().isEmpty()) {
+        if (callback) callback(false, "未配置云端中台地址或未绑定点位");
+        return;
+    }
+
+    if (!nam_) nam_ = new QNetworkAccessManager(this);
+
+    QUrl update_url(cloud_base_url_.trimmed() + "/api/v1/edge/config");
+    QNetworkRequest request(update_url);
+    request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    request.setTransferTimeout(5000);
+
+    QJsonObject payload;
+    if (!point_name.trimmed().isEmpty()) {
+        payload["pointName"] = point_name.trimmed();
+    }
+    payload["cameraRtsp"] = camera_rtsp.trimmed();
+
+    QNetworkReply* reply = nam_->sendCustomRequest(request, "PUT", QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, point_name, camera_rtsp, callback]() {
+        reply->deleteLater();
+        int http_status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() == QNetworkReply::NoError && (http_status == 200 || http_status == 204)) {
+            if (!point_name.trimmed().isEmpty()) {
+                bound_point_name_ = point_name.trimmed();
+                ConfigManager::instance().set_cloud_point_name(bound_point_name_);
+            }
+            if (callback) callback(true, "点位配置已成功双向同步回写至云端中台！");
+        } else {
+            QString err_msg = QString("云端同步失败 (HTTP %1): %2").arg(http_status).arg(reply->errorString());
+            if (callback) callback(false, err_msg);
+        }
+    });
+}
+
 void EdgeReportManager::record_passage(const PassageEvent& event) {
     QMutexLocker locker(&mutex_);
     if (event.direction == PassageDirection::ENTRY) {

@@ -71,6 +71,10 @@ public:
     using ConfigCallback = std::function<void(bool success, const QString& msg, const QJsonObject& point_config)>;
     void fetch_cloud_config(ConfigCallback callback);
 
+    // 6. 双向同步：将边缘端调整后的点位配置 (RTSP流地址、点位名称) 同步回写至云端中台
+    using SyncCallback = std::function<void(bool success, const QString& msg)>;
+    void update_cloud_point_config(const QString& point_name, const QString& camera_rtsp, SyncCallback callback);
+
     // 获取离线积压队列数量
     int get_offline_queue_count() const;
 

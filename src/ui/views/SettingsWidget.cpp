@@ -80,15 +80,14 @@ void SettingsWidget::setup_ui() {
     auto* cloud_row2 = new QHBoxLayout();
     cloud_row2->addWidget(new QLabel("商户登录手机号:", this));
     cloud_phone_edit_ = new QLineEdit(cfg.get_cloud_user_phone(), this);
-    cloud_phone_edit_->setPlaceholderText("例如: 13454118762");
+    cloud_phone_edit_->setPlaceholderText("请输入管理员分配的商户手机号");
     cloud_row2->addWidget(cloud_phone_edit_, 1);
 
     cloud_row2->addSpacing(16);
     cloud_row2->addWidget(new QLabel("登录密码:", this));
     cloud_password_edit_ = new QLineEdit(this);
     cloud_password_edit_->setEchoMode(QLineEdit::Password);
-    cloud_password_edit_->setPlaceholderText("商户登录密码");
-    cloud_password_edit_->setText(cfg.get_cloud_user_phone());
+    cloud_password_edit_->setPlaceholderText("请输入商户登录密码");
     cloud_row2->addWidget(cloud_password_edit_, 1);
 
     btn_cloud_login_ = new QPushButton("🔐 登录并拉取点位", this);
@@ -107,6 +106,8 @@ void SettingsWidget::setup_ui() {
         pdata["name"] = cfg.get_cloud_point_name();
         pdata["token"] = cfg.get_cloud_point_token();
         cloud_point_combo_->addItem(QString("[%1] %2").arg(cfg.get_cloud_point_id()).arg(cfg.get_cloud_point_name()), pdata);
+    } else {
+        cloud_point_combo_->addItem("⚪ 未绑定点位 (请先登录拉取已授权点位)");
     }
     cloud_row3->addWidget(cloud_point_combo_, 1);
 
@@ -142,16 +143,18 @@ void SettingsWidget::setup_ui() {
         if (cfg.get_cloud_point_id() > 0 && !cfg.get_cloud_point_token().isEmpty()) {
             QString company = cfg.get_cloud_company_name();
             QString phone = cfg.get_cloud_user_phone();
+            QString company_display = company.isEmpty() ? "已授权商户" : company;
+            QString phone_display = phone.isEmpty() ? "--" : phone;
             cloud_status_info_label_->setText(QString("🟢 已绑定点位: [%1] %2  │  商户: %3 (%4)  │  状态: 在线")
                 .arg(cfg.get_cloud_point_id())
                 .arg(cfg.get_cloud_point_name())
-                .arg(company.isEmpty() ? "万科物业" : company)
-                .arg(phone.isEmpty() ? "13454118762" : phone));
+                .arg(company_display)
+                .arg(phone_display));
             cloud_status_info_label_->setStyleSheet(
                 "color: #2ea043; font-weight: 600; font-size: 12px; padding: 7px 12px; background: rgba(46, 160, 67, 0.12); border-radius: 4px; border: 1px solid rgba(46, 160, 67, 0.4);"
             );
         } else {
-            cloud_status_info_label_->setText("⚪ 未关联云端点位 - 请输入商户手机号与密码登录后选择点位绑定");
+            cloud_status_info_label_->setText("⚪ 未绑定点位：请使用管理员下发的商户账号登录后选择点位绑定");
             cloud_status_info_label_->setStyleSheet(
                 "color: #8b949e; font-size: 12px; padding: 7px 12px; background: rgba(139, 148, 158, 0.1); border-radius: 4px; border: 1px solid rgba(139, 148, 158, 0.3);"
             );
@@ -417,8 +420,8 @@ void SettingsWidget::setup_ui() {
 
                 QString sync_info = QString("点位名称: %1\n所属商户: %2 (%3)\n摄像头流: %4")
                     .arg(pname)
-                    .arg(company.isEmpty() ? "万科物业" : company)
-                    .arg(phone.isEmpty() ? "13454118762" : phone)
+                    .arg(company.isEmpty() ? "已授权商户" : company)
+                    .arg(phone.isEmpty() ? "--" : phone)
                     .arg(rtsp.isEmpty() ? "未配置(保持本地视频源)" : rtsp);
                 QMessageBox::information(this, "云端配置已同步", sync_info);
             } else {
@@ -458,7 +461,8 @@ void SettingsWidget::on_btn_browse() {
 
 void SettingsWidget::on_btn_save() {
     auto& cfg = ConfigManager::instance();
-    cfg.set_video_source(video_input_edit_->text().trimmed());
+    QString new_video_source = video_input_edit_->text().trimmed();
+    cfg.set_video_source(new_video_source);
     cfg.set_clip_retention_days(retention_spin_->value());
 
     cfg.set_crowd_surge_enabled(surge_enabled_chk_->isChecked());
@@ -476,9 +480,26 @@ void SettingsWidget::on_btn_save() {
 
     cfg.save();
 
-    emit video_source_changed(video_input_edit_->text().trimmed());
+    emit video_source_changed(new_video_source);
     emit settings_applied(surge_threshold_spin_->value(), surge_enabled_chk_->isChecked(), surge_beep_chk_->isChecked());
-    QMessageBox::information(this, "成功", "设置已保存并生效。");
+
+    // 双向同步回写：若当前已绑定云端点位，将修改后的视频流/点位配置同步更新至云端数据库
+    if (cfg.get_cloud_point_id() > 0 && !cfg.get_cloud_point_token().isEmpty()) {
+        EdgeReportManager::instance().update_cloud_point_config(
+            cfg.get_cloud_point_name(),
+            new_video_source,
+            [this](bool success, const QString& msg) {
+                if (success) {
+                    qInfo() << "[SettingsWidget] 双向同步完成:" << msg;
+                } else {
+                    qWarning() << "[SettingsWidget] 双向同步提示:" << msg;
+                }
+            }
+        );
+        QMessageBox::information(this, "成功", "设置已保存！已生效并双向同步更新至云端中台点位资产。");
+    } else {
+        QMessageBox::information(this, "成功", "设置已保存至本地配置并生效。");
+    }
 }
 
 void SettingsWidget::on_btn_clear_data() {

@@ -22,7 +22,7 @@ void ConfigManager::load(const QString& ini_path) {
     }
 
     QSettings settings(ini_path_, QSettings::IniFormat);
-    video_source_ = settings.value("Video/Source", "configs/test_corridor.mp4").toString();
+    video_source_ = settings.value("Video/Source", "").toString();
     clip_retention_days_ = settings.value("Storage/RetentionDays", 30).toInt();
     conf_thresh_ = settings.value("AI/ConfThreshold", 0.45f).toFloat();
     nms_thresh_ = settings.value("AI/NmsThreshold", 0.50f).toFloat();
@@ -35,19 +35,19 @@ void ConfigManager::load(const QString& ini_path) {
     crowd_surge_beep_ = settings.value("Alert/CrowdSurgeBeep", false).toBool();
 
     webhook_enabled_ = settings.value("Webhook/Enabled", false).toBool();
-    webhook_url_ = settings.value("Webhook/Url", "http://127.0.0.1:8088/api/v1/events").toString();
+    webhook_url_ = settings.value("Webhook/Url", "").toString();
     webhook_token_ = settings.value("Webhook/Token", "").toString();
     webhook_timeout_ms_ = settings.value("Webhook/TimeoutMs", 3000).toInt();
 
     cloud_server_url_ = settings.value("Cloud/ServerUrl", "http://localhost:8080").toString();
     cloud_client_name_ = settings.value("Cloud/ClientName", "FlowSight-Node-1").toString();
-    cloud_user_phone_ = settings.value("Cloud/UserPhone", "13454118762").toString();
-    cloud_company_name_ = settings.value("Cloud/CompanyName", "万科物业服务有限公司").toString();
-    cloud_point_id_ = settings.value("Cloud/PointId", 1).toLongLong();
-    cloud_point_name_ = settings.value("Cloud/PointName", "万科西区东门主入口").toString();
-    cloud_point_code_ = settings.value("Cloud/PointCode", "POINT_VK_EAST_01").toString();
-    cloud_device_password_ = settings.value("Cloud/DevicePassword", "Edge@123456").toString();
-    cloud_point_token_ = settings.value("Cloud/PointToken", "ptk_b2b307f111394859985f85eda543c509").toString();
+    cloud_user_phone_ = settings.value("Cloud/UserPhone", "").toString();
+    cloud_company_name_ = settings.value("Cloud/CompanyName", "").toString();
+    cloud_point_id_ = settings.value("Cloud/PointId", 0).toLongLong();
+    cloud_point_name_ = settings.value("Cloud/PointName", "").toString();
+    cloud_point_code_ = settings.value("Cloud/PointCode", "").toString();
+    cloud_device_password_ = settings.value("Cloud/DevicePassword", "").toString();
+    cloud_point_token_ = settings.value("Cloud/PointToken", "").toString();
     cloud_sync_enabled_ = settings.value("Cloud/SyncEnabled", true).toBool();
 }
 

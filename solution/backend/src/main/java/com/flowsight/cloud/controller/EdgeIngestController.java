@@ -6,6 +6,7 @@ import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
 import com.flowsight.cloud.dto.PairingRequestDTO;
+import com.flowsight.cloud.dto.PointUpdateDTO;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
@@ -102,5 +103,13 @@ public class EdgeIngestController {
     public Result<PointVO> getEdgeConfig(@RequestHeader(value = "X-Point-Token", required = false) String token) {
         BizPoint point = authenticateEdge(token);
         return Result.success(pointService.getPointById(point.getId()));
+    }
+
+    @PutMapping("/config")
+    public Result<Void> updateEdgeConfig(@RequestHeader(value = "X-Point-Token", required = false) String token,
+                                         @RequestBody PointUpdateDTO dto) {
+        BizPoint point = authenticateEdge(token);
+        pointService.updatePoint(point.getId(), dto);
+        return Result.success("边缘端点位配置已成功双向同步至云端", null);
     }
 }

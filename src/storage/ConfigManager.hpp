@@ -94,7 +94,7 @@ private:
     ~ConfigManager() override = default;
 
     QString ini_path_ = "configs/flowsight.ini";
-    QString video_source_ = "configs/test_corridor.mp4";
+    QString video_source_ = "";
     int clip_retention_days_ = 30;
     float conf_thresh_ = 0.45f;
     float nms_thresh_ = 0.50f;
@@ -114,12 +114,12 @@ private:
     // 云端中台持久化配置 (双密码体系)
     QString cloud_server_url_ = "http://localhost:8080";
     QString cloud_client_name_ = "FlowSight-Node-1";
-    QString cloud_user_phone_ = "13454118762";
-    QString cloud_company_name_ = "万科物业";
-    qint64 cloud_point_id_ = 1;
-    QString cloud_point_name_ = "万科西区东门主入口";
-    QString cloud_point_code_ = "POINT_VK_EAST_01";
-    QString cloud_device_password_ = "Edge@123456";
-    QString cloud_point_token_ = "ptk_b2b307f111394859985f85eda543c509";
+    QString cloud_user_phone_ = "";
+    QString cloud_company_name_ = "";
+    qint64 cloud_point_id_ = 0;
+    QString cloud_point_name_ = "";
+    QString cloud_point_code_ = "";
+    QString cloud_device_password_ = "";
+    QString cloud_point_token_ = "";
     bool cloud_sync_enabled_ = true;
 };
