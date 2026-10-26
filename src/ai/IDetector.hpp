@@ -16,4 +16,7 @@ public:
 
     // 获取当前推理后端名称
     virtual std::string get_backend_name() const = 0;
+
+    // 动态切换业务检测模式 ("PEDESTRIAN" 行人 / "VEHICLE" 车辆)
+    virtual void set_biz_type(const std::string& biz_type) {}
 };

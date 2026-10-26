@@ -9,6 +9,8 @@ public:
 
     std::vector<TrackObject> update(const std::vector<Detection>& detections) override;
     void reset() override;
+    void set_vehicle_mode(bool enable) override;
+    bool is_vehicle_mode() const override;
 
 private:
     class Impl;

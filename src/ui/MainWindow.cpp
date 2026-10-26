@@ -11,6 +11,7 @@
 #include "network/WebhookPusher.hpp"
 #include "network/EdgeReportManager.hpp"
 #include "ai/AttributeClassifier.hpp"
+#include "ai/VehicleClassifier.hpp"
 #include <QTimer>
 #include <QThreadPool>
 
@@ -148,6 +149,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(pipeline_.get(), &PipelineController::event_occurred, view_evidence_, &EvidenceWidget::add_new_event);
     connect(pipeline_.get(), &PipelineController::event_attributes_updated, view_evidence_, &EvidenceWidget::update_event_attributes);
     connect(pipeline_.get(), &PipelineController::event_attributes_updated, view_monitor_, &MonitorWidget::update_event_attributes);
+    connect(pipeline_.get(), &PipelineController::event_vehicle_attributes_updated, view_evidence_, &EvidenceWidget::update_event_vehicle_attributes);
+    connect(pipeline_.get(), &PipelineController::event_vehicle_attributes_updated, view_monitor_, &MonitorWidget::update_event_vehicle_attributes);
     connect(pipeline_.get(), &PipelineController::event_occurred, view_analytics_, &AnalyticsWidget::add_realtime_passage);
     connect(pipeline_.get(), &PipelineController::event_occurred, this, [](const PassageEvent& ev) {
         EdgeReportManager::instance().record_passage(ev);
@@ -284,8 +287,9 @@ void MainWindow::cleanup_on_shutdown() {
     // 3. 停止智能批量上报器所有定时器 (批量上报、看门狗重试、切片上传)，并刷新内存离线缓冲入库
     EdgeReportManager::instance().shutdown();
 
-    // 4. 停止 MobileNetV3 二级属性分类后台工作线程
+    // 4. 停止 MobileNetV3 二级属性分类后台工作线程与车流分析线程
     AttributeClassifier::instance().stop();
+    VehicleClassifier::instance().stop();
 
     // 5. 等待全局线程池中正在执行的任务 (如磁盘切片清理) 安全退出
     QThreadPool::globalInstance()->waitForDone(2000);

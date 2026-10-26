@@ -49,6 +49,7 @@ void ConfigManager::load(const QString& ini_path) {
     cloud_device_password_ = settings.value("Cloud/DevicePassword", "").toString();
     cloud_point_token_ = settings.value("Cloud/PointToken", "").toString();
     cloud_sync_enabled_ = settings.value("Cloud/SyncEnabled", true).toBool();
+    biz_type_ = settings.value("AI/BizType", "PEDESTRIAN").toString();
 }
 
 void ConfigManager::save() {
@@ -86,6 +87,7 @@ void ConfigManager::save() {
     settings.setValue("Cloud/DevicePassword", cloud_device_password_);
     settings.setValue("Cloud/PointToken", cloud_point_token_);
     settings.setValue("Cloud/SyncEnabled", cloud_sync_enabled_);
+    settings.setValue("AI/BizType", biz_type_);
     settings.sync();
 
     emit config_changed();

@@ -59,6 +59,7 @@ public:
 
     // 异步校准内存聚合窗口中事件的 AI 属性 (防止二级分类完成时事件已进入批量缓冲)
     void update_event_attributes(int track_id, const std::string& gender, const std::string& age_group);
+    void update_event_vehicle_attributes(int track_id, const std::string& plate_number, const std::string& plate_color, const std::string& vehicle_type, const std::string& vehicle_color);
 
     // 手动/定时触发聚合包刷新上报
     void flush_batch();

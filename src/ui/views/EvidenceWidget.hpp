@@ -17,6 +17,7 @@ public:
     void refresh_events();
     void add_new_event(const PassageEvent& ev);
     void update_event_attributes(int track_id, const QString& gender, const QString& age_group);
+    void update_event_vehicle_attributes(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color);
 
 private slots:
     void on_cell_double_clicked(int row, int column);

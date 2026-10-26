@@ -396,14 +396,29 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
         float w = trk.bbox.width * scale_;
         float h = trk.bbox.height * scale_;
 
-        // 柔和半透明绿光边框
-        painter.setPen(QPen(QColor(46, 213, 115, 200), 2));
-        painter.setBrush(QColor(46, 213, 115, 20));
+        QColor border_color = QColor(46, 213, 115, 200);
+        QColor corner_color = QColor(0, 230, 118);
+        if (!trk.plate_number.empty()) {
+            if (trk.plate_color == "绿牌") {
+                border_color = QColor(46, 204, 113, 220);
+                corner_color = QColor(39, 174, 96);
+            } else if (trk.plate_color == "黄牌") {
+                border_color = QColor(241, 196, 15, 220);
+                corner_color = QColor(243, 156, 18);
+            } else {
+                border_color = QColor(52, 152, 219, 220);
+                corner_color = QColor(41, 128, 185);
+            }
+        }
+
+        // 柔和半透明边框
+        painter.setPen(QPen(border_color, 2));
+        painter.setBrush(QColor(border_color.red(), border_color.green(), border_color.blue(), 25));
         painter.drawRoundedRect(QRectF(c_tl.x(), c_tl.y(), w, h), 4, 4);
 
         // 四角 HUD 科技高亮小拐角
         float corner_len = std::min(w, h) * 0.25f;
-        painter.setPen(QPen(QColor(0, 230, 118), 3));
+        painter.setPen(QPen(corner_color, 3));
         // 左上角
         painter.drawLine(QPointF(c_tl.x(), c_tl.y()), QPointF(c_tl.x() + corner_len, c_tl.y()));
         painter.drawLine(QPointF(c_tl.x(), c_tl.y()), QPointF(c_tl.x(), c_tl.y() + corner_len));
@@ -411,7 +426,7 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
         painter.drawLine(QPointF(c_tl.x() + w, c_tl.y() + h), QPointF(c_tl.x() + w - corner_len, c_tl.y() + h));
         painter.drawLine(QPointF(c_tl.x() + w, c_tl.y() + h), QPointF(c_tl.x() + w, c_tl.y() + h - corner_len));
 
-        // 足底接触点 (外层光晕 + 内部红点)
+        // 接触代表点 (外层光晕 + 内部红点)
         QPointF c_foot = frame_to_canvas(trk.foot_point);
         painter.setPen(Qt::NoPen);
         painter.setBrush(QColor(255, 71, 87, 80));
@@ -419,9 +434,15 @@ void VideoCanvas::paintEvent(QPaintEvent*) {
         painter.setBrush(QColor(255, 71, 87, 230));
         painter.drawEllipse(c_foot, 3.5, 3.5);
 
-        // 顶部属性气泡胶囊标签 (展示真实 AI 识别的性别与年龄段)
+        // 顶部属性气泡胶囊标签 (车牌/车型 或 行人性别年龄)
         QString tag;
-        if (!trk.age_group.empty() && trk.age_group != "未知") {
+        if (!trk.plate_number.empty()) {
+            QString veh_desc = QString::fromStdString(trk.vehicle_color) + QString::fromStdString(trk.vehicle_type);
+            if (veh_desc.isEmpty()) veh_desc = QString::fromStdString(trk.plate_color);
+            tag = QString("ID:%1 [%2 %3]").arg(trk.track_id)
+                                           .arg(QString::fromStdString(trk.plate_number))
+                                           .arg(veh_desc);
+        } else if (!trk.age_group.empty() && trk.age_group != "未知") {
             tag = QString("ID:%1 [%2 | %3]").arg(trk.track_id)
                                              .arg(QString::fromStdString(trk.gender))
                                              .arg(QString::fromStdString(trk.age_group));

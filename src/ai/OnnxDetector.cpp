@@ -51,6 +51,7 @@ public:
     float conf_thresh_ = 0.45f;
     float nms_thresh_ = 0.50f;
     std::string backend_name_ = "CPU (多线程高性能优化)";
+    std::string biz_type_ = "PEDESTRIAN";
 
     std::vector<std::string> input_node_names_;
     std::vector<std::string> output_node_names_;
@@ -178,14 +179,37 @@ public:
 
         std::vector<cv::Rect> boxes;
         std::vector<float> confidences;
+        std::vector<int> class_ids;
         boxes.reserve(256);
         confidences.reserve(256);
+        class_ids.reserve(256);
 
         float min_score = std::min(0.15f, conf_thresh_);
+        bool is_vehicle = (biz_type_ == "VEHICLE");
+        static const int vehicle_classes[] = {2, 3, 5, 7}; // 2:car, 3:motorcycle, 5:bus, 7:truck
+
         for (int i = 0; i < num_proposals; ++i) {
-            // YOLOv8 class 0 is person
-            float person_score = raw_output[4 * num_proposals + i];
-            if (person_score >= min_score) {
+            float best_score = 0.0f;
+            int best_cls = 0;
+
+            if (is_vehicle) {
+                // 车流模式：检测机动车与相关车辆类别 (car, motorcycle, bus, truck)
+                for (int cls : vehicle_classes) {
+                    if (4 + cls < dimensions) {
+                        float s = raw_output[(4 + cls) * num_proposals + i];
+                        if (s > best_score) {
+                            best_score = s;
+                            best_cls = cls;
+                        }
+                    }
+                }
+            } else {
+                // 行人模式：检测人 (class 0: person)
+                best_score = raw_output[4 * num_proposals + i];
+                best_cls = 0;
+            }
+
+            if (best_score >= min_score) {
                 float cx = raw_output[0 * num_proposals + i];
                 float cy = raw_output[1 * num_proposals + i];
                 float w = raw_output[2 * num_proposals + i];
@@ -198,7 +222,8 @@ public:
                 float orig_h = h / r;
 
                 boxes.emplace_back(cv::Rect(std::round(orig_x), std::round(orig_y), std::round(orig_w), std::round(orig_h)));
-                confidences.push_back(person_score);
+                confidences.push_back(best_score);
+                class_ids.push_back(best_cls);
             }
         }
 
@@ -211,7 +236,7 @@ public:
             Detection det;
             det.bbox = cv::Rect2f(boxes[idx]);
             det.confidence = confidences[idx];
-            det.class_id = 0;
+            det.class_id = class_ids[idx];
             detections.push_back(det);
         }
 
@@ -232,4 +257,8 @@ bool OnnxDetector::detect(const cv::Mat& bgr_frame, std::vector<Detection>& dete
 
 std::string OnnxDetector::get_backend_name() const {
     return impl_->backend_name_;
+}
+
+void OnnxDetector::set_biz_type(const std::string& biz_type) {
+    impl_->biz_type_ = biz_type;
 }

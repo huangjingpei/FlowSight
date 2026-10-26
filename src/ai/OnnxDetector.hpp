@@ -10,6 +10,7 @@ public:
     bool init(const std::string& model_path, float conf_thresh = 0.45f, float nms_thresh = 0.50f) override;
     bool detect(const cv::Mat& bgr_frame, std::vector<Detection>& detections) override;
     std::string get_backend_name() const override;
+    void set_biz_type(const std::string& biz_type) override;
 
 private:
     class Impl;

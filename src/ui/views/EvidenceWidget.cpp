@@ -1,6 +1,7 @@
 #include "EvidenceWidget.hpp"
 #include "ui/components/MediaPlayerWidget.hpp"
 #include "storage/DatabaseManager.hpp"
+#include "storage/ConfigManager.hpp"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
@@ -108,7 +109,11 @@ void EvidenceWidget::setup_ui() {
     // 证据表格定义
     table_ = new QTableWidget(this);
     table_->setColumnCount(8);
-    table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
+    if (ConfigManager::instance().is_vehicle_mode()) {
+        table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "车牌号码", "车型与外观", "置信度", "短视频证据切片"});
+    } else {
+        table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
+    }
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     table_->horizontalHeader()->setMinimumSectionSize(55);
     table_->setColumnWidth(0, 160); // "2026-10-18 20:00:23"
@@ -287,6 +292,13 @@ void EvidenceWidget::refresh_events() {
     auto events = DatabaseManager::instance().query_filtered_events(dir_filter, start_ms, end_ms, kw, 500);
     table_->setRowCount(0);
 
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    if (is_veh) {
+        table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "车牌号码", "车型与外观", "置信度", "短视频证据切片"});
+    } else {
+        table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
+    }
+
     for (const auto& ev : events) {
         int row = table_->rowCount();
         table_->insertRow(row);
@@ -347,8 +359,18 @@ void EvidenceWidget::populate_table_row(int row, const PassageEvent& ev) {
     QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "🟢 进入 [IN]" : "🔴 离开 [OUT]";
     QColor dir_color = (ev.direction == PassageDirection::ENTRY) ? QColor(46, 213, 115) : QColor(255, 71, 87);
     QString track_str = QString("#%1").arg(ev.track_id);
-    QString gender_str = QString::fromStdString(ev.gender.empty() ? "未知" : ev.gender);
-    QString age_str = QString::fromStdString(ev.age_group.empty() ? "未知" : ev.age_group);
+    QString col4_str, col5_str;
+    if (!ev.plate_number.empty() || ConfigManager::instance().is_vehicle_mode()) {
+        col4_str = QString::fromStdString(ev.plate_number.empty() ? "识别中" : ev.plate_number);
+        if (!ev.plate_color.empty()) {
+            col4_str += QString(" (%1)").arg(QString::fromStdString(ev.plate_color));
+        }
+        col5_str = QString::fromStdString(ev.vehicle_color) + QString::fromStdString(ev.vehicle_type);
+        if (col5_str.isEmpty()) col5_str = "机动车";
+    } else {
+        col4_str = QString::fromStdString(ev.gender.empty() ? "未知" : ev.gender);
+        col5_str = QString::fromStdString(ev.age_group.empty() ? "未知" : ev.age_group);
+    }
     QString conf_str = QString("%1%").arg(QString::number(ev.confidence * 100.0f, 'f', 1));
     QString clip_str = QString::fromStdString(ev.clip_path);
 
@@ -376,15 +398,15 @@ void EvidenceWidget::populate_table_row(int row, const PassageEvent& ev) {
     item_id->setTextAlignment(Qt::AlignCenter);
     item_id->setToolTip(QString("目标跟踪编号: %1").arg(track_str));
 
-    // 4. 性别 (居中)
-    auto* item_gender = new QTableWidgetItem(gender_str);
+    // 4. 性别 / 车牌 (居中)
+    auto* item_gender = new QTableWidgetItem(col4_str);
     item_gender->setTextAlignment(Qt::AlignCenter);
-    item_gender->setToolTip(gender_str);
+    item_gender->setToolTip(col4_str);
 
-    // 5. 年龄段 (居中，支持完整展示 青年(18-35))
-    auto* item_age = new QTableWidgetItem(age_str);
+    // 5. 年龄段 / 车型 (居中)
+    auto* item_age = new QTableWidgetItem(col5_str);
     item_age->setTextAlignment(Qt::AlignCenter);
-    item_age->setToolTip(age_str);
+    item_age->setToolTip(col5_str);
 
     // 6. 置信度 (居中)
     auto* item_conf = new QTableWidgetItem(conf_str);
@@ -441,6 +463,33 @@ void EvidenceWidget::update_event_attributes(int track_id, const QString& gender
             if (age_item && (age_item->text() == "未知" || age_item->text().isEmpty())) {
                 age_item->setText(age_group);
                 age_item->setToolTip(age_group);
+            }
+            if (table_->currentRow() == r) {
+                update_metadata_inspector(r);
+            }
+            break;
+        }
+    }
+}
+
+void EvidenceWidget::update_event_vehicle_attributes(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color) {
+    if (track_id <= 0 || !table_) return;
+    QString target_track = QString("#%1").arg(track_id);
+    for (int r = 0; r < table_->rowCount(); ++r) {
+        auto* track_item = table_->item(r, 3);
+        if (track_item && track_item->text() == target_track) {
+            auto* plate_item = table_->item(r, 4);
+            if (plate_item) {
+                QString full_plate = plate_number;
+                if (!plate_color.isEmpty()) full_plate += QString(" (%1)").arg(plate_color);
+                plate_item->setText(full_plate);
+                plate_item->setToolTip(full_plate);
+            }
+            auto* type_item = table_->item(r, 5);
+            if (type_item) {
+                QString desc = vehicle_color + vehicle_type;
+                type_item->setText(desc);
+                type_item->setToolTip(desc);
             }
             if (table_->currentRow() == r) {
                 update_metadata_inspector(r);

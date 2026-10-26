@@ -11,6 +11,15 @@ struct Detection {
     int class_id;          // 目标类别 (0: person)
 };
 
+// 车辆与车牌详细信息结构
+struct VehicleInfo {
+    std::string plate_number = "";  // 车牌号码 (例如 "浙A·88888")
+    std::string plate_color = "";   // 号牌颜色 ("蓝牌", "绿牌", "黄牌", "白牌")
+    std::string vehicle_type = "";  // 车型 ("轿车", "SUV", "客车", "货车", "摩托车")
+    std::string vehicle_color = ""; // 车身颜色 ("白色", "黑色", "银灰", "红色", "蓝色", "黄色")
+    float confidence = 0.92f;
+};
+
 // 目标跟踪轨迹结构（含预留属性字段）
 struct TrackObject {
     int track_id = -1;     // 唯一跟踪 ID
@@ -22,6 +31,12 @@ struct TrackObject {
     // 预留基础客流属性
     std::string gender = "未知";     // "男" / "女" / "未知"
     std::string age_group = "未知";  // "青年(20-30)" / "中年(30-50)" / "未知"
+
+    // 车辆与车牌感知属性
+    std::string plate_number = "";
+    std::string plate_color = "";
+    std::string vehicle_type = "";
+    std::string vehicle_color = "";
 };
 
 // 任意 N 边形 ROI 配置
@@ -126,6 +141,12 @@ struct PassageEvent {
     std::string clip_path;   // 关联的短视频切片路径 (如 "clips/clip_12.mp4")
     std::string gender = "未知";
     std::string age_group = "未知";
+
+    // 车辆与车牌通行属性
+    std::string plate_number = "";
+    std::string plate_color = "";
+    std::string vehicle_type = "";
+    std::string vehicle_color = "";
 };
 
 // 实时统计快照
@@ -137,6 +158,7 @@ struct StatisticsSnapshot {
     float fps = 0.0f;
     float infer_ms = 0.0f;
     std::string backend_name = "CPU";
+    std::string biz_type = "PEDESTRIAN"; // "PEDESTRIAN" 或 "VEHICLE"
 };
 
 // 小时级预聚合统计结构

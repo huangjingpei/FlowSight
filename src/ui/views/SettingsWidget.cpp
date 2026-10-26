@@ -145,9 +145,11 @@ void SettingsWidget::setup_ui() {
             QString phone = cfg.get_cloud_user_phone();
             QString company_display = company.isEmpty() ? "已授权商户" : company;
             QString phone_display = phone.isEmpty() ? "--" : phone;
-            cloud_status_info_label_->setText(QString("🟢 已绑定点位: [%1] %2  │  商户: %3 (%4)  │  状态: 在线")
+            QString bizTag = cfg.is_vehicle_mode() ? "🚗 车流感知" : "🚶 客流感知";
+            cloud_status_info_label_->setText(QString("🟢 已绑定点位: [%1] %2 [%3]  │  商户: %4 (%5)  │  状态: 在线")
                 .arg(cfg.get_cloud_point_id())
                 .arg(cfg.get_cloud_point_name())
+                .arg(bizTag)
                 .arg(company_display)
                 .arg(phone_display));
             cloud_status_info_label_->setStyleSheet(
@@ -344,12 +346,16 @@ void SettingsWidget::setup_ui() {
                 bool isOccupied = p["isOccupied"].toBool();
                 QString boundClient = p["boundClientName"].toString();
 
+                QString bizType = p["bizType"].toString();
+                if (bizType.isEmpty()) bizType = "PEDESTRIAN";
+
                 QVariantMap map;
                 map["id"] = pid;
                 map["name"] = pname;
                 map["token"] = ptoken;
                 map["occupied"] = isOccupied;
                 map["boundClient"] = boundClient;
+                map["bizType"] = bizType;
 
                 QString statusTag = "🟢 空闲";
                 if (isOccupied) {
@@ -360,7 +366,8 @@ void SettingsWidget::setup_ui() {
                     }
                 }
 
-                cloud_point_combo_->addItem(QString("[%1] %2 (%3) - %4").arg(pid).arg(pname).arg(pcode).arg(statusTag), map);
+                QString bizTag = (bizType == "VEHICLE") ? "🚗 车流" : "🚶 客流";
+                cloud_point_combo_->addItem(QString("[%1] %2 (%3) [%4] - %5").arg(pid).arg(pname).arg(pcode).arg(bizTag).arg(statusTag), map);
             }
 
             auto& cfg = ConfigManager::instance();
@@ -442,11 +449,13 @@ void SettingsWidget::setup_ui() {
                 QString rtsp = cfg_data.value("cameraRtsp").toString();
                 QString phone = cfg_data.value("userPhone").toString();
                 QString company = cfg_data.value("companyName").toString();
+                QString bizType = cfg_data.value("bizType").toString();
 
                 auto& cfg = ConfigManager::instance();
                 if (!pname.isEmpty()) cfg.set_cloud_point_name(pname);
                 if (!phone.isEmpty()) cfg.set_cloud_user_phone(phone);
                 if (!company.isEmpty()) cfg.set_cloud_company_name(company);
+                if (!bizType.isEmpty()) cfg.set_biz_type(bizType);
 
                 if (!rtsp.trimmed().isEmpty()) {
                     video_input_edit_->setText(rtsp.trimmed());
@@ -459,8 +468,10 @@ void SettingsWidget::setup_ui() {
 
                 update_status_badge();
 
-                QString sync_info = QString("点位名称: %1\n所属商户: %2 (%3)\n摄像头流: %4")
+                QString bizDesc = (bizType == "VEHICLE") ? "🚗 车流感知 (车辆与车牌识别)" : "🚶 客流感知 (人数与性别年龄)";
+                QString sync_info = QString("点位名称: %1\n感知模式: %2\n所属商户: %3 (%4)\n摄像头流: %5")
                     .arg(pname)
+                    .arg(bizDesc)
                     .arg(company.isEmpty() ? "已授权商户" : company)
                     .arg(phone.isEmpty() ? "--" : phone)
                     .arg(rtsp.isEmpty() ? "未配置(保持本地视频源)" : rtsp);

@@ -356,6 +356,16 @@ QWidget* MonitorWidget::create_nvr_kpi_card(const QString& card_id, const QStrin
     auto* u_lbl = new QLabel(unit, card);
     u_lbl->setStyleSheet("color: #6e7681; font-size: 11px; font-weight: 500; padding-bottom: 3px;");
 
+    int idx = -1;
+    if (card_id == "kpi_occupancy") idx = 0;
+    else if (card_id == "kpi_entry") idx = 1;
+    else if (card_id == "kpi_exit") idx = 2;
+    else if (card_id == "kpi_total") idx = 3;
+    if (idx >= 0) {
+        kpi_titles_[idx] = t_lbl;
+        kpi_units_[idx] = u_lbl;
+    }
+
     val_hbox->addWidget(out_val_label);
     val_hbox->addWidget(u_lbl, 0, Qt::AlignBottom);
     val_hbox->addStretch();
@@ -387,11 +397,37 @@ void MonitorWidget::update_stats(const StatisticsSnapshot& stats) {
     if (exit_label_) exit_label_->setText(QString::number(stats.today_exit));
     if (total_label_) total_label_->setText(QString::number(stats.today_total));
 
+    // 智能双流 UI 动态自适应 (人流 vs 车流)
+    if (stats.biz_type == "VEHICLE") {
+        if (kpi_titles_[0]) kpi_titles_[0]->setText("当前场内车辆 (滞留)");
+        if (kpi_units_[0]) kpi_units_[0]->setText("辆");
+        if (kpi_titles_[1]) kpi_titles_[1]->setText("今日进入车次 (In)");
+        if (kpi_units_[1]) kpi_units_[1]->setText("车次");
+        if (kpi_titles_[2]) kpi_titles_[2]->setText("今日离开车次 (Out)");
+        if (kpi_units_[2]) kpi_units_[2]->setText("车次");
+        if (kpi_titles_[3]) kpi_titles_[3]->setText("全天车流总负荷 (Total)");
+        if (kpi_units_[3]) kpi_units_[3]->setText("车次");
+        if (channel_status_label_) channel_status_label_->setText("布防状态: 在线分析中  |  智能车流与车牌识别 (LPR)");
+        if (channel_info_label_) channel_info_label_->setText("AI 架构: YOLOv8-Vehicle + LPRNet + ColorHSV");
+    } else {
+        if (kpi_titles_[0]) kpi_titles_[0]->setText("当前区域人数 (滞留)");
+        if (kpi_units_[0]) kpi_units_[0]->setText("人");
+        if (kpi_titles_[1]) kpi_titles_[1]->setText("今日累计进入 (In)");
+        if (kpi_units_[1]) kpi_units_[1]->setText("人次");
+        if (kpi_titles_[2]) kpi_titles_[2]->setText("今日累计离开 (Out)");
+        if (kpi_units_[2]) kpi_units_[2]->setText("人次");
+        if (kpi_titles_[3]) kpi_titles_[3]->setText("全天通行总负荷 (Total)");
+        if (kpi_units_[3]) kpi_units_[3]->setText("人次");
+        if (channel_status_label_) channel_status_label_->setText("布防状态: 在线分析中  |  双模态客流检测");
+        if (channel_info_label_) channel_info_label_->setText("AI 架构: YOLOv8n + Beit-INT8 + InsightFace");
+    }
+
     // 动态刷新荷载风控进度条
     if (surge_progress_ && surge_text_label_) {
         int pct = (surge_threshold_ > 0) ? std::min(100, (stats.current_occupancy * 100) / surge_threshold_) : 0;
         surge_progress_->setValue(pct);
-        surge_text_label_->setText(QString("%1 / %2 人 (%3%)").arg(stats.current_occupancy).arg(surge_threshold_).arg(pct));
+        QString unit_name = (stats.biz_type == "VEHICLE") ? "辆" : "人";
+        surge_text_label_->setText(QString("%1 / %2 %3 (%4%)").arg(stats.current_occupancy).arg(surge_threshold_).arg(unit_name).arg(pct));
     }
 }
 
@@ -469,22 +505,35 @@ void MonitorWidget::add_passage_event(const PassageEvent& ev) {
     QString dir_tag = is_entry ? "🟢 进" : "🔴 出";
     QString zone_str = QString("[%1]").arg(QString::fromStdString(ev.roi_name.empty() ? "A门通道" : ev.roi_name));
 
-    QString attr_str;
-    if (!ev.gender.empty() && ev.gender != "未知") {
-        attr_str = QString("%1").arg(QString::fromStdString(ev.gender));
-        if (!ev.age_group.empty() && ev.age_group != "未知") {
-            attr_str += QString("/%1").arg(QString::fromStdString(ev.age_group));
-        }
+    QString text;
+    if (!ev.plate_number.empty()) {
+        QString veh_desc = QString::fromStdString(ev.vehicle_color) + QString::fromStdString(ev.vehicle_type);
+        if (veh_desc.isEmpty()) veh_desc = QString::fromStdString(ev.plate_color);
+        text = QString("%1  %2 %3  ID:%4  [%5 %6]")
+            .arg(time_str)
+            .arg(dir_tag)
+            .arg(zone_str)
+            .arg(ev.track_id)
+            .arg(QString::fromStdString(ev.plate_number))
+            .arg(veh_desc);
     } else {
-        attr_str = "分析中";
-    }
+        QString attr_str;
+        if (!ev.gender.empty() && ev.gender != "未知") {
+            attr_str = QString("%1").arg(QString::fromStdString(ev.gender));
+            if (!ev.age_group.empty() && ev.age_group != "未知") {
+                attr_str += QString("/%1").arg(QString::fromStdString(ev.age_group));
+            }
+        } else {
+            attr_str = "分析中";
+        }
 
-    QString text = QString("%1  %2 %3  ID:%4  (%5)")
-        .arg(time_str)
-        .arg(dir_tag)
-        .arg(zone_str)
-        .arg(ev.track_id)
-        .arg(attr_str);
+        text = QString("%1  %2 %3  ID:%4  (%5)")
+            .arg(time_str)
+            .arg(dir_tag)
+            .arg(zone_str)
+            .arg(ev.track_id)
+            .arg(attr_str);
+    }
 
     auto* item = new QListWidgetItem(text);
     item->setToolTip(text);
@@ -522,6 +571,35 @@ void MonitorWidget::update_event_attributes(int track_id, const QString& gender,
             text.replace("(已记录)", QString("(%1)").arg(attr_str));
             item->setText(text);
             item->setToolTip(text);
+            break;
+        }
+    }
+}
+
+void MonitorWidget::update_event_vehicle_attributes(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color) {
+    if (track_id <= 0 || !ticker_list_) return;
+    if (plate_number.isEmpty()) return;
+
+    QString veh_desc = vehicle_color + vehicle_type;
+    if (veh_desc.isEmpty()) veh_desc = plate_color;
+
+    QString id_tag1 = QString("ID:%1").arg(track_id);
+    QString id_tag2 = QString("目标#%1").arg(track_id);
+
+    for (int i = 0; i < ticker_list_->count(); ++i) {
+        auto* item = ticker_list_->item(i);
+        if (!item) continue;
+        QString text = item->text();
+        if (text.contains(id_tag1) || text.contains(id_tag2)) {
+            if (text.contains("(分析中)") || text.contains("(已记录)")) {
+                int p1 = text.indexOf('(');
+                int p2 = text.indexOf(')', p1);
+                if (p1 != -1 && p2 != -1) {
+                    QString updated = text.left(p1) + QString("[%1 %2]").arg(plate_number, veh_desc) + text.mid(p2 + 1);
+                    item->setText(updated);
+                    item->setToolTip(updated);
+                }
+            }
             break;
         }
     }

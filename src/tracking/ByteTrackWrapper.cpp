@@ -1,5 +1,6 @@
 #include "ByteTrackWrapper.hpp"
 #include "ai/AttributeClassifier.hpp"
+#include "ai/VehicleClassifier.hpp"
 #include <opencv2/imgproc.hpp>
 #include <vector>
 #include <map>
@@ -71,6 +72,7 @@ class ByteTrackWrapper::Impl {
 public:
     int frame_rate_ = 30;
     int track_buffer_ = 60; // 存活缓冲提升至 2 秒 (60帧)
+    bool is_vehicle_mode_ = false;
     int next_id_ = 1;
     std::vector<STrack> tracked_stracks_;
     std::vector<STrack> lost_stracks_;
@@ -219,12 +221,18 @@ public:
                 lost_stracks_.push_back(st);
             } else {
                 // 轨迹超出存活缓冲，彻底析构，联动释放属性模型中的历史与缓存
-                AttributeClassifier::instance().remove_track(st.track_id);
+                if (is_vehicle_mode_) {
+                    VehicleClassifier::instance().remove_track(st.track_id);
+                } else {
+                    AttributeClassifier::instance().remove_track(st.track_id);
+                }
             }
         }
 
         // 7. 构筑输出 TrackObject 列表并计算自适应足底代表点
         std::vector<TrackObject> output_tracks;
+        bool is_veh_mode = is_vehicle_mode_;
+
         for (const auto& st : tracked_stracks_) {
             // 状态确认门限：仅向业务层输出已激活或至少连续匹配 2 帧的稳定轨迹，杜绝单帧假阳性噪音
             if (!st.is_activated && st.tracklet_len < 2) {
@@ -240,10 +248,20 @@ public:
             // 足底接触点 (x1+x2)/2, y2
             obj.foot_point = cv::Point2f(st.bbox.x + st.bbox.width * 0.5f, st.bbox.y + st.bbox.height);
 
-            // 查询二级真实属性分类结果 (若仍在异步推理中则暂标为未知，待推理完毕自动回填校准)
-            if (!AttributeClassifier::instance().get_attributes(st.track_id, obj.gender, obj.age_group)) {
-                obj.gender = "未知";
-                obj.age_group = "未知";
+            if (is_veh_mode) {
+                VehicleInfo v_info;
+                if (VehicleClassifier::instance().get_vehicle_info(st.track_id, v_info)) {
+                    obj.plate_number = v_info.plate_number;
+                    obj.plate_color = v_info.plate_color;
+                    obj.vehicle_type = v_info.vehicle_type;
+                    obj.vehicle_color = v_info.vehicle_color;
+                }
+            } else {
+                // 查询二级真实行人属性分类结果 (若仍在异步推理中则暂标为未知，待推理完毕自动回填校准)
+                if (!AttributeClassifier::instance().get_attributes(st.track_id, obj.gender, obj.age_group)) {
+                    obj.gender = "未知";
+                    obj.age_group = "未知";
+                }
             }
 
             output_tracks.push_back(obj);
@@ -253,11 +271,20 @@ public:
     }
 
     void reset() {
-        for (const auto& st : tracked_stracks_) {
-            AttributeClassifier::instance().remove_track(st.track_id);
-        }
-        for (const auto& st : lost_stracks_) {
-            AttributeClassifier::instance().remove_track(st.track_id);
+        if (is_vehicle_mode_) {
+            for (const auto& st : tracked_stracks_) {
+                VehicleClassifier::instance().remove_track(st.track_id);
+            }
+            for (const auto& st : lost_stracks_) {
+                VehicleClassifier::instance().remove_track(st.track_id);
+            }
+        } else {
+            for (const auto& st : tracked_stracks_) {
+                AttributeClassifier::instance().remove_track(st.track_id);
+            }
+            for (const auto& st : lost_stracks_) {
+                AttributeClassifier::instance().remove_track(st.track_id);
+            }
         }
         tracked_stracks_.clear();
         lost_stracks_.clear();
@@ -276,4 +303,12 @@ std::vector<TrackObject> ByteTrackWrapper::update(const std::vector<Detection>& 
 
 void ByteTrackWrapper::reset() {
     impl_->reset();
+}
+
+void ByteTrackWrapper::set_vehicle_mode(bool enable) {
+    impl_->is_vehicle_mode_ = enable;
+}
+
+bool ByteTrackWrapper::is_vehicle_mode() const {
+    return impl_->is_vehicle_mode_;
 }

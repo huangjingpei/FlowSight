@@ -11,4 +11,8 @@ public:
 
     // 重置所有内部轨迹状态
     virtual void reset() = 0;
+
+    // 动态切换业务跟踪模式 (是否为车流感知)
+    virtual void set_vehicle_mode(bool enable) {}
+    virtual bool is_vehicle_mode() const { return false; }
 };

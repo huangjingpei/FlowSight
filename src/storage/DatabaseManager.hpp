@@ -42,6 +42,7 @@ public:
     void get_today_counts(int& out_entry, int& out_exit);
     void prune_expired_event_clips(int64_t threshold_ms);
     bool update_event_attributes(int track_id, const std::string& gender, const std::string& age_group);
+    bool update_event_vehicle_attributes(int track_id, const std::string& plate_number, const std::string& plate_color, const std::string& vehicle_type, const std::string& vehicle_color);
     QSqlDatabase get_database();
 
     // 报表多维综合查询与指标统计

@@ -160,6 +160,10 @@ public:
                             ev.foot_y = trk.foot_point.y;
                             ev.gender = trk.gender;
                             ev.age_group = trk.age_group;
+                            ev.plate_number = trk.plate_number;
+                            ev.plate_color = trk.plate_color;
+                            ev.vehicle_type = trk.vehicle_type;
+                            ev.vehicle_color = trk.vehicle_color;
                             out_events.push_back(ev);
 
                             recent_passages_.push_back({timestamp_ms, PassageDirection::ENTRY, 0, trk.foot_point});
@@ -181,6 +185,10 @@ public:
                             ev.foot_y = trk.foot_point.y;
                             ev.gender = trk.gender;
                             ev.age_group = trk.age_group;
+                            ev.plate_number = trk.plate_number;
+                            ev.plate_color = trk.plate_color;
+                            ev.vehicle_type = trk.vehicle_type;
+                            ev.vehicle_color = trk.vehicle_color;
                             out_events.push_back(ev);
 
                             recent_passages_.push_back({timestamp_ms, PassageDirection::EXIT, 0, trk.foot_point});
@@ -274,6 +282,10 @@ public:
                                 ev.source_id = roi.source_id;
                                 ev.gender = trk.gender;
                                 ev.age_group = trk.age_group;
+                                ev.plate_number = trk.plate_number;
+                                ev.plate_color = trk.plate_color;
+                                ev.vehicle_type = trk.vehicle_type;
+                                ev.vehicle_color = trk.vehicle_color;
                                 out_events.push_back(ev);
 
                                 recent_passages_.push_back({timestamp_ms, PassageDirection::ENTRY, roi.roi_id, trk.foot_point});
@@ -299,6 +311,10 @@ public:
                                 ev.source_id = roi.source_id;
                                 ev.gender = trk.gender;
                                 ev.age_group = trk.age_group;
+                                ev.plate_number = trk.plate_number;
+                                ev.plate_color = trk.plate_color;
+                                ev.vehicle_type = trk.vehicle_type;
+                                ev.vehicle_color = trk.vehicle_color;
                                 out_events.push_back(ev);
 
                                 recent_passages_.push_back({timestamp_ms, PassageDirection::EXIT, roi.roi_id, trk.foot_point});

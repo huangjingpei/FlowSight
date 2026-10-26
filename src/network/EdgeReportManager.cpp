@@ -302,6 +302,13 @@ void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, con
             bound_point_token_ = point_token;
             client_name_ = target_client;
 
+            QByteArray res_bytes = reply->readAll();
+            QJsonDocument res_doc = QJsonDocument::fromJson(res_bytes);
+            QString biz_type = "PEDESTRIAN";
+            if (res_doc.isObject() && res_doc.object().contains("data")) {
+                biz_type = res_doc.object()["data"].toObject().value("bizType").toString("PEDESTRIAN");
+            }
+
             auto& cfg = ConfigManager::instance();
             cfg.set_cloud_server_url(cloud_base_url_);
             cfg.set_cloud_point_id(bound_point_id_);
@@ -309,6 +316,7 @@ void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, con
             cfg.set_cloud_point_token(bound_point_token_);
             cfg.set_cloud_client_name(client_name_);
             cfg.set_cloud_sync_enabled(true);
+            cfg.set_biz_type(biz_type);
             cfg.save();
 
             is_online_ = true;
@@ -441,6 +449,10 @@ void EdgeReportManager::fetch_cloud_config(ConfigCallback callback) {
                 if (!company.isEmpty()) {
                     cfg.set_cloud_company_name(company);
                 }
+                QString biz_type = point_cfg.value("bizType").toString();
+                if (!biz_type.isEmpty()) {
+                    cfg.set_biz_type(biz_type);
+                }
                 cfg.set_cloud_point_name(bound_point_name_);
                 cfg.save();
 
@@ -561,6 +573,20 @@ void EdgeReportManager::update_event_attributes(int track_id, const std::string&
     }
 }
 
+void EdgeReportManager::update_event_vehicle_attributes(int track_id, const std::string& plate_number, const std::string& plate_color, const std::string& vehicle_type, const std::string& vehicle_color) {
+    if (track_id <= 0 || plate_number.empty()) return;
+
+    QMutexLocker locker(&mutex_);
+    for (auto& ev : batch_events_) {
+        if (ev.track_id == track_id) {
+            ev.plate_number = plate_number;
+            ev.plate_color = plate_color;
+            ev.vehicle_type = vehicle_type;
+            ev.vehicle_color = vehicle_color;
+        }
+    }
+}
+
 QByteArray EdgeReportManager::compress_data(const QByteArray& raw_json) {
     // 使用 Qt 内置 qCompress，并剔除前 4 字节的 Qt 私有 length header，输出标准 Deflate/ZLIB 流
     QByteArray compressed = qCompress(raw_json);
@@ -654,6 +680,13 @@ void EdgeReportManager::flush_batch() {
         attrs["gender"] = QString::fromStdString(ev.gender);
         attrs["age_group"] = QString::fromStdString(ev.age_group);
         ev_obj["attributes"] = attrs;
+
+        if (!ev.plate_number.empty()) {
+            ev_obj["plateNumber"] = QString::fromStdString(ev.plate_number);
+            ev_obj["plateColor"] = QString::fromStdString(ev.plate_color);
+            ev_obj["vehicleType"] = QString::fromStdString(ev.vehicle_type);
+            ev_obj["vehicleColor"] = QString::fromStdString(ev.vehicle_color);
+        }
         events_arr.append(ev_obj);
     }
     root["events"] = events_arr;

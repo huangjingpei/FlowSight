@@ -114,6 +114,10 @@ bool DatabaseManager::init_database(const QString& db_path) {
     q.exec("ALTER TABLE passage_events ADD COLUMN roi_name TEXT DEFAULT 'A门主通道';");
     q.exec("ALTER TABLE passage_events ADD COLUMN foot_x REAL DEFAULT 0.0;");
     q.exec("ALTER TABLE passage_events ADD COLUMN foot_y REAL DEFAULT 0.0;");
+    q.exec("ALTER TABLE passage_events ADD COLUMN plate_number TEXT DEFAULT '';");
+    q.exec("ALTER TABLE passage_events ADD COLUMN plate_color TEXT DEFAULT '';");
+    q.exec("ALTER TABLE passage_events ADD COLUMN vehicle_type TEXT DEFAULT '';");
+    q.exec("ALTER TABLE passage_events ADD COLUMN vehicle_color TEXT DEFAULT '';");
     q.exec("CREATE INDEX IF NOT EXISTS idx_events_ts ON passage_events(timestamp_ms);");
 
     // 3. 小时级后台预聚合加速表 (P1-6)
@@ -163,8 +167,8 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
 
     QSqlQuery q(db);
     q.prepare("INSERT INTO passage_events ("
-              "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group, roi_id, roi_name, foot_x, foot_y) "
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+              "source_id, timestamp_ms, track_id, direction, roi_version, confidence, clip_path, gender, age_group, roi_id, roi_name, foot_x, foot_y, plate_number, plate_color, vehicle_type, vehicle_color) "
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
     struct HourlyDelta {
         QString date_str;
@@ -211,6 +215,10 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
         q.bindValue(10, QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name));
         q.bindValue(11, static_cast<double>(ev.foot_x));
         q.bindValue(12, static_cast<double>(ev.foot_y));
+        q.bindValue(13, QString::fromStdString(ev.plate_number));
+        q.bindValue(14, QString::fromStdString(ev.plate_color));
+        q.bindValue(15, QString::fromStdString(ev.vehicle_type));
+        q.bindValue(16, QString::fromStdString(ev.vehicle_color));
         q.exec();
 
         // 累计本批次对应小时段的增量
@@ -255,7 +263,7 @@ bool DatabaseManager::insert_events(const std::vector<PassageEvent>& events) {
 
 std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_filter, int64_t start_ms, int64_t end_ms, const QString& keyword, int limit, const QString& gender_filter) {
     std::vector<PassageEvent> list;
-    QString sql = "SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group, roi_id, roi_name "
+    QString sql = "SELECT timestamp_ms, track_id, direction, roi_version, confidence, source_id, clip_path, gender, age_group, roi_id, roi_name, plate_number, plate_color, vehicle_type, vehicle_color "
                   "FROM passage_events WHERE 1=1";
 
     if (direction_filter >= 0) {
@@ -271,7 +279,7 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
         sql += " AND gender = ?";
     }
     if (!keyword.trimmed().isEmpty()) {
-        sql += " AND (CAST(track_id AS TEXT) LIKE ? OR clip_path LIKE ? OR gender LIKE ? OR age_group LIKE ? OR roi_name LIKE ?)";
+        sql += " AND (CAST(track_id AS TEXT) LIKE ? OR clip_path LIKE ? OR gender LIKE ? OR age_group LIKE ? OR roi_name LIKE ? OR plate_number LIKE ? OR vehicle_type LIKE ?)";
     }
     sql += " ORDER BY timestamp_ms DESC LIMIT ?";
 
@@ -297,6 +305,8 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
         q.addBindValue(kw);
         q.addBindValue(kw);
         q.addBindValue(kw);
+        q.addBindValue(kw);
+        q.addBindValue(kw);
     }
     q.addBindValue(limit);
 
@@ -315,6 +325,10 @@ std::vector<PassageEvent> DatabaseManager::query_filtered_events(int direction_f
             ev.roi_id = q.value(9).toInt() > 0 ? q.value(9).toInt() : 1;
             ev.roi_name = q.value(10).toString().toStdString();
             if (ev.roi_name.empty()) ev.roi_name = "A门主通道";
+            ev.plate_number = q.value(11).toString().toStdString();
+            ev.plate_color = q.value(12).toString().toStdString();
+            ev.vehicle_type = q.value(13).toString().toStdString();
+            ev.vehicle_color = q.value(14).toString().toStdString();
             list.push_back(ev);
         }
     }
@@ -526,6 +540,24 @@ bool DatabaseManager::update_event_attributes(int track_id, const std::string& g
               "WHERE track_id = ? AND (gender = '未知' OR gender = '' OR gender IS NULL);");
     q.addBindValue(QString::fromStdString(gender));
     q.addBindValue(QString::fromStdString(age_group));
+    q.addBindValue(track_id);
+    return q.exec();
+}
+
+bool DatabaseManager::update_event_vehicle_attributes(int track_id, const std::string& plate_number, const std::string& plate_color, const std::string& vehicle_type, const std::string& vehicle_color) {
+    if (track_id <= 0 || plate_number.empty()) return false;
+
+    QSqlDatabase db = get_database();
+    if (!db.isOpen()) return false;
+
+    QSqlQuery q(db);
+    // 异步车牌与车型校准：将对应 track_id 历史过车事件回填补齐
+    q.prepare("UPDATE passage_events SET plate_number = ?, plate_color = ?, vehicle_type = ?, vehicle_color = ? "
+              "WHERE track_id = ? AND (plate_number = '' OR plate_number IS NULL);");
+    q.addBindValue(QString::fromStdString(plate_number));
+    q.addBindValue(QString::fromStdString(plate_color));
+    q.addBindValue(QString::fromStdString(vehicle_type));
+    q.addBindValue(QString::fromStdString(vehicle_color));
     q.addBindValue(track_id);
     return q.exec();
 }

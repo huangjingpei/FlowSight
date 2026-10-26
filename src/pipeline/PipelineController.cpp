@@ -1,6 +1,7 @@
 #include "PipelineController.hpp"
 #include "ai/OnnxDetector.hpp"
 #include "ai/AttributeClassifier.hpp"
+#include "ai/VehicleClassifier.hpp"
 #include "tracking/ByteTrackWrapper.hpp"
 #include "analytics/RoiCounter.hpp"
 #include "storage/DatabaseManager.hpp"
@@ -232,7 +233,11 @@ public:
         if (tracker_) {
             tracker_->reset();
         }
-        AttributeClassifier::instance().clear_cache();
+        if (ConfigManager::instance().is_vehicle_mode()) {
+            VehicleClassifier::instance().clear_cache();
+        } else {
+            AttributeClassifier::instance().clear_cache();
+        }
         StatisticsSnapshot snap;
         snap.current_occupancy = 0;
         snap.today_entry = 0;
@@ -256,12 +261,26 @@ public slots:
             qWarning() << "[PipelineController] Model file not loaded from:" << QString::fromStdString(resolved_model);
         }
 
-        // 初始化二级属性识别高精度模型 (P1-5: 优先加载量化预训练行人属性模型)
-        std::string resolved_attr_model = resolve_resource_path("models/pedestrian_gender_int8.onnx");
-        if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
-            resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+        // 智能双流感知：依据配置按需加载模型 (二选一模式，严格防范边缘内存 OOM)
+        bool is_veh_mode = ConfigManager::instance().is_vehicle_mode();
+        if (tracker_) {
+            tracker_->set_vehicle_mode(is_veh_mode);
         }
-        AttributeClassifier::instance().init(resolved_attr_model);
+        if (is_veh_mode) {
+            detector_->set_biz_type("VEHICLE");
+            AttributeClassifier::instance().stop();
+            VehicleClassifier::instance().init();
+            qInfo() << "[PipelineController] 智能感知流水线路由初始化: 【车流感知模式】(机动车检测 + LPR 车牌识别 + 车型颜色分析)";
+        } else {
+            detector_->set_biz_type("PEDESTRIAN");
+            VehicleClassifier::instance().stop();
+            std::string resolved_attr_model = resolve_resource_path("models/pedestrian_gender_int8.onnx");
+            if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
+                resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+            }
+            AttributeClassifier::instance().init(resolved_attr_model);
+            qInfo() << "[PipelineController] 智能感知流水线路由初始化: 【客流感知模式】(行人检测 + 性别年龄深度分析)";
+        }
 
         // 开机恢复今日已入库的进出累计客流数并立即广播同步大屏
         DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
@@ -271,6 +290,7 @@ public slots:
             init_snap.today_entry = today_entry_;
             init_snap.today_exit = today_exit_;
             init_snap.today_total = today_entry_ + today_exit_;
+            init_snap.biz_type = is_veh_mode ? "VEHICLE" : "PEDESTRIAN";
             if (detector_) init_snap.backend_name = detector_->get_backend_name();
             emit stats_updated(init_snap);
         }
@@ -404,7 +424,11 @@ public slots:
                 init_capture(cur_source);
                 if (tracker_) tracker_->reset();
                 if (roi_counter_) roi_counter_->reset();
-                AttributeClassifier::instance().clear_cache();
+                if (ConfigManager::instance().is_vehicle_mode()) {
+                    VehicleClassifier::instance().clear_cache();
+                } else {
+                    AttributeClassifier::instance().clear_cache();
+                }
                 // 重新从 SQLite 恢复今日最新累计客流，绝不暴力清零！
                 DatabaseManager::instance().get_today_counts(today_entry_, today_exit_);
                 StatisticsSnapshot snap;
@@ -464,7 +488,11 @@ public slots:
                 // 彻底杜绝拖拽引起的跨时空伪位移误触发与切片错乱
                 if (tracker_) tracker_->reset();
                 if (roi_counter_) roi_counter_->reset();
-                AttributeClassifier::instance().clear_cache();
+                if (ConfigManager::instance().is_vehicle_mode()) {
+                    VehicleClassifier::instance().clear_cache();
+                } else {
+                    AttributeClassifier::instance().clear_cache();
+                }
                 if (clip_recorder_) clip_recorder_->clear();
             }
 
@@ -519,7 +547,11 @@ public slots:
                     }
                     if (tracker_) tracker_->reset();
                     if (roi_counter_) roi_counter_->reset();
-                    AttributeClassifier::instance().clear_cache();
+                    if (ConfigManager::instance().is_vehicle_mode()) {
+                        VehicleClassifier::instance().clear_cache();
+                    } else {
+                        AttributeClassifier::instance().clear_cache();
+                    }
                     emit loop_restarted();
                     bool second_read_ok = false;
                     {
@@ -578,23 +610,49 @@ public slots:
             // 6. 目标跟踪 (ByteTrack)
             auto tracks = tracker_->update(detections);
 
-            // 6.1 针对活跃目标框触发二级异步属性分类识别 (MobileNetV3 P1-5)
-            for (auto& trk : tracks) {
-                int x = std::clamp(static_cast<int>(trk.bbox.x), 0, frame.cols - 1);
-                int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
-                int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
-                int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
-                if (w >= 28 && h >= 56) {
-                    cv::Rect crop_rect(x, y, w, h);
-                    cv::Mat crop = frame(crop_rect);
-                    AttributeClassifier::instance().classify_async(trk.track_id, crop);
+            // 6.1 针对活跃目标框触发二级异步属性与车牌分类识别 (按需路由)
+            if (is_veh_mode) {
+                for (auto& trk : tracks) {
+                    int x = std::clamp(static_cast<int>(trk.bbox.x), 0, frame.cols - 1);
+                    int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
+                    int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
+                    int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
+                    if (w >= 30 && h >= 30) {
+                        cv::Rect crop_rect(x, y, w, h);
+                        cv::Mat crop = frame(crop_rect);
+                        VehicleClassifier::instance().classify_async(trk.track_id, 2 /* car */, crop);
+                    }
+                    VehicleInfo v_info;
+                    if (VehicleClassifier::instance().get_vehicle_info(trk.track_id, v_info)) {
+                        trk.plate_number = v_info.plate_number;
+                        trk.plate_color = v_info.plate_color;
+                        trk.vehicle_type = v_info.vehicle_type;
+                        trk.vehicle_color = v_info.vehicle_color;
+                        if (!trk.plate_number.empty()) {
+                            DatabaseManager::instance().update_event_vehicle_attributes(trk.track_id, trk.plate_number, trk.plate_color, trk.vehicle_type, trk.vehicle_color);
+                            EdgeReportManager::instance().update_event_vehicle_attributes(trk.track_id, trk.plate_number, trk.plate_color, trk.vehicle_type, trk.vehicle_color);
+                            emit event_vehicle_attributes_updated(trk.track_id, QString::fromStdString(trk.plate_number), QString::fromStdString(trk.plate_color), QString::fromStdString(trk.vehicle_type), QString::fromStdString(trk.vehicle_color));
+                        }
+                    }
                 }
-                if (AttributeClassifier::instance().get_attributes(trk.track_id, trk.gender, trk.age_group)) {
-                    // 若已成功获得真实识别属性，尝试异步校准该目标若在早期被记为 '未知' 的历史通行事件
-                    if (trk.gender != "未知") {
-                        DatabaseManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
-                        EdgeReportManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
-                        emit event_attributes_updated(trk.track_id, QString::fromStdString(trk.gender), QString::fromStdString(trk.age_group));
+            } else {
+                for (auto& trk : tracks) {
+                    int x = std::clamp(static_cast<int>(trk.bbox.x), 0, frame.cols - 1);
+                    int y = std::clamp(static_cast<int>(trk.bbox.y), 0, frame.rows - 1);
+                    int w = std::clamp(static_cast<int>(trk.bbox.width), 1, frame.cols - x);
+                    int h = std::clamp(static_cast<int>(trk.bbox.height), 1, frame.rows - y);
+                    if (w >= 28 && h >= 56) {
+                        cv::Rect crop_rect(x, y, w, h);
+                        cv::Mat crop = frame(crop_rect);
+                        AttributeClassifier::instance().classify_async(trk.track_id, crop);
+                    }
+                    if (AttributeClassifier::instance().get_attributes(trk.track_id, trk.gender, trk.age_group)) {
+                        // 若已成功获得真实识别属性，尝试异步校准该目标若在早期被记为 '未知' 的历史通行事件
+                        if (trk.gender != "未知") {
+                            DatabaseManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
+                            EdgeReportManager::instance().update_event_attributes(trk.track_id, trk.gender, trk.age_group);
+                            emit event_attributes_updated(trk.track_id, QString::fromStdString(trk.gender), QString::fromStdString(trk.age_group));
+                        }
                     }
                 }
             }
@@ -660,6 +718,7 @@ public slots:
                 snap.today_total = today_entry_ + today_exit_;
                 snap.fps = current_fps;
                 snap.infer_ms = infer_ms;
+                snap.biz_type = is_veh_mode ? "VEHICLE" : "PEDESTRIAN";
                 if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
             }
@@ -678,6 +737,7 @@ public slots:
                 snap.today_total = today_entry_ + today_exit_;
                 snap.fps = current_fps;
                 snap.infer_ms = infer_ms;
+                snap.biz_type = is_veh_mode ? "VEHICLE" : "PEDESTRIAN";
                 if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
             }
@@ -709,6 +769,7 @@ signals:
     void stats_updated(const StatisticsSnapshot& stats);
     void event_occurred(const PassageEvent& event);
     void event_attributes_updated(int track_id, const QString& gender, const QString& age_group);
+    void event_vehicle_attributes_updated(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color);
     void media_info_ready(bool is_live, qint64 duration_ms, double fps);
     void position_changed(qint64 position_ms);
     void loop_restarted();
@@ -747,6 +808,7 @@ void PipelineController::start_pipeline(const std::string& model_path, const std
     connect(worker_.get(), &Worker::stats_updated, this, &PipelineController::stats_updated);
     connect(worker_.get(), &Worker::event_occurred, this, &PipelineController::event_occurred);
     connect(worker_.get(), &Worker::event_attributes_updated, this, &PipelineController::event_attributes_updated);
+    connect(worker_.get(), &Worker::event_vehicle_attributes_updated, this, &PipelineController::event_vehicle_attributes_updated);
     connect(worker_.get(), &Worker::media_info_ready, this, [this](bool is_live, qint64 d, double fps) {
         is_live_ = is_live;
         duration_ms_ = d;

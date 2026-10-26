@@ -41,6 +41,7 @@ signals:
     void stats_updated(const StatisticsSnapshot& stats);
     void event_occurred(const PassageEvent& event);
     void event_attributes_updated(int track_id, const QString& gender, const QString& age_group);
+    void event_vehicle_attributes_updated(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color);
 
     // 多媒体时钟与状态信号 (向 UI 广播首尾时间与模式自适应)
     void media_info_ready(bool is_live, qint64 duration_ms, double fps);

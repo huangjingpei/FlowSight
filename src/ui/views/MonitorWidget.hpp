@@ -25,6 +25,7 @@ public:
     void clear_display_records();
     void populate_recent_events(const std::vector<PassageEvent>& events);
     void update_event_attributes(int track_id, const QString& gender, const QString& age_group);
+    void update_event_vehicle_attributes(int track_id, const QString& plate_number, const QString& plate_color, const QString& vehicle_type, const QString& vehicle_color);
 
     // 播放控制条状态同步
     void set_media_info(bool is_live, qint64 duration_ms, double fps);
@@ -57,6 +58,8 @@ private:
     QLabel* entry_label_ = nullptr;
     QLabel* exit_label_ = nullptr;
     QLabel* total_label_ = nullptr;
+    QLabel* kpi_titles_[4] = {nullptr, nullptr, nullptr, nullptr};
+    QLabel* kpi_units_[4] = {nullptr, nullptr, nullptr, nullptr};
 
     // NVR 通道状态与风控指示
     QLabel* channel_status_label_ = nullptr;

@@ -86,6 +86,11 @@ public:
     bool get_cloud_sync_enabled() const { return cloud_sync_enabled_; }
     void set_cloud_sync_enabled(bool val) { cloud_sync_enabled_ = val; }
 
+    // 智能双流感知业务模式 ("PEDESTRIAN" 客流 / "VEHICLE" 车流)
+    QString get_biz_type() const { return biz_type_; }
+    void set_biz_type(const QString& val) { biz_type_ = val; }
+    bool is_vehicle_mode() const { return biz_type_.compare("VEHICLE", Qt::CaseInsensitive) == 0; }
+
 signals:
     void config_changed();
 
@@ -122,4 +127,5 @@ private:
     QString cloud_device_password_ = "";
     QString cloud_point_token_ = "";
     bool cloud_sync_enabled_ = true;
+    QString biz_type_ = "PEDESTRIAN";
 };
