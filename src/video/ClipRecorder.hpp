@@ -27,11 +27,30 @@ public:
     }
 
     void stop() {
-        if (!running_.load()) return;
-        running_.store(false);
+        bool expected = true;
+        if (!running_.compare_exchange_strong(expected, false)) {
+            // 已在停止中或已停止，若当前不在 worker_thread_ 内部，等待其退出
+            if (worker_thread_.joinable() && std::this_thread::get_id() != worker_thread_.get_id()) {
+                try {
+                    worker_thread_.join();
+                } catch (...) {}
+            }
+            return;
+        }
+
+        // 立即排空积压队列，杜绝阻塞主退出流程
+        {
+            std::lock_guard<std::mutex> lock(task_mtx_);
+            while (!task_queue_.empty()) {
+                task_queue_.pop();
+            }
+        }
         cv_.notify_all();
-        if (worker_thread_.joinable()) {
-            worker_thread_.join();
+
+        if (worker_thread_.joinable() && std::this_thread::get_id() != worker_thread_.get_id()) {
+            try {
+                worker_thread_.join();
+            } catch (...) {}
         }
     }
 
@@ -42,7 +61,7 @@ public:
 
     // 每帧送入画面构建带时间戳的环形缓冲（约 3 秒）
     void push_frame(const cv::Mat& frame) {
-        if (frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;
+        if (!running_.load() || frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;
         int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -50,12 +69,22 @@ public:
         if (frame_buffer_.size() >= max_buffer_size_) {
             frame_buffer_.pop_front();
         }
-        frame_buffer_.push_back(BufferedFrame{frame.clone(), now_ms});
+        // 关键内存保护：若画面分辨率超过 1280 宽度，下采样至 720p 存储切片池
+        // 彻底根除 1080p 原画连续 clone 产生 500MB+ 内存暴涨崩溃
+        if (frame.cols > 1280) {
+            cv::Mat downscaled;
+            float scale = 1280.0f / static_cast<float>(frame.cols);
+            cv::resize(frame, downscaled, cv::Size(1280, static_cast<int>(frame.rows * scale)));
+            frame_buffer_.push_back(BufferedFrame{downscaled, now_ms});
+        } else {
+            frame_buffer_.push_back(BufferedFrame{frame.clone(), now_ms});
+        }
     }
 
     // 触发进出事件时调用：将切片投递到任务队列，由后台独立线程平滑排队编码保存
     // 关键物理校准: 视频切片编码封装严格与摄像头原生采集帧率 (stream_fps, 默认25) 1:1 等速对齐，彻底根除回放“快进感”
     std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int stream_fps = 25) {
+        if (!running_.load()) return "";
         std::vector<cv::Mat> snapshot;
         int actual_fps = (stream_fps >= 10 && stream_fps <= 60) ? stream_fps : 25;
         {
@@ -65,8 +94,8 @@ public:
             snapshot.reserve(frame_buffer_.size());
             for (const auto& bf : frame_buffer_) {
                 if (!bf.frame.empty() && bf.frame.cols > 0 && bf.frame.rows > 0) {
-                    // 严格深拷贝每一帧像素，杜绝与环形缓冲区并发弹出或复用产生内存引用冲突
-                    snapshot.push_back(bf.frame.clone());
+                    // cv::Mat 浅拷贝增加引用计数，零内存二次重分配
+                    snapshot.push_back(bf.frame);
                 }
             }
         }
@@ -82,8 +111,9 @@ public:
 
         {
             std::lock_guard<std::mutex> lock(task_mtx_);
-            // 队列积压保护：若排队任务过多，淘汰最旧任务，杜绝内存耗尽崩溃
-            while (task_queue_.size() >= 10) {
+            if (!running_.load()) return "";
+            // 队列积压保护：限制最多 3 个切片排队，淘汰旧任务防范堆积
+            while (task_queue_.size() >= 3) {
                 task_queue_.pop();
             }
             task_queue_.push(ClipTask{std::move(snapshot), filename, actual_fps});
@@ -114,8 +144,12 @@ private:
                     return !running_.load() || !task_queue_.empty();
                 });
 
-                if (!running_.load() && task_queue_.empty()) {
+                if (!running_.load()) {
                     break;
+                }
+
+                if (task_queue_.empty()) {
+                    continue;
                 }
 
                 task = std::move(task_queue_.front());
@@ -161,11 +195,13 @@ private:
                             if (writer.isOpened()) break;
                         }
                     } catch (...) {}
+                    writer.release();
                     try {
                         if (writer.open(native_path, fourcc, task.fps, cv::Size(w, h), true)) {
                             if (writer.isOpened()) break;
                         }
                     } catch (...) {}
+                    writer.release();
                 }
 
                 // 兜底尝试 MJPG 编码
@@ -184,6 +220,7 @@ private:
 
                 // 4. 逐帧严格校准尺寸与通道后安全写入，杜绝底层 ffmpeg sws_scale / memcpy 越界奔溃
                 for (const auto& f : task.snapshot) {
+                    if (!running_.load()) break; // 退出检查
                     if (f.empty() || f.cols <= 0 || f.rows <= 0) continue;
 
                     cv::Mat ready_frame;
@@ -223,9 +260,11 @@ private:
     std::mutex mtx_;
 
     // 线程池队列与后台编码 Worker
-    std::queue<ClipTask> task_queue_;
+    // 关键依赖拓扑顺序：running_ -> task_mtx_ -> cv_ -> task_queue_ -> worker_thread_
+    // 保证在析构函数触发逆序销毁时，worker_thread_ 必先被完全销毁并 join，绝对杜绝访问已释放的锁与队列
+    std::atomic<bool> running_{false};
     std::mutex task_mtx_;
     std::condition_variable cv_;
+    std::queue<ClipTask> task_queue_;
     std::thread worker_thread_;
-    std::atomic<bool> running_{false};
 };

@@ -635,7 +635,9 @@ public slots:
                 }
             }
 
-            clip_recorder_->push_frame(frame);
+            if (clip_recorder_) {
+                clip_recorder_->push_frame(frame);
+            }
 
             // 检查视频分辨率并自适应调整 ROI 防区 (若尚未标定则自适应开箱默认防区，支持多防区自适应)
             if (frame.cols != last_w_ || frame.rows != last_h_) {
@@ -765,7 +767,10 @@ public slots:
 
                 // 严格以摄像头/视频源原生帧率 (video_fps) 编码，杜绝因 CPU 推理快慢导致的时间尺度失真
                 int clip_fps = (video_fps >= 10.0 && video_fps <= 60.0) ? static_cast<int>(std::round(video_fps)) : 25;
-                std::string clip = clip_recorder_->save_clip_async("clips", ev.track_id, ev.timestamp_ms, clip_fps);
+                std::string clip = "";
+                if (clip_recorder_) {
+                    clip = clip_recorder_->save_clip_async("clips", ev.track_id, ev.timestamp_ms, clip_fps);
+                }
                 ev.clip_path = clip;
                 DatabaseManager::instance().insert_events({ev});
                 emit event_occurred(ev);
@@ -823,6 +828,9 @@ public slots:
             std::lock_guard<std::mutex> lk(cap_mtx_);
             if (cap_.isOpened()) cap_.release();
         }
+        if (clip_recorder_) {
+            clip_recorder_->stop();
+        }
     }
 
 signals:
@@ -859,6 +867,10 @@ PipelineController::~PipelineController() {
 }
 
 void PipelineController::start_pipeline(const std::string& model_path, const std::string& video_source) {
+    if (worker_ || worker_thread_.isRunning()) {
+        stop_pipeline();
+    }
+
     worker_ = std::make_unique<Worker>();
     worker_->model_path_ = model_path;
     worker_->video_source_ = video_source;
@@ -893,10 +905,11 @@ void PipelineController::stop_pipeline() {
         audio_player_->stop();
     }
     if (worker_) {
+        worker_->disconnect();
         worker_->stop();
         worker_thread_.quit();
-        if (!worker_thread_.wait(3000)) {
-            qWarning() << "[PipelineController] Worker 线程未在 3 秒内退出，强制终止...";
+        if (!worker_thread_.wait(5000)) {
+            qWarning() << "[PipelineController] Worker 线程未在 5 秒内退出，强制终止...";
             worker_thread_.terminate();
             worker_thread_.wait(1000);
         }
