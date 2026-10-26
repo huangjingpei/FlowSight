@@ -150,7 +150,7 @@ void EvidenceWidget::setup_ui() {
     player_vbox->setSpacing(10);
 
     // 播放器卡片
-    auto* p_card = new QWidget(this);
+    auto* p_card = new QWidget(player_container_);
     p_card->setStyleSheet("background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px;");
     auto* card_layout = new QVBoxLayout(p_card);
     card_layout->setContentsMargins(4, 4, 4, 4);
@@ -165,7 +165,7 @@ void EvidenceWidget::setup_ui() {
     player_vbox->addWidget(p_card);
 
     // 元数据检查器卡片
-    auto* meta_card = new QWidget(this);
+    auto* meta_card = new QWidget(player_container_);
     meta_card->setStyleSheet("background-color: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;");
     auto* meta_vbox = new QVBoxLayout(meta_card);
     meta_vbox->setContentsMargins(8, 8, 8, 8);
@@ -249,6 +249,13 @@ void EvidenceWidget::setup_ui() {
 
     connect(table_, &QTableWidget::cellDoubleClicked, this, &EvidenceWidget::on_cell_double_clicked);
     connect(table_, &QTableWidget::itemSelectionChanged, this, &EvidenceWidget::on_table_selection_changed);
+}
+
+void EvidenceWidget::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (player_) {
+        player_->pause();
+    }
 }
 
 void EvidenceWidget::reset_filters() {

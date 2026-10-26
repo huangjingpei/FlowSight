@@ -27,12 +27,11 @@ void MediaPlayerWidget::setup_ui() {
     audio_output_->setVolume(0.8f);
     player_->setAudioOutput(audio_output_);
 
-    video_widget_ = new QVideoWidget(this);
-    video_widget_->setStyleSheet("background-color: #0d1117; border: 1px solid #21262d; border-radius: 6px;");
-    video_widget_->setMinimumHeight(240);
-    video_widget_->installEventFilter(this);
-    player_->setVideoOutput(video_widget_);
-    main_layout->addWidget(video_widget_, 1);
+    video_canvas_ = new VideoCanvasWidget(this);
+    video_canvas_->setMinimumHeight(240);
+    video_canvas_->installEventFilter(this);
+    player_->setVideoOutput(video_canvas_->video_sink());
+    main_layout->addWidget(video_canvas_, 1);
 
     // 2. 挂载标准首尾时间播放控制条
     control_bar_ = new PlaybackControlBar(this);
@@ -99,6 +98,9 @@ void MediaPlayerWidget::pause() {
 void MediaPlayerWidget::stop() {
     player_->stop();
     control_bar_->set_position(0);
+    if (video_canvas_) {
+        video_canvas_->clear();
+    }
 }
 
 void MediaPlayerWidget::replay() {
@@ -164,19 +166,19 @@ QString MediaPlayerWidget::current_media_path() const {
 }
 
 void MediaPlayerWidget::take_snapshot() {
-    if (!video_widget_) return;
+    if (!video_canvas_) return;
+
+    QImage img = video_canvas_->current_image();
+    if (img.isNull()) {
+        QMessageBox::warning(this, "截图失败", "未能从播放器抓取到有效视频画面帧");
+        return;
+    }
 
     QDir().mkpath("snapshots");
     QString filename = QString("snapshots/snapshot_%1.png")
         .arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss_zzz"));
 
-    QPixmap pixmap = video_widget_->grab();
-    if (pixmap.isNull()) {
-        QMessageBox::warning(this, "截图失败", "未能从播放器抓取到有效视频画面帧");
-        return;
-    }
-
-    if (pixmap.save(filename, "PNG")) {
+    if (img.save(filename, "PNG")) {
         emit snapshot_saved(filename);
         QToolTip::showText(mapToGlobal(QPoint(width() / 2, height() / 2)),
                            QString("✅ 抓拍成功已保存至:\n%1").arg(filename), this);
@@ -187,15 +189,22 @@ void MediaPlayerWidget::take_snapshot() {
 
 void MediaPlayerWidget::toggle_fullscreen() {
     if (!is_fullscreen_) {
-        video_widget_->setParent(nullptr);
-        video_widget_->setWindowFlags(Qt::Window);
-        video_widget_->showFullScreen();
+        video_canvas_->setParent(nullptr);
+        video_canvas_->setWindowFlags(Qt::Window);
+        video_canvas_->showFullScreen();
         is_fullscreen_ = true;
     } else {
-        video_widget_->setWindowFlags(Qt::Widget);
-        static_cast<QVBoxLayout*>(layout())->insertWidget(0, video_widget_, 1);
-        video_widget_->showNormal();
+        video_canvas_->setWindowFlags(Qt::Widget);
+        static_cast<QVBoxLayout*>(layout())->insertWidget(0, video_canvas_, 1);
+        video_canvas_->showNormal();
         is_fullscreen_ = false;
+    }
+}
+
+void MediaPlayerWidget::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    if (player_ && player_->playbackState() == QMediaPlayer::PlayingState) {
+        player_->pause();
     }
 }
 
@@ -225,7 +234,7 @@ void MediaPlayerWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 bool MediaPlayerWidget::eventFilter(QObject* watched, QEvent* event) {
-    if (watched == video_widget_) {
+    if (watched == video_canvas_) {
         if (event->type() == QEvent::KeyPress) {
             auto* ke = static_cast<QKeyEvent*>(event);
             if (ke->key() == Qt::Key_Escape && is_fullscreen_) {
