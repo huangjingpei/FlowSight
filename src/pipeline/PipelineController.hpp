@@ -18,6 +18,7 @@ public:
     void start_pipeline(const std::string& model_path, const std::string& video_source);
     void stop_pipeline();
     void set_video_source(const std::string& video_source);
+    void set_biz_type(const std::string& biz_type);
     void update_roi_config(const RoiConfig& config);
     void update_roi_configs(const std::vector<RoiConfig>& configs);
     RoiConfig get_current_roi() const;

@@ -192,6 +192,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             pipeline_->set_video_source(path.toStdString());
         }
     });
+    connect(view_settings_, &SettingsWidget::biz_type_changed, this, [this](const QString& type) {
+        if (pipeline_) {
+            pipeline_->set_biz_type(type.toStdString());
+        }
+        if (view_monitor_) {
+            view_monitor_->set_biz_type(type);
+        }
+        if (view_evidence_) {
+            view_evidence_->refresh_events();
+        }
+    });
     connect(view_monitor_, &MonitorWidget::flow_direction_changed, this, [this](float angle, bool invert) {
         if (!view_monitor_ || !view_monitor_->canvas()) return;
         auto rois = view_monitor_->canvas()->get_rois();

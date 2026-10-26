@@ -22,6 +22,7 @@ public:
     void update_active_rois(const std::vector<RoiConfig>& rois);
     void set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold);
     void update_surge_threshold(int threshold);
+    void set_biz_type(const QString& biz_type);
     void clear_display_records();
     void populate_recent_events(const std::vector<PassageEvent>& events);
     void update_event_attributes(int track_id, const QString& gender, const QString& age_group);

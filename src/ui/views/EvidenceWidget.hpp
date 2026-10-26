@@ -50,6 +50,7 @@ private:
     QLabel* inspector_time_ = nullptr;
     QLabel* inspector_dir_ = nullptr;
     QLabel* inspector_track_ = nullptr;
+    QLabel* inspector_attr_title_ = nullptr;
     QLabel* inspector_attr_ = nullptr;
     QLabel* inspector_file_ = nullptr;
     QLabel* inspector_status_ = nullptr;

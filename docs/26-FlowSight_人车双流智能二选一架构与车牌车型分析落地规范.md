@@ -132,7 +132,8 @@ flowchart LR
 | [`BizPassageEvent.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/entity/BizPassageEvent.java) | 实体映射新增车辆与车牌四大属性。 |
 | [`PointVO.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/dto/PointVO.java) 等 DTO/VO | `PointVO`, `PointCreateDTO`, `PointUpdateDTO`, `DeviceLoginVO`, `EdgeEventDTO`, `EventItemVO`, `DashboardSummaryVO` 全面扩展 `bizType` 与车牌字段。 |
 | [`PointServiceImpl.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/service/impl/PointServiceImpl.java) | 登录（`loginWithDeviceCredentials`）、配对（`pairWithCode`）、绑定（`bindPoint`）及实体转换中完整回传 `bizType`。 |
-| [`EventServiceImpl.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/service/impl/EventServiceImpl.java) | 单事件入库、批量上报入库持久化车牌数据；在看板聚合概览中，根据点位业务类型动态统计人流/车流。 |
+| [`EventServiceImpl.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/service/impl/EventServiceImpl.java) | 单事件入库、批量上报入库持久化车牌数据；在看板概览与多维趋势中根据点位业务类型动态自适应标题与指标；去重命中时自动回填补齐车牌属性；修复时钟漂移负数假在线隐患。 |
+| [`TrendReportVO.java`](file:///e:/FlowSight/solution/backend/src/main/java/com/flowsight/cloud/vo/TrendReportVO.java) | 新增 `bizType` 字段，支持逐时、逐日、逐季趋势分析车流与客流模式智能响应。 |
 
 ### 4.2 边缘客户端 (FlowSight.exe & FlowSightEngine.dll) 改造
 
@@ -142,24 +143,26 @@ flowchart LR
 | [`ITracker.hpp`](file:///e:/FlowSight/src/ai/ITracker.hpp) & [`ByteTrackWrapper.cpp`](file:///e:/FlowSight/src/ai/ByteTrackWrapper.cpp) | 增加 `virtual void set_vehicle_mode(bool)` 纯虚接口与实现，解耦 Qt 依赖，跟踪输出中填充车辆结构。 |
 | [`IDetector.hpp`](file:///e:/FlowSight/src/ai/IDetector.hpp) & [`OnnxDetector.cpp`](file:///e:/FlowSight/src/ai/OnnxDetector.cpp) | 增加 `set_biz_type(string)`，在 `VEHICLE` 模式下仅放行机动车类目 (2, 3, 5, 7)。 |
 | [`VehicleClassifier.hpp/.cpp`](file:///e:/FlowSight/src/ai/VehicleClassifier.hpp) | 新建机动车与车牌分析引擎单例，多线程并发，提取 HSV 颜色、车型外观与国标车牌号，实现多帧投票闭锁。 |
-| [`PipelineController.cpp`](file:///e:/FlowSight/src/pipeline/PipelineController.cpp) | 1. 依据 `ConfigManager::is_vehicle_mode()` 按需动态初始化/停止对应属性分类器；<br/>2. 视频帧循环中接入 `VehicleClassifier::classify_async`；<br/>3. 实现 `event_vehicle_attributes_updated` 信号跨线程更新。 |
+| [`PipelineController.cpp`](file:///e:/FlowSight/src/pipeline/PipelineController.cpp) | 1. 依据点位 `bizType` 动态调度，并在运行循环中实现**零重启动态热切换**；<br/>2. 视频帧循环中接入 `VehicleClassifier::classify_async`；<br/>3. 实现 `event_vehicle_attributes_updated` 信号跨线程更新；<br/>4. 暴露 `set_biz_type()` 接口。 |
 | [`DatabaseManager.cpp`](file:///e:/FlowSight/src/storage/DatabaseManager.cpp) | SQLite 自动平滑热升级（执行 `ALTER TABLE passage_events ADD COLUMN...`），新增 `update_event_vehicle_attributes`。 |
 | [`EdgeReportManager.cpp`](file:///e:/FlowSight/src/network/EdgeReportManager.cpp) | 绑定点位与获取云端配置时自动协商 `bizType`；上报心跳与批量上报事件时全量传递车牌车辆属性。 |
 | [`VideoCanvas.cpp`](file:///e:/FlowSight/src/ui/canvas/VideoCanvas.cpp) | HUD 渲染动态自适应：车流模式下绘制专属车牌卡片与发光边框（新能源渐变绿底、传统蓝底、特种黄底）。 |
-| [`MonitorWidget.cpp`](file:///e:/FlowSight/src/ui/views/MonitorWidget.cpp) | KPI 标题与单位动态切换（当前在场人数/人 ⇄ 当前场内车辆/辆；进入人次 ⇄ 进入车次）；实时抓拍流列表自适应展示车牌与车型。 |
-| [`EvidenceWidget.cpp`](file:///e:/FlowSight/src/ui/views/EvidenceWidget.cpp) | 表头自适应（性别/年龄段 ⇄ 车牌号码/车型与外观）；行数据与详情检查器完全自适应。 |
-| [`SettingsWidget.cpp`](file:///e:/FlowSight/src/ui/views/SettingsWidget.cpp) | 点位下拉框显示 `[🚗 车流] / [🚶 客流]` 标识；状态徽章与同步提示自适应。 |
+| [`MonitorWidget.cpp`](file:///e:/FlowSight/src/ui/views/MonitorWidget.cpp) | KPI 标题与单位动态切换（当前在场人数/人 ⇄ 当前场内车辆/辆；进入人次 ⇄ 进入车次）；实时抓拍流列表自适应展示车牌与车型；暴露 `set_biz_type()` 供设置换绑即刻热生效。 |
+| [`EvidenceWidget.cpp`](file:///e:/FlowSight/src/ui/views/EvidenceWidget.cpp) | 表头自适应（性别/年龄段 ⇄ 车牌号码/车型与外观）；行数据与详情检查器属性标题自适应（人体属性 ⇄ 车辆特征）。 |
+| [`SettingsWidget.cpp`](file:///e:/FlowSight/src/ui/views/SettingsWidget.cpp) | 点位下拉框显示 `[🚗 车流] / [🚶 客流]` 标识；点位绑定与同步配置时发射 `biz_type_changed` 触发全线联动。 |
+| [`MainWindow.cpp`](file:///e:/FlowSight/src/ui/MainWindow.cpp) | 联动 `SettingsWidget::biz_type_changed` 至 `PipelineController`、`MonitorWidget` 与 `EvidenceWidget`。 |
 
 ### 4.3 移动端 H5 决策看板改造
 
 | 文件路径 | 核心改造内容 |
 | :--- | :--- |
 | [`api/index.ts`](file:///e:/FlowSight/solution/apps/h5/src/api/index.ts) | `DashboardSummaryVO` 新增 `bizType?: string`；完善 `EventItemVO` 接口定义。 |
+| [`store/point.ts`](file:///e:/FlowSight/solution/apps/h5/src/store/point.ts) | `PointItem` 扩展 `bizType?: string` 强类型定义。 |
 | [`Dashboard.vue`](file:///e:/FlowSight/solution/apps/h5/src/views/Dashboard.vue) | 增加 `isVehicleMode` 计算属性；四大 KPI（场内滞留车辆、进入车次、驶出车次、当前车速/通畅指数）自适应；下拉列表展示车流/客流标签。 |
 | [`Playback.vue`](file:///e:/FlowSight/solution/apps/h5/src/views/Playback.vue) | 事件列表明细自适应呈现 `🚘 车牌号 (蓝/绿牌) · 车型颜色`；点位选项附带业务标识。 |
 | [`VideoReplayModal.vue`](file:///e:/FlowSight/solution/apps/h5/src/components/VideoReplayModal.vue) | 录像回放弹窗元数据标题展示车牌底色、车牌号码与车型外观标签。 |
 | [`Insights.vue`](file:///e:/FlowSight/solution/apps/h5/src/views/Insights.vue) | 结构特征卡片在车流模式下动态切换为“车辆与车牌特征结构”，直观呈现新能源绿牌 vs 燃油蓝牌占比。 |
-| [`Trends.vue`](file:///e:/FlowSight/solution/apps/h5/src/views/Trends.vue) | 点位选择器增加业务类型标签。 |
+| [`Trends.vue`](file:///e:/FlowSight/solution/apps/h5/src/views/Trends.vue) | 核心指标与通行时序曲线根据点位业务类型响应式自适应（车次/车/车流动态 ⇄ 人次/人/客流动态）。 |
 
 ---
 

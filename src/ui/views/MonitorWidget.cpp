@@ -431,6 +431,16 @@ void MonitorWidget::update_stats(const StatisticsSnapshot& stats) {
     }
 }
 
+void MonitorWidget::set_biz_type(const QString& biz_type) {
+    StatisticsSnapshot fake_snap;
+    fake_snap.biz_type = biz_type.toStdString();
+    fake_snap.current_occupancy = current_occupancy_;
+    fake_snap.today_entry = entry_label_ ? entry_label_->text().toInt() : 0;
+    fake_snap.today_exit = exit_label_ ? exit_label_->text().toInt() : 0;
+    fake_snap.today_total = total_label_ ? total_label_->text().toInt() : 0;
+    update_stats(fake_snap);
+}
+
 void MonitorWidget::set_crowd_surge_alert(bool is_surged, int current_occupancy, int threshold) {
     current_occupancy_ = current_occupancy;
     surge_threshold_ = threshold > 0 ? threshold : 30;

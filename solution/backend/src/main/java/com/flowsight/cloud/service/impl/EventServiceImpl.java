@@ -197,8 +197,20 @@ public class EventServiceImpl implements EventService {
                             // 若切片先行到达，回填切片 URL 到已有记录
                             String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + evDto.getTrackId());
                             BizPassageEvent existEv = existing.get(0);
+                            boolean needUpdate = false;
                             if (pendingUrl != null && (existEv.getClipUrl() == null || existEv.getClipUrl().isEmpty())) {
                                 existEv.setClipUrl(pendingUrl);
+                                needUpdate = true;
+                            }
+                            if ((existEv.getPlateNumber() == null || existEv.getPlateNumber().isEmpty()) &&
+                                evDto.getPlateNumber() != null && !evDto.getPlateNumber().isEmpty()) {
+                                existEv.setPlateNumber(evDto.getPlateNumber());
+                                existEv.setPlateColor(evDto.getPlateColor() != null ? evDto.getPlateColor() : "");
+                                existEv.setVehicleType(evDto.getVehicleType() != null ? evDto.getVehicleType() : "");
+                                existEv.setVehicleColor(evDto.getVehicleColor() != null ? evDto.getVehicleColor() : "");
+                                needUpdate = true;
+                            }
+                            if (needUpdate) {
                                 eventMapper.updateById(existEv);
                             }
                             log.info("点位 {} TrackId {} 在时间戳 {} 附近已存在通行记录，执行端云去重跳过重复插入", pointId, evDto.getTrackId(), evTs);
@@ -459,12 +471,12 @@ public class EventServiceImpl implements EventService {
                     .ifPresent(entry -> demo.setTopAgeGroup(entry.getKey()));
         }
 
-        // 获取最新心跳滞留并进行实时在线超时判断 (若超 15s 未上报则判定 OFFLINE)
+        // 获取最新心跳滞留并进行实时在线超时判断 (若超 15s 未上报则判定 OFFLINE，防负数时钟漂移)
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
         boolean isOnline = false;
         if (hb != null && hb.getLastHeartbeat() != null) {
             long secondsSinceLastHeartbeat = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
-            if (secondsSinceLastHeartbeat <= 15) {
+            if (secondsSinceLastHeartbeat >= 0 && secondsSinceLastHeartbeat <= 15) {
                 isOnline = true;
             }
         }
@@ -510,8 +522,12 @@ public class EventServiceImpl implements EventService {
         if (dimension == null || dimension.trim().isEmpty()) {
             dimension = "realtime";
         }
+        BizPoint point = pointMapper.selectById(pointId);
+        boolean isVehMode = point != null && "VEHICLE".equalsIgnoreCase(point.getBizType());
+
         TrendReportVO vo = new TrendReportVO();
         vo.setDimension(dimension);
+        vo.setBizType(isVehMode ? "VEHICLE" : "PEDESTRIAN");
 
         List<String> categories = new ArrayList<>();
         List<Integer> entryList = new ArrayList<>();
@@ -532,7 +548,7 @@ public class EventServiceImpl implements EventService {
                     .le(BizPassageEvent::getTimestampMs, endOfDayMs)
                     .orderByAsc(BizPassageEvent::getTimestampMs));
 
-            vo.setTitle("今日实时通行时序曲线 (真实采集时间动态流)");
+            vo.setTitle(isVehMode ? "今日实时车流通行时序曲线 (真实采集时间动态流)" : "今日实时通行时序曲线 (真实采集时间动态流)");
 
             if (events.isEmpty()) {
                 LocalDateTime now = LocalDateTime.now();
@@ -603,7 +619,7 @@ public class EventServiceImpl implements EventService {
             vo.setAverageCount(categories.isEmpty() ? 0.0 : Math.round((double) totalPeriod / categories.size() * 10.0) / 10.0);
 
         } else if ("hour".equalsIgnoreCase(dimension)) {
-            vo.setTitle("今日逐时客流分布曲线");
+            vo.setTitle(isVehMode ? "今日逐时车流分布曲线" : "今日逐时客流分布曲线");
             LocalDate today = LocalDate.now();
             List<BizStatsHourly> list = statsMapper.selectList(new LambdaQueryWrapper<BizStatsHourly>()
                     .eq(BizStatsHourly::getPointId, pointId)
@@ -632,7 +648,7 @@ public class EventServiceImpl implements EventService {
 
         } else if ("day".equalsIgnoreCase(dimension)) {
             int d = (days != null && days > 0) ? days : 7;
-            vo.setTitle(String.format("近 %d 天逐日客流走势曲线", d));
+            vo.setTitle(String.format(isVehMode ? "近 %d 天逐日车流走势曲线" : "近 %d 天逐日客流走势曲线", d));
             LocalDate endDate = LocalDate.now();
             LocalDate startDate = endDate.minusDays(d - 1);
 
@@ -668,7 +684,7 @@ public class EventServiceImpl implements EventService {
             vo.setAverageCount(Math.round((double) totalPeriod / d * 10.0) / 10.0);
 
         } else if ("quarter".equalsIgnoreCase(dimension)) {
-            vo.setTitle("年度季度客流走势曲线");
+            vo.setTitle(isVehMode ? "年度季度车流走势曲线" : "年度季度客流走势曲线");
             List<Map<String, Object>> rows = statsMapper.selectQuarterlyStats(pointId);
             if (rows != null && !rows.isEmpty()) {
                 for (Map<String, Object> r : rows) {

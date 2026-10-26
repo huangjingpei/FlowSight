@@ -41,22 +41,22 @@
       <div class="flat-kpi-row">
         <div class="kpi-cell">
           <span class="cell-label">周期总流</span>
-          <span class="cell-val text-white">{{ trendData.totalPeriodCount }}<span class="cell-unit">人次</span></span>
+          <span class="cell-val text-white">{{ trendData.totalPeriodCount }}<span class="cell-unit">{{ isVehicleMode ? '车次' : '人次' }}</span></span>
         </div>
         <div class="kpi-cell">
           <span class="cell-label">峰值最高</span>
-          <span class="cell-val text-cyan">{{ trendData.peakTime }} ({{ trendData.peakValue }}人)</span>
+          <span class="cell-val text-cyan">{{ trendData.peakTime }} ({{ trendData.peakValue }}{{ isVehicleMode ? '车' : '人' }})</span>
         </div>
         <div class="kpi-cell">
           <span class="cell-label">时序均值</span>
-          <span class="cell-val text-green">{{ trendData.averageCount || '0.0' }}<span class="cell-unit">人/点</span></span>
+          <span class="cell-val text-green">{{ trendData.averageCount || '0.0' }}<span class="cell-unit">{{ isVehicleMode ? '车/点' : '人/点' }}</span></span>
         </div>
       </div>
 
       <!-- 行 4: 扁平高对比度 ECharts 图表容器 (填满剩余高度) -->
       <div class="chart-box">
         <div class="chart-legend-row">
-          <span class="legend-title">通行时序曲线 (采集时间动态流)</span>
+          <span class="legend-title">{{ trendData.title || (isVehicleMode ? '通行时序曲线 (车流动态流)' : '通行时序曲线 (客流动态流)') }}</span>
           <div class="legend-items">
             <span class="leg-item"><i class="leg-dot cyan"></i>进入</span>
             <span class="leg-item"><i class="leg-dot pink"></i>离开</span>
@@ -105,6 +105,14 @@ const trendData = ref<TrendReportVO>({
 const chartRef = ref<HTMLDivElement | null>(null);
 let myChart: echarts.ECharts | null = null;
 let timer: any = null;
+
+const isVehicleMode = computed(() => {
+  if (trendData.value?.bizType) {
+    return trendData.value.bizType === 'VEHICLE';
+  }
+  const pt = pointStore.points.find((p) => p.id === activePointId.value);
+  return pt?.bizType === 'VEHICLE';
+});
 
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({

@@ -418,12 +418,16 @@ void SettingsWidget::setup_ui() {
         btn_bind_point_->setEnabled(false);
         btn_bind_point_->setText("正在绑定...");
 
-        EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name, force, [this, update_status_badge](bool success, const QString& msg) {
+        EdgeReportManager::instance().bind_point(url, pid, pname, ptoken, client_name, force, [this, update_status_badge, map](bool success, const QString& msg) {
             btn_bind_point_->setEnabled(true);
             btn_bind_point_->setText("🔗 确认绑定");
 
             if (success) {
                 update_status_badge();
+                QString bound_biz = map["bizType"].toString();
+                if (!bound_biz.isEmpty()) {
+                    emit biz_type_changed(bound_biz);
+                }
                 // 绑定成功后自动触发拉取云端 RTSP 流与点位详细参数
                 btn_sync_config_->click();
             } else {
@@ -455,7 +459,10 @@ void SettingsWidget::setup_ui() {
                 if (!pname.isEmpty()) cfg.set_cloud_point_name(pname);
                 if (!phone.isEmpty()) cfg.set_cloud_user_phone(phone);
                 if (!company.isEmpty()) cfg.set_cloud_company_name(company);
-                if (!bizType.isEmpty()) cfg.set_biz_type(bizType);
+                if (!bizType.isEmpty()) {
+                    cfg.set_biz_type(bizType);
+                    emit biz_type_changed(bizType);
+                }
 
                 if (!rtsp.trimmed().isEmpty()) {
                     video_input_edit_->setText(rtsp.trimmed());

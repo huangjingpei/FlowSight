@@ -14,6 +14,7 @@ public:
 
 signals:
     void video_source_changed(const QString& source_uri);
+    void biz_type_changed(const QString& biz_type);
     void settings_applied(int surge_threshold, bool surge_enabled, bool surge_beep);
     void data_cleared(bool reset_rois);
 

@@ -15,6 +15,11 @@ public class TrendReportVO {
     private String dimension;
 
     /**
+     * 业务模式: PEDESTRIAN-客流, VEHICLE-车流
+     */
+    private String bizType = "PEDESTRIAN";
+
+    /**
      * 维度标题 (例如: "今日 24 小时通行曲线", "近 7 天日均通行趋势", "年度季度客流走势")
      */
     private String title;

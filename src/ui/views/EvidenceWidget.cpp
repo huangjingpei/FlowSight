@@ -184,11 +184,12 @@ void EvidenceWidget::setup_ui() {
     grid->setColumnStretch(0, 0);
     grid->setColumnStretch(1, 1);
 
-    auto add_row = [&](int r, const QString& label_str, QLabel*& val_label) {
+    auto add_row = [&](int r, const QString& label_str, QLabel*& val_label, QLabel** out_title = nullptr) {
         auto* title = new QLabel(label_str, meta_card);
         title->setStyleSheet("color: #8b949e; font-size: 12px; font-weight: 500;");
         title->setMinimumWidth(75);
         title->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+        if (out_title) *out_title = title;
         val_label = new QLabel("--", meta_card);
         val_label->setStyleSheet("color: #f0f6fc; font-size: 12px; font-weight: 500;");
         val_label->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -199,7 +200,7 @@ void EvidenceWidget::setup_ui() {
     add_row(0, "发生时间:", inspector_time_);
     add_row(1, "通行判定:", inspector_dir_);
     add_row(2, "跟踪目标:", inspector_track_);
-    add_row(3, "人体属性:", inspector_attr_);
+    add_row(3, ConfigManager::instance().is_vehicle_mode() ? "车辆特征:" : "人体属性:", inspector_attr_, &inspector_attr_title_);
     add_row(4, "切片文件:", inspector_file_);
     inspector_file_->setWordWrap(true);
     add_row(5, "切片状态:", inspector_status_);
@@ -297,6 +298,9 @@ void EvidenceWidget::refresh_events() {
         table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "车牌号码", "车型与外观", "置信度", "短视频证据切片"});
     } else {
         table_->setHorizontalHeaderLabels({"发生时间", "标定防区", "通行方向", "目标 ID", "性别", "年龄段", "置信度", "短视频证据切片"});
+    }
+    if (inspector_attr_title_) {
+        inspector_attr_title_->setText(is_veh ? "车辆特征:" : "人体属性:");
     }
 
     for (const auto& ev : events) {

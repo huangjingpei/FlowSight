@@ -102,6 +102,10 @@ public:
     std::string pending_video_source_;
     std::atomic<bool> source_changed_{false};
 
+    std::mutex biz_mtx_;
+    std::string pending_biz_type_;
+    std::atomic<bool> biz_type_changed_{false};
+
     std::unique_ptr<IDetector> detector_;
     std::unique_ptr<ITracker> tracker_;
     std::unique_ptr<RoiCounter> roi_counter_;
@@ -207,6 +211,12 @@ public:
         std::lock_guard<std::mutex> lock(source_mtx_);
         pending_video_source_ = new_source;
         source_changed_ = true;
+    }
+
+    void change_biz_type(const std::string& new_biz) {
+        std::lock_guard<std::mutex> lock(biz_mtx_);
+        pending_biz_type_ = new_biz;
+        biz_type_changed_ = true;
     }
 
     void pause() { is_paused_ = true; }
@@ -438,6 +448,57 @@ public slots:
                 snap.today_total = today_entry_ + today_exit_;
                 if (detector_) snap.backend_name = detector_->get_backend_name();
                 emit stats_updated(snap);
+            }
+
+            // 1.1 动态检测业务感知模式热切换 (客流 <-> 车流 智能二选一热路由)
+            bool trigger_biz_switch = false;
+            std::string target_biz;
+            if (biz_type_changed_.exchange(false)) {
+                std::lock_guard<std::mutex> lock(biz_mtx_);
+                target_biz = pending_biz_type_;
+                trigger_biz_switch = true;
+            } else {
+                bool cur_cfg_veh = ConfigManager::instance().is_vehicle_mode();
+                if (cur_cfg_veh != is_veh_mode) {
+                    target_biz = cur_cfg_veh ? "VEHICLE" : "PEDESTRIAN";
+                    trigger_biz_switch = true;
+                }
+            }
+
+            if (trigger_biz_switch && !target_biz.empty()) {
+                bool next_veh_mode = (target_biz == "VEHICLE");
+                if (next_veh_mode != is_veh_mode) {
+                    is_veh_mode = next_veh_mode;
+                    if (tracker_) {
+                        tracker_->set_vehicle_mode(is_veh_mode);
+                        tracker_->reset();
+                    }
+                    if (roi_counter_) roi_counter_->reset();
+                    if (detector_) {
+                        detector_->set_biz_type(is_veh_mode ? "VEHICLE" : "PEDESTRIAN");
+                    }
+                    if (is_veh_mode) {
+                        AttributeClassifier::instance().stop();
+                        VehicleClassifier::instance().init();
+                        qInfo() << "[PipelineController] 智能感知模式热切换 => 【车流感知模式】(机动车检测 + LPR 车牌识别 + 车型颜色分析)";
+                    } else {
+                        VehicleClassifier::instance().stop();
+                        std::string resolved_attr_model = resolve_resource_path("models/pedestrian_gender_int8.onnx");
+                        if (!QFileInfo::exists(QString::fromStdString(resolved_attr_model))) {
+                            resolved_attr_model = resolve_resource_path("models/mobilenetv3_attributes.onnx");
+                        }
+                        AttributeClassifier::instance().init(resolved_attr_model);
+                        qInfo() << "[PipelineController] 智能感知模式热切换 => 【客流感知模式】(行人检测 + 性别年龄分析)";
+                    }
+                    StatisticsSnapshot snap;
+                    snap.current_occupancy = 0;
+                    snap.today_entry = today_entry_;
+                    snap.today_exit = today_exit_;
+                    snap.today_total = today_entry_ + today_exit_;
+                    snap.biz_type = is_veh_mode ? "VEHICLE" : "PEDESTRIAN";
+                    if (detector_) snap.backend_name = detector_->get_backend_name();
+                    emit stats_updated(snap);
+                }
             }
 
             // 2. 暂停与单帧步进处理
@@ -863,6 +924,12 @@ void PipelineController::set_video_source(const std::string& video_source) {
         } else {
             audio_player_->stop();
         }
+    }
+}
+
+void PipelineController::set_biz_type(const std::string& biz_type) {
+    if (worker_) {
+        worker_->change_biz_type(biz_type);
     }
 }
 

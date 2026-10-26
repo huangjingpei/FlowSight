@@ -6,6 +6,7 @@ export interface PointItem {
   pointName: string;
   pointCode: string;
   streamStatus: string;
+  bizType?: string;
 }
 
 export const usePointStore = defineStore('point', () => {
