@@ -29,6 +29,8 @@ public:
 
 private slots:
     void on_preset_changed(int index);
+    void on_datetime_changed(const QDateTime& dt);
+    void on_filter_combo_changed();
     void on_btn_query_clicked();
     void on_btn_reset_clicked();
     void on_btn_export_csv();
@@ -70,4 +72,5 @@ private:
     AnalyticsChartWidget* hourly_chart_ = nullptr;
 
     bool is_live_today_view_ = true;
+    bool is_updating_preset_ = false;
 };
