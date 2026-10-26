@@ -103,10 +103,10 @@
           <el-input v-model="createForm.phone" placeholder="11位手机号 (唯一凭证)" />
         </el-form-item>
         <el-form-item label="企业客户全称" prop="companyName">
-          <el-input v-model="createForm.companyName" placeholder="例如: 万科物业服务有限公司" />
+          <el-input v-model="createForm.companyName" placeholder="例如: 杭州栩文科技有限公司" />
         </el-form-item>
         <el-form-item label="商户项目简称">
-          <el-input v-model="createForm.nickname" placeholder="例如: 万科未来城项目" />
+          <el-input v-model="createForm.nickname" placeholder="例如: 杭州总部项目" />
         </el-form-item>
         <el-form-item label="责任联系人">
           <el-input v-model="createForm.contactPerson" placeholder="例如: 刘经理 / 张主任" />

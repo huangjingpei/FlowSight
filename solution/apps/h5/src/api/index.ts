@@ -143,6 +143,7 @@ export interface DashboardOverviewVO {
 }
 
 export const h5Api = {
+  getUserProfile: () => api.get<any, any>('/h5/user/profile'),
   getMyPoints: () => api.get('/h5/points'),
   getDashboardOverview: () => api.get<any, DashboardOverviewVO>('/h5/dashboard/overview'),
   setDefaultPoint: (pointId: number | null) => api.post('/h5/user/default-point', { pointId }),

@@ -31,9 +31,9 @@
           />
         </div>
 
-        <!-- 快捷填入万科物业账号 -->
-        <div class="quick-row" @click="fillVankeAccount">
-          <span class="quick-link">⚡ 填入万科物业测试账号 (13454118762)</span>
+        <!-- 快捷填入商户测试账号 -->
+        <div class="quick-row" @click="fillDemoAccount">
+          <span class="quick-link">⚡ 填入商户测试账号 (13454118762)</span>
         </div>
 
         <button type="submit" class="btn-submit" :disabled="loading">
@@ -59,10 +59,10 @@ const phone = ref('13454118762');
 const password = ref('13454118762');
 const loading = ref(false);
 
-const fillVankeAccount = () => {
+const fillDemoAccount = () => {
   phone.value = '13454118762';
   password.value = '13454118762';
-  showToast({ message: '已填入万科物业账号', position: 'top', duration: 1000 });
+  showToast({ message: '已填入商户测试账号', position: 'top', duration: 1000 });
 };
 
 const onSubmit = async () => {

@@ -15,6 +15,7 @@ import com.flowsight.cloud.vo.PairingCodeVO;
 import com.flowsight.cloud.vo.PointCredentialVO;
 import com.flowsight.cloud.vo.PointVO;
 import com.flowsight.cloud.vo.TrendReportVO;
+import com.flowsight.cloud.vo.UserVO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -85,6 +86,16 @@ public class H5DashboardController {
             checkPointOwnership(pointId, request);
         }
         return Result.success(eventService.pageEvents(userId, pointId, startDate, endDate, direction, page, size));
+    }
+
+    @GetMapping("/user/profile")
+    public Result<UserVO> getUserProfile(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        UserVO user = userService.getUserById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("当前登录商户不存在或已被注销");
+        }
+        return Result.success(user);
     }
 
     @PostMapping("/user/password")

@@ -15,8 +15,8 @@
         <div class="profile-top">
           <div class="avatar-box">🏢</div>
           <div class="profile-meta">
-            <div class="company-name">{{ userProfile.companyName || '万科物业服务有限公司' }}</div>
-            <div class="phone-str">账号：{{ userProfile.phone || '13454118762' }}</div>
+            <div class="company-name">{{ userProfile.companyName || userProfile.nickname || '企业商户' }}</div>
+            <div class="phone-str">账号：{{ userProfile.phone || '--' }}</div>
           </div>
           <div class="auth-pill">已认证</div>
         </div>
@@ -330,11 +330,11 @@
           <div class="node-meta-list">
             <div class="meta-row">
               <span class="m-k">通道名称</span>
-              <span class="m-v">{{ summary.pointName || '万科西区东门主入口' }}</span>
+              <span class="m-v">{{ summary.pointName || '--' }}</span>
             </div>
             <div class="meta-row">
               <span class="m-k">通道编码</span>
-              <span class="m-v cyan-code">{{ pointCredential.pointCode || 'POINT_VK_EAST_01' }}</span>
+              <span class="m-v cyan-code">{{ pointCredential.pointCode || '--' }}</span>
             </div>
             <div class="meta-row">
               <span class="m-k">连接状态</span>
@@ -505,14 +505,35 @@ const currentThemeLabel = computed(() => {
   return currentTheme.value === 'light' ? '明亮浅色' : '深邃暗黑';
 });
 
-// 用户资料
-const userProfile = computed(() => {
+// 用户资料 (从本地缓存预热，并向云端实时同步)
+const userProfile = ref<any>({
+  phone: '',
+  companyName: '',
+  nickname: '',
+  contactPerson: ''
+});
+
+const loadUserProfile = async () => {
   try {
     const raw = localStorage.getItem('flowsight_user');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u && (u.companyName || u.phone)) {
+        userProfile.value = { ...userProfile.value, ...u };
+      }
+    }
   } catch (e) {}
-  return { phone: '13454118762', companyName: '万科物业服务有限公司(未来城项目)' };
-});
+
+  try {
+    const remote: any = await h5Api.getUserProfile();
+    if (remote && (remote.companyName || remote.phone)) {
+      userProfile.value = { ...userProfile.value, ...remote };
+      localStorage.setItem('flowsight_user', JSON.stringify(remote));
+    }
+  } catch (err) {
+    console.warn('拉取云端商户资料异常:', err);
+  }
+};
 
 // 对话框弹窗状态管理 (取代页面内部折叠)
 type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | 'defaultPoint' | null;
@@ -778,11 +799,13 @@ const handleLogout = () => {
 
 onMounted(() => {
   dashboardStore.syncFromStorage();
+  loadUserProfile();
   loadSummary();
 });
 
 onActivated(() => {
   dashboardStore.syncFromStorage();
+  loadUserProfile();
 });
 
 onUnmounted(() => {

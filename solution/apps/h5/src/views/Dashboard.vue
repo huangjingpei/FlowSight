@@ -435,6 +435,15 @@ const currentCompanyName = computed(() => {
   return 'FlowSight 实时监控';
 });
 
+const syncUserProfile = async () => {
+  try {
+    const remote: any = await h5Api.getUserProfile();
+    if (remote && (remote.companyName || remote.phone)) {
+      localStorage.setItem('flowsight_user', JSON.stringify(remote));
+    }
+  } catch (err) {}
+};
+
 const summary = ref<DashboardSummaryVO>({
   pointId: 0,
   pointName: '',
@@ -705,6 +714,7 @@ const handleResize = () => {
 
 onMounted(async () => {
   dashboardStore.syncFromStorage();
+  syncUserProfile();
   await loadPoints();
   if (activePointId.value) {
     syncFromHistory(activePointId.value);
@@ -722,6 +732,7 @@ onMounted(async () => {
 onActivated(() => {
   isPageActive.value = true;
   dashboardStore.syncFromStorage();
+  syncUserProfile();
   restartPollTimer(pollRateSec.value);
   if (activePointId.value) {
     syncFromHistory(activePointId.value);
