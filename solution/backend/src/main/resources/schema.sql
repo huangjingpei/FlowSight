@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
     `company_name` VARCHAR(128) NOT NULL DEFAULT '' COMMENT '商户单位/企业客户全称',
     `contact_person` VARCHAR(64) NOT NULL DEFAULT '' COMMENT '客户责任联系人姓名',
     `point_quota` INT NOT NULL DEFAULT 5 COMMENT '允许开通监控点位配额上限',
+    `default_point_id` BIGINT DEFAULT NULL COMMENT '用户偏好的默认直达点位ID',
     `expire_time` DATETIME DEFAULT NULL COMMENT 'SaaS订阅授权到期时间',
     `avatar` VARCHAR(255) DEFAULT '' COMMENT '用户头像地址',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '账号状态: 1-正常, 0-禁用',

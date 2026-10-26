@@ -172,6 +172,15 @@ public class PointServiceImpl implements PointService {
         // 1. 删除云端数据库点位本身
         pointMapper.deleteById(id);
 
+        // 1.1 若商户将该点位设为默认座舱，解除默认关联
+        if (point.getUserId() != null) {
+            SysUser u = userMapper.selectById(point.getUserId());
+            if (u != null && id.equals(u.getDefaultPointId())) {
+                u.setDefaultPointId(null);
+                userMapper.updateById(u);
+            }
+        }
+
         // 2. 清理云端该点位下所有事件流水记录
         eventMapper.delete(new LambdaQueryWrapper<BizPassageEvent>().eq(BizPassageEvent::getPointId, id));
 

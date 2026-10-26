@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.dto.EdgeBatchReportDTO;
 import com.flowsight.cloud.dto.EdgeEventDTO;
 import com.flowsight.cloud.dto.EdgeHeartbeatDTO;
+import com.flowsight.cloud.vo.DashboardOverviewVO;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.TrendReportVO;
@@ -17,6 +18,7 @@ public interface EventService {
     void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto);
     void recordHeartbeat(com.flowsight.cloud.entity.BizPoint point, EdgeHeartbeatDTO dto);
     DashboardSummaryVO getDashboardSummary(Long pointId);
+    DashboardOverviewVO getDashboardOverview(Long userId);
     TrendReportVO getTrendReport(Long pointId, String dimension, Integer days);
     Page<EventItemVO> pageEvents(Long userId, Long pointId, String startDate, String endDate, String direction, int page, int size);
 }

@@ -7,16 +7,26 @@
         <span class="company-name">{{ currentCompanyName }}</span>
       </div>
       <div class="header-right">
+        <button
+          class="mode-toggle-btn"
+          :class="{ active: isOverviewMode }"
+          @click="toggleMode"
+        >
+          <span class="mt-icon">{{ isOverviewMode ? '◫' : '⊞' }}</span>
+          <span>{{ isOverviewMode ? '单点座舱' : '业务全览' }}</span>
+        </button>
         <span class="live-status-pill" :class="summary.streamStatus === 'ONLINE' ? 'online' : 'offline'">
           {{ summary.streamStatus === 'ONLINE' ? '● 边缘在线' : '○ 边缘离线' }}
         </span>
       </div>
     </header>
 
-    <!-- 2. 主体：单屏纯平实时监控 (无圈套、5秒近实时动态曲线、数据极度聚焦) -->
-    <main class="flat-main">
-      <!-- 行 1: 通道点位选择条 -->
-      <div class="flat-point-bar">
+    <!-- 2. 主体：单屏纯平实时监控 或 多点位业务全览卡片流 -->
+    <main class="flat-main" :class="{ 'flat-main-scroll': isOverviewMode }">
+      <!-- 模式 A: 单机座舱 -->
+      <template v-if="!isOverviewMode">
+        <!-- 行 1: 通道点位选择条 -->
+        <div class="flat-point-bar">
         <span class="point-label">监控通道:</span>
         <div class="point-select-wrap">
           <select v-model="activePointId" class="flat-select" @change="onPointChange">
@@ -123,6 +133,137 @@
         </div>
         <div ref="pulseChartRef" class="pulse-chart-container"></div>
       </div>
+      </template>
+
+      <!-- 模式 B: 多点位业务全览卡片流 -->
+      <template v-else>
+        <div class="overview-container">
+          <!-- 1. 全局统计指标大盘 -->
+          <div class="overview-global-hero">
+            <div class="hero-top">
+              <div class="hero-title">
+                <span class="hero-dot"></span>
+                <span>全业务运行大盘</span>
+              </div>
+              <div class="hero-status-pill">
+                <span class="status-dot-green">●</span>
+                <span>在线 {{ overviewData?.globalMetrics?.onlinePoints || 0 }} / 离线 {{ overviewData?.globalMetrics?.offlinePoints || 0 }}</span>
+              </div>
+            </div>
+
+            <div class="hero-metric-grid">
+              <!-- 客流全局 -->
+              <div class="hero-subcard border-cyan">
+                <div class="subcard-header">
+                  <span class="subcard-tag tag-cyan">客流大盘</span>
+                  <span class="subcard-count">{{ overviewData?.globalMetrics?.pedestrianPoints || 0 }}通道</span>
+                </div>
+                <div class="subcard-num text-cyan">
+                  {{ overviewData?.globalMetrics?.totalPedestrianEntry || 0 }}<span class="subcard-unit">总人次</span>
+                </div>
+                <div class="subcard-meta">
+                  <span>在场: {{ overviewData?.globalMetrics?.totalPedestrianOccupancy || 0 }}人</span>
+                  <span>离开: {{ overviewData?.globalMetrics?.totalPedestrianExit || 0 }}人</span>
+                </div>
+              </div>
+
+              <!-- 车流全局 -->
+              <div class="hero-subcard border-amber">
+                <div class="subcard-header">
+                  <span class="subcard-tag tag-amber">车流大盘</span>
+                  <span class="subcard-count">{{ overviewData?.globalMetrics?.vehiclePoints || 0 }}通道</span>
+                </div>
+                <div class="subcard-num text-amber">
+                  {{ overviewData?.globalMetrics?.totalVehicleEntry || 0 }}<span class="subcard-unit">总车次</span>
+                </div>
+                <div class="subcard-meta">
+                  <span>滞留: {{ overviewData?.globalMetrics?.totalVehicleOccupancy || 0 }}辆</span>
+                  <span>出场: {{ overviewData?.globalMetrics?.totalVehicleExit || 0 }}车次</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 点位业务卡片矩阵列表 -->
+          <div class="overview-card-list">
+            <div class="list-section-title">
+              <span>业务点位矩阵 ({{ overviewData?.pointCards?.length || 0 }})</span>
+              <span class="list-hint">点击卡片直达单机座舱</span>
+            </div>
+
+            <div v-if="overviewData?.pointCards?.length === 0" class="empty-cards-box">
+              暂无监控点位，请联系系统管理员分配
+            </div>
+
+            <div
+              v-for="card in overviewData?.pointCards || []"
+              :key="card.pointId"
+              class="point-biz-card"
+              :class="[
+                card.bizType === 'VEHICLE' ? 'biz-card-vehicle' : 'biz-card-pedestrian',
+                card.pointId === activePointId ? 'biz-card-active' : ''
+              ]"
+              @click="handleSelectPointFromCard(card.pointId)"
+            >
+              <!-- 卡片头部: 业务徽章 + 名称 + 在线状态 + 默认座舱星标 -->
+              <div class="card-head">
+                <div class="card-head-left">
+                  <span class="biz-pill" :class="card.bizType === 'VEHICLE' ? 'pill-amber' : 'pill-cyan'">
+                    {{ card.bizType === 'VEHICLE' ? '🚗 车流' : '🚶 客流' }}
+                  </span>
+                  <div class="card-name-box">
+                    <span class="card-point-name">{{ card.pointName }}</span>
+                    <span class="card-point-code">{{ card.pointCode }}</span>
+                  </div>
+                </div>
+
+                <div class="card-head-right">
+                  <span class="card-stream-pill" :class="card.streamStatus === 'ONLINE' ? 'online' : 'offline'">
+                    {{ card.streamStatus === 'ONLINE' ? '● 在线' : '○ 离线' }}
+                  </span>
+                  <button
+                    class="btn-star-default"
+                    :class="{ active: card.isDefault }"
+                    :title="card.isDefault ? '当前默认业务座舱，点击取消' : '点击设为默认座舱'"
+                    @click.stop="handleSetDefaultFromCard(card.pointId, $event)"
+                  >
+                    {{ card.isDefault ? '★ 默认' : '☆ 设默认' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 卡片主体: 4 宫格 KPI 数据 -->
+              <div class="card-kpi-grid">
+                <div class="card-kpi-item">
+                  <span class="ck-label">{{ card.bizType === 'VEHICLE' ? '当前滞留' : '瞬时在场' }}</span>
+                  <span class="ck-val text-cyan">{{ card.currentOccupancy }} <small>{{ card.bizType === 'VEHICLE' ? '辆' : '人' }}</small></span>
+                </div>
+                <div class="card-kpi-item">
+                  <span class="ck-label">{{ card.bizType === 'VEHICLE' ? '今日进车' : '今日进入' }}</span>
+                  <span class="ck-val text-green">{{ card.todayEntry }} <small>{{ card.bizType === 'VEHICLE' ? '次' : '人' }}</small></span>
+                </div>
+                <div class="card-kpi-item">
+                  <span class="ck-label">{{ card.bizType === 'VEHICLE' ? '今日出车' : '今日离开' }}</span>
+                  <span class="ck-val text-orange">{{ card.todayExit }} <small>{{ card.bizType === 'VEHICLE' ? '次' : '人' }}</small></span>
+                </div>
+                <div class="card-kpi-item">
+                  <span class="ck-label">{{ card.bizType === 'VEHICLE' ? '双向总车次' : '双向总客流' }}</span>
+                  <span class="ck-val text-purple">{{ card.todayTotal }} <small>{{ card.bizType === 'VEHICLE' ? '次' : '人' }}</small></span>
+                </div>
+              </div>
+
+              <!-- 卡片底栏: 边端节点 + 心跳 + 进入直达按钮 -->
+              <div class="card-footer-strip">
+                <div class="cf-left">
+                  <span class="cf-node">📡 {{ card.clientName || '边端工控机' }}</span>
+                  <span v-if="card.lastHeartbeat" class="cf-time">{{ card.lastHeartbeat.slice(11, 19) }}</span>
+                </div>
+                <span class="cf-arrow">进入座舱 ›</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </main>
 
     <!-- 现场全景快照弹窗 -->
@@ -177,7 +318,7 @@ import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, next
 import { storeToRefs } from 'pinia';
 import { showToast } from 'vant';
 import * as echarts from 'echarts';
-import { h5Api, DashboardSummaryVO } from '../api';
+import { h5Api, DashboardSummaryVO, DashboardOverviewVO } from '../api';
 import { usePointStore } from '../store/point';
 import { useDashboardStore } from '../store/dashboard';
 import { useThemeStore } from '../store/theme';
@@ -186,6 +327,80 @@ const pointStore = usePointStore();
 const dashboardStore = useDashboardStore();
 const themeStore = useThemeStore();
 const activePointId = ref<number>(0);
+
+// 多点位业务全览模式状态
+const isOverviewMode = ref(false);
+const overviewLoading = ref(false);
+const overviewData = ref<DashboardOverviewVO | null>(null);
+
+const fetchOverview = async () => {
+  try {
+    overviewLoading.value = true;
+    const res: any = await h5Api.getDashboardOverview();
+    overviewData.value = res;
+    if (res && res.defaultPointId && pointStore.defaultPointId !== res.defaultPointId) {
+      pointStore.setDefaultPoint(res.defaultPointId);
+    }
+  } catch (err) {
+    console.error('获取业务全览失败:', err);
+  } finally {
+    overviewLoading.value = false;
+  }
+};
+
+const toggleMode = () => {
+  isOverviewMode.value = !isOverviewMode.value;
+  if (isOverviewMode.value) {
+    fetchOverview();
+  } else {
+    if (activePointId.value) {
+      syncFromHistory(activePointId.value);
+      nextTick(() => {
+        if (pulseChartRef.value) {
+          if (!pulseChart) pulseChart = echarts.init(pulseChartRef.value);
+          pulseChart.resize();
+          renderPulseChart();
+        }
+      });
+      pollTick();
+    }
+  }
+};
+
+const handleSelectPointFromCard = (pointId: number) => {
+  if (pointStore.setActivePoint(pointId)) {
+    activePointId.value = pointId;
+    isOverviewMode.value = false;
+    syncFromHistory(pointId);
+    nextTick(() => {
+      if (pulseChartRef.value) {
+        if (!pulseChart) pulseChart = echarts.init(pulseChartRef.value);
+        pulseChart.resize();
+        renderPulseChart();
+      }
+    });
+    pollTick();
+    showToast({ message: '已切换至该业务座舱', position: 'top', duration: 800 });
+  }
+};
+
+const handleSetDefaultFromCard = async (pointId: number, e?: Event) => {
+  if (e) e.stopPropagation();
+  try {
+    const targetId = pointStore.defaultPointId === pointId ? null : pointId;
+    await h5Api.setDefaultPoint(targetId);
+    pointStore.setDefaultPoint(targetId);
+    if (overviewData.value) {
+      overviewData.value.defaultPointId = targetId;
+      overviewData.value.pointCards.forEach((c: any) => {
+        c.isDefault = (c.pointId === targetId);
+      });
+    }
+    showToast({ message: targetId ? '已锁定为默认业务座舱' : '已恢复默认首项', position: 'top', duration: 1000 });
+  } catch (err: any) {
+    showToast({ message: err.message || '设置失败', position: 'top' });
+  }
+};
 
 const { pollRateSec } = storeToRefs(dashboardStore);
 
@@ -280,14 +495,22 @@ const loadPoints = async () => {
   try {
     const list: any = await h5Api.getMyPoints();
     pointStore.setPoints(list);
-    if (list.length > 0 && !activePointId.value) {
-      activePointId.value = list[0].id;
+    if (!activePointId.value) {
+      if (pointStore.defaultPointId && list.some((p: any) => p.id === pointStore.defaultPointId)) {
+        activePointId.value = pointStore.defaultPointId;
+      } else if (list.length > 0) {
+        activePointId.value = list[0].id;
+      }
     }
   } catch (e) {}
 };
 
 // 轮询：拉取当前通道最新人数与变化，推入全局持久时序
 const pollTick = async () => {
+  if (isOverviewMode.value) {
+    await fetchOverview();
+    return;
+  }
   if (!activePointId.value) return;
   try {
     const data: any = await h5Api.getDashboardSummary(activePointId.value);
@@ -578,6 +801,37 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 210, 255, 0.12);
+  border: 1px solid rgba(0, 210, 255, 0.35);
+  color: var(--fs-primary, #00D2FF);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-toggle-btn:active {
+  transform: scale(0.95);
+  background: rgba(0, 210, 255, 0.25);
+}
+.mode-toggle-btn.active {
+  background: linear-gradient(135deg, #00D2FF, #0088FF);
+  color: #0A0D14;
+  border-color: #00D2FF;
+  font-weight: 700;
 }
 
 .live-status-pill {
@@ -1307,5 +1561,355 @@ onUnmounted(() => {
 }
 :global(.theme-light) .smc-title {
   color: var(--fs-text-main);
+}
+
+/* ==================== 多点位业务全览卡片流样式 ==================== */
+.flat-main-scroll {
+  overflow-y: auto !important;
+  justify-content: flex-start !important;
+  padding: 10px !important;
+}
+
+.overview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding-bottom: 24px;
+}
+
+.overview-global-hero {
+  background: var(--fs-card, #111723);
+  border: 1px solid var(--fs-card-border, #1E2838);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.hero-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fs-text-main, #FFFFFF);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fs-primary, #00D2FF);
+  box-shadow: 0 0 6px var(--fs-primary, #00D2FF);
+}
+
+.hero-status-pill {
+  font-size: 11px;
+  color: var(--fs-text-dim, #7A8CA5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot-green {
+  color: #00E676;
+  font-size: 10px;
+}
+
+.hero-metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.hero-subcard {
+  background: var(--fs-card-secondary, #161F2E);
+  border-radius: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid #00D2FF;
+}
+
+.hero-subcard.border-amber {
+  border-left-color: #FFA000;
+}
+
+.subcard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.subcard-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.tag-cyan {
+  background: rgba(0, 210, 255, 0.15);
+  color: #00D2FF;
+}
+
+.tag-amber {
+  background: rgba(255, 160, 0, 0.15);
+  color: #FFA000;
+}
+
+.subcard-count {
+  font-size: 10px;
+  color: var(--fs-text-dim, #7A8CA5);
+}
+
+.subcard-num {
+  font-size: 18px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  line-height: 1.2;
+}
+
+.subcard-unit {
+  font-size: 9px;
+  font-weight: normal;
+  margin-left: 2px;
+  color: var(--fs-text-dim, #7A8CA5);
+}
+
+.subcard-meta {
+  font-size: 10px;
+  color: var(--fs-text-dim, #7A8CA5);
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.list-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fs-text-dim, #7A8CA5);
+  padding: 0 4px;
+  margin-top: 4px;
+}
+
+.list-hint {
+  font-size: 10px;
+  font-weight: normal;
+  color: var(--fs-primary, #00D2FF);
+}
+
+.overview-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty-cards-box {
+  text-align: center;
+  padding: 30px 10px;
+  font-size: 12px;
+  color: var(--fs-text-dim, #7A8CA5);
+  background: var(--fs-card, #111723);
+  border-radius: 8px;
+}
+
+.point-biz-card {
+  background: var(--fs-card, #111723);
+  border: 1px solid var(--fs-card-border, #1E2838);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.point-biz-card:active {
+  transform: scale(0.985);
+  border-color: var(--fs-primary, #00D2FF);
+}
+
+.point-biz-card.biz-card-active {
+  border-color: var(--fs-primary, #00D2FF);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.12);
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.card-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.biz-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.pill-cyan {
+  background: rgba(0, 210, 255, 0.15);
+  color: #00D2FF;
+  border: 1px solid rgba(0, 210, 255, 0.3);
+}
+
+.pill-amber {
+  background: rgba(255, 160, 0, 0.15);
+  color: #FFA000;
+  border: 1px solid rgba(255, 160, 0, 0.3);
+}
+
+.card-name-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-point-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fs-text-main, #FFFFFF);
+}
+
+.card-point-code {
+  font-size: 10px;
+  color: var(--fs-text-dim, #7A8CA5);
+  font-family: monospace;
+}
+
+.card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-stream-pill {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.card-stream-pill.online {
+  background: rgba(0, 230, 118, 0.15);
+  color: #00E676;
+}
+
+.card-stream-pill.offline {
+  background: rgba(255, 61, 113, 0.15);
+  color: #FF3D71;
+}
+
+.btn-star-default {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid rgba(122, 140, 165, 0.3);
+  color: var(--fs-text-dim, #7A8CA5);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-star-default.active {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #FFD700;
+  color: #FFD700;
+  font-weight: 700;
+}
+
+.card-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  background: var(--fs-card-secondary, #161F2E);
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.card-kpi-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ck-label {
+  font-size: 9px;
+  color: var(--fs-text-dim, #7A8CA5);
+  margin-bottom: 2px;
+}
+
+.ck-val {
+  font-size: 13px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.ck-val small {
+  font-size: 8px;
+  font-weight: normal;
+  color: var(--fs-text-dim, #7A8CA5);
+}
+
+.card-footer-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: var(--fs-text-dim, #7A8CA5);
+  padding-top: 4px;
+  border-top: 1px dashed var(--fs-card-border, #1E2838);
+}
+
+.cf-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-arrow {
+  color: var(--fs-primary, #00D2FF);
+  font-weight: 600;
+  font-size: 10px;
+}
+
+/* 浅色主题适配 */
+:global(.theme-light) .mode-toggle-btn {
+  background: rgba(2, 132, 199, 0.1);
+  border-color: rgba(2, 132, 199, 0.3);
+  color: #0284C7;
+}
+:global(.theme-light) .mode-toggle-btn.active {
+  background: #0284C7;
+  color: #FFFFFF;
+}
+:global(.theme-light) .overview-global-hero,
+:global(.theme-light) .point-biz-card {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+:global(.theme-light) .hero-subcard,
+:global(.theme-light) .card-kpi-grid {
+  background: #F8FAFC;
+}
+:global(.theme-light) .card-point-name {
+  color: #0F172A;
 }
 </style>

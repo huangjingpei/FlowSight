@@ -9,17 +9,22 @@ import com.flowsight.cloud.entity.BizDeviceHeartbeat;
 import com.flowsight.cloud.entity.BizPassageEvent;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.entity.BizStatsHourly;
+import com.flowsight.cloud.entity.BusinessType;
 import com.flowsight.cloud.entity.SysUser;
 import com.flowsight.cloud.mapper.BizDeviceHeartbeatMapper;
 import com.flowsight.cloud.mapper.BizPassageEventMapper;
 import com.flowsight.cloud.mapper.BizPointMapper;
 import com.flowsight.cloud.mapper.BizStatsHourlyMapper;
+import com.flowsight.cloud.mapper.BusinessTypeMapper;
 import com.flowsight.cloud.mapper.SysUserMapper;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.MinioService;
+import com.flowsight.cloud.vo.DashboardOverviewVO;
+import com.flowsight.cloud.vo.DashboardPointCardVO;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.DemographicsVO;
 import com.flowsight.cloud.vo.EventItemVO;
+import com.flowsight.cloud.vo.GlobalMetricsVO;
 import com.flowsight.cloud.vo.HourlyStatVO;
 import com.flowsight.cloud.vo.TrendReportVO;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +62,9 @@ public class EventServiceImpl implements EventService {
 
     @Autowired
     private SysUserMapper userMapper;
+
+    @Autowired(required = false)
+    private BusinessTypeMapper businessTypeMapper;
 
     @Autowired
     private MinioService minioService;
@@ -811,5 +819,154 @@ public class EventServiceImpl implements EventService {
         }).collect(Collectors.toList()));
 
         return voPage;
+    }
+
+    @Override
+    public DashboardOverviewVO getDashboardOverview(Long userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("商户用户ID不能为空");
+        }
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("商户用户不存在");
+        }
+        Long defaultPointId = user.getDefaultPointId();
+
+        // 查询该商户名下所有未删除点位
+        List<BizPoint> points = pointMapper.selectList(new LambdaQueryWrapper<BizPoint>()
+                .eq(BizPoint::getUserId, userId)
+                .eq(BizPoint::getIsDeleted, 0)
+                .orderByAsc(BizPoint::getId));
+
+        // 预查业务类型字典构建友好名称映射
+        Map<String, String> bizTypeNameMap = new HashMap<>();
+        bizTypeNameMap.put("PEDESTRIAN", "客流检测分析");
+        bizTypeNameMap.put("VEHICLE", "车流检测分析");
+        if (businessTypeMapper != null) {
+            try {
+                List<BusinessType> btList = businessTypeMapper.selectList(null);
+                if (btList != null) {
+                    for (BusinessType bt : btList) {
+                        if (bt.getBizCode() != null && bt.getBizName() != null) {
+                            bizTypeNameMap.put(bt.getBizCode().toUpperCase(), bt.getBizName());
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("拉取业务类型字典映射异常: {}", ex.getMessage());
+            }
+        }
+
+        GlobalMetricsVO global = new GlobalMetricsVO();
+        global.setTotalPoints(points.size());
+
+        int onlineCount = 0;
+        int offlineCount = 0;
+        int pedCount = 0;
+        int vehCount = 0;
+
+        int totalPedOcc = 0;
+        int totalPedIn = 0;
+        int totalPedOut = 0;
+
+        int totalVehOcc = 0;
+        int totalVehIn = 0;
+        int totalVehOut = 0;
+
+        LocalDate today = LocalDate.now();
+        List<DashboardPointCardVO> cardList = new ArrayList<>();
+
+        for (BizPoint p : points) {
+            // 1. 查询点位当日累计出入数据
+            List<BizStatsHourly> hourlyList = statsMapper.selectList(new LambdaQueryWrapper<BizStatsHourly>()
+                    .eq(BizStatsHourly::getPointId, p.getId())
+                    .eq(BizStatsHourly::getStatDate, today));
+            int todayIn = 0;
+            int todayOut = 0;
+            if (hourlyList != null) {
+                for (BizStatsHourly h : hourlyList) {
+                    todayIn += (h.getEntryCount() != null ? h.getEntryCount() : 0);
+                    todayOut += (h.getExitCount() != null ? h.getExitCount() : 0);
+                }
+            }
+            int todayTotal = todayIn + todayOut;
+
+            // 2. 查询设备最新心跳与在线判定 (15秒内有心跳即判定 ONLINE)
+            BizDeviceHeartbeat hb = heartbeatMapper.selectById(p.getId());
+            boolean isOnline = false;
+            int occupancy = 0;
+            String clientName = "";
+            String lastHeartbeatStr = "";
+            if (hb != null && hb.getLastHeartbeat() != null) {
+                long seconds = ChronoUnit.SECONDS.between(hb.getLastHeartbeat(), LocalDateTime.now());
+                if (seconds >= 0 && seconds <= 15) {
+                    isOnline = true;
+                }
+                occupancy = (hb.getCurrentOccupancy() != null && hb.getCurrentOccupancy() >= 0) ? hb.getCurrentOccupancy() : 0;
+                clientName = hb.getClientName() != null ? hb.getClientName() : "";
+                lastHeartbeatStr = hb.getLastHeartbeat().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+
+            if (isOnline) {
+                onlineCount++;
+            } else {
+                offlineCount++;
+            }
+
+            // 3. 业务模式分类与全局累计
+            String rawBiz = p.getBizType() != null ? p.getBizType().trim().toUpperCase() : "PEDESTRIAN";
+            String friendlyName = bizTypeNameMap.getOrDefault(rawBiz, "PEDESTRIAN".equals(rawBiz) ? "客流检测分析" : ("VEHICLE".equals(rawBiz) ? "车流检测分析" : rawBiz));
+
+            if ("VEHICLE".equals(rawBiz)) {
+                vehCount++;
+                totalVehOcc += occupancy;
+                totalVehIn += todayIn;
+                totalVehOut += todayOut;
+            } else {
+                pedCount++;
+                totalPedOcc += occupancy;
+                totalPedIn += todayIn;
+                totalPedOut += todayOut;
+            }
+
+            // 4. 组装单卡片视图对象
+            DashboardPointCardVO card = new DashboardPointCardVO();
+            card.setPointId(p.getId());
+            card.setPointName(p.getPointName());
+            card.setPointCode(p.getPointCode());
+            card.setBizType(rawBiz);
+            card.setBizTypeName(friendlyName);
+            card.setStreamStatus(isOnline ? "ONLINE" : "OFFLINE");
+            card.setCurrentOccupancy(occupancy);
+            card.setTodayEntry(todayIn);
+            card.setTodayExit(todayOut);
+            card.setTodayTotal(todayTotal);
+            card.setSnapshotUrl(p.getSnapshotUrl() != null ? p.getSnapshotUrl() : "");
+            card.setDefault(defaultPointId != null && defaultPointId.equals(p.getId()));
+            card.setLastHeartbeat(lastHeartbeatStr);
+            card.setClientName(clientName);
+
+            cardList.add(card);
+        }
+
+        global.setOnlinePoints(onlineCount);
+        global.setOfflinePoints(offlineCount);
+        global.setPedestrianPoints(pedCount);
+        global.setVehiclePoints(vehCount);
+
+        global.setTotalPedestrianOccupancy(totalPedOcc);
+        global.setTotalPedestrianEntry(totalPedIn);
+        global.setTotalPedestrianExit(totalPedOut);
+
+        global.setTotalVehicleOccupancy(totalVehOcc);
+        global.setTotalVehicleEntry(totalVehIn);
+        global.setTotalVehicleExit(totalVehOut);
+
+        DashboardOverviewVO overview = new DashboardOverviewVO();
+        overview.setDefaultPointId(defaultPointId);
+        overview.setGlobalMetrics(global);
+        overview.setPointCards(cardList);
+
+        return overview;
     }
 }

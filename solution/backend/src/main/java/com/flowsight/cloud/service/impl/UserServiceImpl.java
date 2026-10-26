@@ -143,6 +143,7 @@ public class UserServiceImpl implements UserService {
         vo.setCompanyName(u.getCompanyName());
         vo.setContactPerson(u.getContactPerson());
         vo.setPointQuota(u.getPointQuota());
+        vo.setDefaultPointId(u.getDefaultPointId());
         vo.setExpireTime(u.getExpireTime());
         vo.setAvatar(u.getAvatar());
         vo.setStatus(u.getStatus());
@@ -168,6 +169,26 @@ public class UserServiceImpl implements UserService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        user.setUpdateTime(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void setDefaultPoint(Long userId, Long pointId) {
+        if (userId == null) throw new IllegalArgumentException("用户ID不能为空");
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) throw new IllegalArgumentException("用户不存在");
+
+        if (pointId != null && pointId > 0) {
+            BizPoint point = pointMapper.selectById(pointId);
+            if (point == null || (point.getIsDeleted() != null && point.getIsDeleted() == 1) || !userId.equals(point.getUserId())) {
+                throw new IllegalArgumentException("无效的监控点位或该点位不属于当前商户");
+            }
+            user.setDefaultPointId(pointId);
+        } else {
+            user.setDefaultPointId(null);
+        }
         user.setUpdateTime(LocalDateTime.now());
         userMapper.updateById(user);
     }

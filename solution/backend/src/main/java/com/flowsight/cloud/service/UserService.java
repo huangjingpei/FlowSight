@@ -12,4 +12,5 @@ public interface UserService {
     void deleteUserCascadeCloud(Long id);
     UserVO getUserById(Long id);
     void changePassword(Long userId, String oldPassword, String newPassword);
+    void setDefaultPoint(Long userId, Long pointId);
 }

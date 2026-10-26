@@ -105,8 +105,47 @@ export interface PairingCodeVO {
   expireAtMs: number;
 }
 
+export interface GlobalMetricsVO {
+  totalPoints: number;
+  onlinePoints: number;
+  offlinePoints: number;
+  pedestrianPoints: number;
+  vehiclePoints: number;
+  totalPedestrianOccupancy: number;
+  totalPedestrianEntry: number;
+  totalPedestrianExit: number;
+  totalVehicleOccupancy: number;
+  totalVehicleEntry: number;
+  totalVehicleExit: number;
+}
+
+export interface DashboardPointCardVO {
+  pointId: number;
+  pointName: string;
+  pointCode: string;
+  bizType: string;
+  bizTypeName: string;
+  streamStatus: string;
+  currentOccupancy: number;
+  todayEntry: number;
+  todayExit: number;
+  todayTotal: number;
+  snapshotUrl?: string;
+  isDefault: boolean;
+  lastHeartbeat?: string;
+  clientName?: string;
+}
+
+export interface DashboardOverviewVO {
+  defaultPointId: number | null;
+  globalMetrics: GlobalMetricsVO;
+  pointCards: DashboardPointCardVO[];
+}
+
 export const h5Api = {
   getMyPoints: () => api.get('/h5/points'),
+  getDashboardOverview: () => api.get<any, DashboardOverviewVO>('/h5/dashboard/overview'),
+  setDefaultPoint: (pointId: number | null) => api.post('/h5/user/default-point', { pointId }),
   getDashboardSummary: (pointId: number) => api.get('/h5/dashboard/summary', { params: { pointId } }),
   getTrends: (pointId: number, dimension = 'hour', days = 7) => api.get('/h5/dashboard/trends', { params: { pointId, dimension, days } }),
   getEvents: (paramsOrPointId: number | EventQueryParams, page = 1, size = 10) => {

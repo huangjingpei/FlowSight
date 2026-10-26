@@ -20,6 +20,7 @@ public class SysUser implements Serializable {
     private String companyName;
     private String contactPerson;
     private Integer pointQuota;
+    private Long defaultPointId; // 用户偏好的默认直达点位ID
     private LocalDateTime expireTime;
     private String avatar;
     private Integer status; // 1-正常, 0-禁用

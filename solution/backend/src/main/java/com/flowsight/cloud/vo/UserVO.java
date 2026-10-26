@@ -12,6 +12,7 @@ public class UserVO {
     private String companyName;
     private String contactPerson;
     private Integer pointQuota;
+    private Long defaultPointId;
     private LocalDateTime expireTime;
     private String avatar;
     private Integer status;

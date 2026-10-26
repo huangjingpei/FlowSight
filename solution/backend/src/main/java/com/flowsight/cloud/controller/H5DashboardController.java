@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.flowsight.cloud.common.Result;
 import com.flowsight.cloud.dto.ChangePasswordDTO;
 import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
+import com.flowsight.cloud.dto.SetDefaultPointDTO;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.PointService;
 import com.flowsight.cloud.service.UserService;
+import com.flowsight.cloud.vo.DashboardOverviewVO;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
 import com.flowsight.cloud.vo.EventItemVO;
 import com.flowsight.cloud.vo.PairingCodeVO;
@@ -49,6 +51,12 @@ public class H5DashboardController {
         return Result.success(pointService.listUserPoints(userId));
     }
 
+    @GetMapping("/dashboard/overview")
+    public Result<DashboardOverviewVO> getDashboardOverview(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        return Result.success(eventService.getDashboardOverview(userId));
+    }
+
     @GetMapping("/dashboard/summary")
     public Result<DashboardSummaryVO> getDashboardSummary(@RequestParam Long pointId, HttpServletRequest request) {
         checkPointOwnership(pointId, request);
@@ -84,6 +92,13 @@ public class H5DashboardController {
         Long userId = (Long) request.getAttribute("userId");
         userService.changePassword(userId, dto.getOldPassword(), dto.getNewPassword());
         return Result.success("密码修改成功，请妥善保管新密码", null);
+    }
+
+    @PostMapping("/user/default-point")
+    public Result<Void> setDefaultPoint(@RequestBody SetDefaultPointDTO dto, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        userService.setDefaultPoint(userId, dto != null ? dto.getPointId() : null);
+        return Result.success(dto != null && dto.getPointId() != null ? "默认业务座舱已锁定" : "默认业务座舱已解除", null);
     }
 
     /**

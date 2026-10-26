@@ -96,6 +96,17 @@
             <span class="cell-chevron">›</span>
           </div>
         </div>
+
+        <div class="menu-cell" @click="openModal('defaultPoint')">
+          <div class="cell-left">
+            <span class="cell-icon">📌</span>
+            <span class="cell-title">默认业务座舱</span>
+          </div>
+          <div class="cell-right">
+            <span class="cell-value">{{ currentDefaultPointLabel }}</span>
+            <span class="cell-chevron">›</span>
+          </div>
+        </div>
       </div>
 
       <!-- 分组 3: 界面显示 -->
@@ -407,6 +418,61 @@
       </div>
     </div>
 
+    <!-- 弹窗 9: 默认业务座舱选择 -->
+    <div v-if="activeModal === 'defaultPoint'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <span class="dh-title">设置默认业务座舱</span>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="dialog-tip" style="margin-bottom: 12px; font-size: 12px; color: var(--fs-text-dim, #7A8CA5); line-height: 1.4;">
+            选择每次登录或重新打开 FlowSight 时优先默认进入的业务通道。
+          </div>
+          <div class="rate-select-list">
+            <!-- 默认首项 (自动不锁定) -->
+            <div
+              :class="['rate-card', pointStore.defaultPointId === null ? 'rate-card-active' : '']"
+              @click="handleSelectDefaultPoint(null)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ pointStore.defaultPointId === null ? '●' : '○' }}</span>
+                <span class="rc-title">跟随首项 (自动)</span>
+              </div>
+              <span class="rc-sub">默认加载首个通道</span>
+            </div>
+
+            <!-- 具体点位列表 -->
+            <div
+              v-for="p in pointStore.points"
+              :key="p.id"
+              :class="['rate-card', pointStore.defaultPointId === p.id ? 'rate-card-active' : '']"
+              @click="handleSelectDefaultPoint(p.id)"
+            >
+              <div class="rc-left">
+                <span class="rc-radio">{{ pointStore.defaultPointId === p.id ? '●' : '○' }}</span>
+                <div>
+                  <div class="rc-title" style="display:flex; align-items:center; gap:6px;">
+                    <span>{{ p.pointName }}</span>
+                    <span
+                      style="font-size:10px; padding:1px 5px; border-radius:3px;"
+                      :style="p.bizType === 'VEHICLE' ? 'background:rgba(255,160,0,0.15); color:#FFA000;' : 'background:rgba(0,210,255,0.15); color:#00D2FF;'"
+                    >
+                      {{ p.bizType === 'VEHICLE' ? '车流' : '客流' }}
+                    </span>
+                  </div>
+                  <div style="font-size: 11px; color: var(--fs-text-dim, #7A8CA5);">{{ p.pointCode }}</div>
+                </div>
+              </div>
+              <span class="rc-sub" :style="pointStore.defaultPointId === p.id ? 'color: var(--fs-primary, #00D2FF); font-weight:600;' : ''">
+                {{ pointStore.defaultPointId === p.id ? '已设为默认' : '设为默认' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -449,8 +515,25 @@ const userProfile = computed(() => {
 });
 
 // 对话框弹窗状态管理 (取代页面内部折叠)
-type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | null;
+type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | 'defaultPoint' | null;
 const activeModal = ref<ModalType>(null);
+
+const currentDefaultPointLabel = computed(() => {
+  if (!pointStore.defaultPointId) return '跟随首项';
+  const found = pointStore.points.find(p => p.id === pointStore.defaultPointId);
+  return found ? found.pointName : '跟随首项';
+});
+
+const handleSelectDefaultPoint = async (pointId: number | null) => {
+  try {
+    await h5Api.setDefaultPoint(pointId);
+    pointStore.setDefaultPoint(pointId);
+    showToast(pointId ? '默认业务座舱已锁定' : '已恢复自动首项');
+    closeModal();
+  } catch (err: any) {
+    showToast(err.message || '设置失败');
+  }
+};
 
 const openModal = (type: ModalType) => {
   activeModal.value = type;
