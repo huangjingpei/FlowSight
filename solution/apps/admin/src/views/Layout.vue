@@ -25,6 +25,10 @@
           <el-icon><VideoCamera /></el-icon>
           <span>点位资产管理</span>
         </el-menu-item>
+        <el-menu-item index="/business-types">
+          <el-icon><Operation /></el-icon>
+          <span>业务类型管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

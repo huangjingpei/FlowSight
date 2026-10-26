@@ -29,13 +29,17 @@
           <el-select
             v-model="filterBizType"
             placeholder="业务感知模式"
-            style="width: 150px; margin-left: 12px;"
+            style="width: 170px; margin-left: 12px;"
             clearable
             @change="fetchPoints"
           >
             <el-option label="全部感知模式" value="" />
-            <el-option label="🚶 客流感知" value="PEDESTRIAN" />
-            <el-option label="🚗 车流感知" value="VEHICLE" />
+            <el-option
+              v-for="opt in bizTypeOptions"
+              :key="opt.bizCode"
+              :label="opt.bizName"
+              :value="opt.bizCode"
+            />
           </el-select>
         </div>
 
@@ -58,14 +62,18 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="bizType" label="感知业务模式" width="130" align="center">
+        <el-table-column prop="bizType" label="感知业务模式" width="170" align="center">
           <template #default="{ row }">
             <el-tag
-              :type="row.bizType === 'VEHICLE' ? 'warning' : 'success'"
               size="small"
               style="font-weight: bold; border-radius: 4px;"
+              :style="{
+                backgroundColor: (getBizTypeColor(row.bizType) || '#388bfd') + '18',
+                color: getBizTypeColor(row.bizType) || '#388bfd',
+                borderColor: (getBizTypeColor(row.bizType) || '#388bfd') + '45'
+              }"
             >
-              {{ row.bizType === 'VEHICLE' ? '🚗 车流感知' : '🚶 客流感知' }}
+              {{ getBizTypeName(row.bizType) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -140,11 +148,30 @@
         </el-form-item>
         <el-form-item label="业务感知模式" prop="bizType">
           <el-radio-group v-model="createForm.bizType" @change="handleBizTypeChange">
-            <el-radio-button label="PEDESTRIAN">🚶 客流分析 (人数与性别年龄)</el-radio-button>
-            <el-radio-button label="VEHICLE">🚗 车流分析 (机动车与车牌车型)</el-radio-button>
+            <el-radio-button
+              v-for="opt in bizTypeOptions"
+              :key="opt.bizCode"
+              :label="opt.bizCode"
+            >
+              {{ opt.bizName }}
+            </el-radio-button>
           </el-radio-group>
-          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-            {{ createForm.bizType === 'VEHICLE' ? '将调度边缘端 YOLO 机动车检测与 LPR 车牌识别算法' : '将调度边缘端 YOLO 人体检测与性别年龄推断算法' }}
+          <div v-if="getSelectedBizType(createForm.bizType)" style="font-size: 12px; color: #57606a; margin-top: 6px; line-height: 1.5; background: #f6f8fa; padding: 8px 12px; border-radius: 6px; border: 1px solid #e1e4e8;">
+            <div><b>业务要求：</b>{{ getSelectedBizType(createForm.bizType).description || '暂无描述' }}</div>
+            <div v-if="getSelectedBizType(createForm.bizType).deviceReq" style="margin-top: 2px;">
+              <b>采集建议：</b>{{ getSelectedBizType(createForm.bizType).deviceReq }}
+            </div>
+            <div style="margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+              <b>支持分析属性：</b>
+              <el-tag
+                v-for="feat in (getSelectedBizType(createForm.bizType).featureList || [])"
+                :key="feat"
+                size="small"
+                effect="light"
+              >
+                {{ feat }}
+              </el-tag>
+            </div>
           </div>
         </el-form-item>
         <el-form-item label="点位编码" prop="pointCode">
@@ -190,10 +217,29 @@
           <el-input v-model="editForm.pointName" />
         </el-form-item>
         <el-form-item label="业务感知模式">
-          <el-radio-group v-model="editForm.bizType">
-            <el-radio-button label="PEDESTRIAN">🚶 客流分析</el-radio-button>
-            <el-radio-button label="VEHICLE">🚗 车流分析</el-radio-button>
+          <el-radio-group v-model="editForm.bizType" @change="refreshEditSuggestedCode">
+            <el-radio-button
+              v-for="opt in bizTypeOptions"
+              :key="opt.bizCode"
+              :label="opt.bizCode"
+            >
+              {{ opt.bizName }}
+            </el-radio-button>
           </el-radio-group>
+          <div v-if="getSelectedBizType(editForm.bizType)" style="font-size: 12px; color: #57606a; margin-top: 6px; line-height: 1.5; background: #f6f8fa; padding: 8px 12px; border-radius: 6px; border: 1px solid #e1e4e8;">
+            <div><b>业务要求：</b>{{ getSelectedBizType(editForm.bizType).description || '暂无描述' }}</div>
+            <div style="margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+              <b>支持分析属性：</b>
+              <el-tag
+                v-for="feat in (getSelectedBizType(editForm.bizType).featureList || [])"
+                :key="feat"
+                size="small"
+                effect="light"
+              >
+                {{ feat }}
+              </el-tag>
+            </div>
+          </div>
           <div style="font-size: 12px; color: #909399; margin-top: 4px;">
             修改感知模式后，现场绑定的 FlowSight.exe 客户端在同步配置时将自动无感热切换算法模型
           </div>
@@ -253,6 +299,38 @@ const size = ref(10);
 const total = ref(0);
 const tableData = ref<any[]>([]);
 const userOptions = ref<any[]>([]);
+const bizTypeOptions = ref<any[]>([]);
+
+const fetchBizTypeOptions = async () => {
+  try {
+    const res: any = await adminApi.getBusinessTypeOptions();
+    bizTypeOptions.value = res || [];
+  } catch (e) {
+    bizTypeOptions.value = [
+      { bizCode: 'PEDESTRIAN', bizName: '客流检测与客群分析', colorTag: '#388bfd', featureList: ['人体检测', '性别分析', '年龄段识别'] },
+      { bizCode: 'VEHICLE', bizName: '车流检测与车辆分析', colorTag: '#e3b341', featureList: ['车辆检测', '车牌识别', '车型分类'] }
+    ];
+  }
+};
+
+const getSelectedBizType = (code: string) => {
+  return bizTypeOptions.value.find(b => b.bizCode === code);
+};
+
+const getBizTypeName = (code: string) => {
+  const opt = getSelectedBizType(code);
+  if (opt) return opt.bizName;
+  if (code === 'VEHICLE') return '车流检测与分析';
+  if (code === 'PEDESTRIAN') return '客流检测与分析';
+  return code || '未指定业务';
+};
+
+const getBizTypeColor = (code: string) => {
+  const opt = getSelectedBizType(code);
+  if (opt && opt.colorTag) return opt.colorTag;
+  if (code === 'VEHICLE') return '#e3b341';
+  return '#388bfd';
+};
 
 const filteredUserId = ref<number | undefined>(route.query.userId ? Number(route.query.userId) : undefined);
 const filteredPhone = ref<string | undefined>(route.query.phone as string);
@@ -444,6 +522,7 @@ const handleRefreshToken = (row: any) => {
 };
 
 onMounted(() => {
+  fetchBizTypeOptions();
   fetchPoints();
   loadUserOptions();
 });

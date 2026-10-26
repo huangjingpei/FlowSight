@@ -46,5 +46,14 @@ export const adminApi = {
   updatePoint: (id: number, data: any) => api.put(`/points/${id}`, data),
   deletePoint: (id: number) => api.delete(`/points/${id}`),
   refreshToken: (id: number) => api.post(`/points/${id}/token/refresh`),
-  generatePointCode: (bizType = 'PEDESTRIAN') => api.get('/points/generate-code', { params: { bizType } })
+  generatePointCode: (bizType = 'PEDESTRIAN') => api.get('/points/generate-code', { params: { bizType } }),
+
+  // 业务模型与感知业务类型管理
+  getBusinessTypes: (page = 1, size = 10, keyword = '') => api.get('/business-types', { params: { page, size, keyword } }),
+  getBusinessTypeOptions: () => api.get('/business-types/options'),
+  getBusinessType: (id: number) => api.get(`/business-types/${id}`),
+  createBusinessType: (data: any) => api.post('/business-types', data),
+  updateBusinessType: (id: number, data: any) => api.put(`/business-types/${id}`, data),
+  deleteBusinessType: (id: number) => api.delete(`/business-types/${id}`),
+  toggleBusinessTypeStatus: (id: number, status: number) => api.patch(`/business-types/${id}/status`, null, { params: { status } })
 };

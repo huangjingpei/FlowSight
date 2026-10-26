@@ -102,3 +102,33 @@ CREATE TABLE IF NOT EXISTS `biz_device_heartbeat` (
     `last_heartbeat` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最新心跳时间',
     PRIMARY KEY (`point_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='边缘设备健康心跳表';
+
+-- 6. 业务模型与感知业务类型配置表 (与点位表 biz_type 强关联，原生定义，无 ALTER TABLE)
+CREATE TABLE IF NOT EXISTS `sys_business_type` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '业务类型主键ID',
+    `biz_code` VARCHAR(32) NOT NULL COMMENT '业务模式英文唯一标识(与边缘端算法协议及点位biz_type一致,如PEDESTRIAN/VEHICLE)',
+    `biz_name` VARCHAR(64) NOT NULL COMMENT '业务模式中文名称',
+    `description` VARCHAR(500) DEFAULT '' COMMENT '业务定位场景与部署要求描述',
+    `features` VARCHAR(1000) DEFAULT '[]' COMMENT '支持的AI算法特征属性(JSON格式标签列表,如性别/年龄/车牌等)',
+    `device_req` VARCHAR(500) DEFAULT '' COMMENT '前端采集与硬件算力要求建议(如推荐分辨率/帧率/角度)',
+    `icon` VARCHAR(64) DEFAULT 'User' COMMENT '前端UI展示图标',
+    `color_tag` VARCHAR(16) DEFAULT '#388bfd' COMMENT '标签色彩十六进制值',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '业务启用状态: 1-启用, 0-停用',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '显示排序权重(数值越小越靠前)',
+    `is_system` TINYINT NOT NULL DEFAULT 0 COMMENT '系统预置标记: 1-系统内置(禁止删除), 0-自定义扩展',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_biz_code` (`biz_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='业务类型配置与AI特征属性表';
+
+-- 预置种子业务类型: 客流分析 与 车流分析
+INSERT INTO `sys_business_type` (`id`, `biz_code`, `biz_name`, `description`, `features`, `device_req`, `icon`, `color_tag`, `status`, `sort_order`, `is_system`)
+VALUES 
+(1, 'PEDESTRIAN', '客流检测与客群分析', '适用于人员通道、大门、闸机等出入口场景，实时进行人体检测跟踪、双向通行计数及性别、年龄段客群画像分析。', '["人体检测","轨迹跟踪","进出防区计数","性别分析","年龄段识别","客流密度"]', '推荐1080P/720P，帧率15-25fps，架高2.5m~3.5m下视角', 'User', '#388bfd', 1, 1, 1),
+(2, 'VEHICLE', '车流检测与车辆分析', '适用于停车场出入口、道路卡口、园区车道场景，实时进行机动车检测、车辆出入计数、车牌号码识别及车型、车身颜色分析。', '["车辆检测","车辆跟踪","车牌识别","号牌颜色识别","车型分类","车身颜色分析"]', '推荐1080P/2K，推荐抓拍焦距6~12mm，车道正面角度≤30度', 'Van', '#e3b341', 1, 2, 1)
+ON DUPLICATE KEY UPDATE 
+    `biz_name`=VALUES(`biz_name`), 
+    `description`=VALUES(`description`), 
+    `features`=VALUES(`features`), 
+    `device_req`=VALUES(`device_req`);

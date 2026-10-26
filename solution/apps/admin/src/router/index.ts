@@ -4,6 +4,7 @@ import Layout from '../views/Layout.vue';
 import Overview from '../views/Overview.vue';
 import UserManage from '../views/UserManage.vue';
 import PointManage from '../views/PointManage.vue';
+import BusinessTypeManage from '../views/BusinessTypeManage.vue';
 
 const routes = [
   { path: '/login', component: Login },
@@ -14,7 +15,8 @@ const routes = [
     children: [
       { path: 'overview', component: Overview, meta: { title: '运营总览' } },
       { path: 'users', component: UserManage, meta: { title: '用户管理' } },
-      { path: 'points', component: PointManage, meta: { title: '点位管理' } }
+      { path: 'points', component: PointManage, meta: { title: '点位管理' } },
+      { path: 'business-types', component: BusinessTypeManage, meta: { title: '业务类型配置' } }
     ]
   }
 ];

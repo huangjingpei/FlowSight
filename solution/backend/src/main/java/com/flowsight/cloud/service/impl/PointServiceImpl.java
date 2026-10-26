@@ -536,7 +536,18 @@ public class PointServiceImpl implements PointService {
 
     @Override
     public String generateUniquePointCode(String bizType) {
-        String prefix = "VEHICLE".equalsIgnoreCase(bizType) ? "PT_VEH_" : "PT_PED_";
+        String typePart = "PED";
+        if (bizType != null && !bizType.trim().isEmpty()) {
+            String b = bizType.trim().toUpperCase();
+            if ("VEHICLE".equalsIgnoreCase(b)) {
+                typePart = "VEH";
+            } else if ("PEDESTRIAN".equalsIgnoreCase(b)) {
+                typePart = "PED";
+            } else {
+                typePart = b.length() > 4 ? b.substring(0, 4) : b;
+            }
+        }
+        String prefix = "PT_" + typePart + "_";
         String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
         for (int i = 0; i < 30; i++) {
             String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 5).toUpperCase();
