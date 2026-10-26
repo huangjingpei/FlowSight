@@ -5,15 +5,10 @@ import Overview from '../views/Overview.vue';
 import UserManage from '../views/UserManage.vue';
 import PointManage from '../views/PointManage.vue';
 import BusinessTypeManage from '../views/BusinessTypeManage.vue';
-import DigitalScreen from '../views/DigitalScreen.vue';
 
 const routes = [
   { path: '/login', component: Login },
-  {
-    path: '/screen',
-    component: DigitalScreen,
-    meta: { title: 'FlowSight 智能视觉数字全景大屏' }
-  },
+  { path: '/screen', redirect: '/overview' },
   {
     path: '/',
     component: Layout,

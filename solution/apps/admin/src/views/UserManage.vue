@@ -70,11 +70,8 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" link type="success" @click="handleOpenScreen(row)">
-              🖥️ 专属大屏
-            </el-button>
             <el-button size="small" link type="primary" @click="jumpToPoints(row)">
               点位管理
             </el-button>
@@ -179,40 +176,6 @@
         <el-button type="primary" :loading="submitLoading" @click="submitEdit">保存修改</el-button>
       </template>
     </el-dialog>
-
-    <!-- 商户专属数字大屏投屏直达配置对话框 -->
-    <el-dialog v-model="screenDialogVisible" title="🖥️ 商户专属数字大屏投屏配置 (多租户隔离)" width="600px">
-      <div v-loading="screenLoading">
-        <el-alert
-          type="success"
-          :closable="false"
-          show-icon
-          title="多租户数据严格隔离保障"
-          description="该专属链接附带该商户专属的长效免密投屏凭据（180天有效），大屏仅展示该商户名下的通道画面、客流/车流指标与最新抓拍流水，绝不跨商户串数据。"
-          style="margin-bottom: 16px;"
-        />
-        <el-form label-width="120px" size="default">
-          <el-form-item label="商户企业全称:">
-            <span style="font-weight: 700; color: #303133; font-size: 15px;">{{ currentScreenInfo.companyName }}</span>
-          </el-form-item>
-          <el-form-item label="商户客户ID:">
-            <el-tag type="info">ID: {{ currentScreenInfo.userId }}</el-tag>
-          </el-form-item>
-          <el-form-item label="大屏直达地址:">
-            <el-input v-model="currentScreenInfo.fullScreenUrl" readonly type="textarea" :rows="3" />
-          </el-form-item>
-        </el-form>
-      </div>
-      <template #footer>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <el-button @click="copyScreenUrl" type="warning" plain>📋 复制大屏直达链接</el-button>
-          <div>
-            <el-button @click="screenDialogVisible = false">关闭</el-button>
-            <el-button type="primary" @click="openScreenInNewTab">🚀 立即在新窗口打开大屏</el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -232,44 +195,6 @@ const total = ref(0);
 const tableData = ref<any[]>([]);
 
 const createVisible = ref(false);
-const screenDialogVisible = ref(false);
-const screenLoading = ref(false);
-const currentScreenInfo = ref<any>({
-  userId: 0,
-  companyName: '',
-  fullScreenUrl: ''
-});
-
-const handleOpenScreen = async (row: any) => {
-  screenLoading.value = true;
-  screenDialogVisible.value = true;
-  try {
-    const res: any = await adminApi.getMerchantScreenUrl(row.id);
-    const host = window.location.origin + window.location.pathname;
-    const fullUrl = host + res.screenUrl;
-    currentScreenInfo.value = {
-      userId: res.userId,
-      companyName: res.companyName || row.companyName || row.phone,
-      fullScreenUrl: fullUrl
-    };
-  } catch (e) {
-    ElMessage.error('获取大屏投屏凭证失败');
-  } finally {
-    screenLoading.value = false;
-  }
-};
-
-const copyScreenUrl = () => {
-  navigator.clipboard.writeText(currentScreenInfo.value.fullScreenUrl).then(() => {
-    ElMessage.success('商户大屏专属直达链接已成功复制到剪贴板！');
-  }).catch(() => {
-    ElMessage.error('复制失败，请手动全选复制');
-  });
-};
-
-const openScreenInNewTab = () => {
-  window.open(currentScreenInfo.value.fullScreenUrl, '_blank');
-};
 
 const createFormRef = ref();
 const createForm = reactive({
