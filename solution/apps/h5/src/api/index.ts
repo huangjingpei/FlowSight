@@ -161,3 +161,7 @@ export const h5Api = {
   generatePairingCode: (pointId: number) => api.post(`/h5/points/${pointId}/pairing-code`),
   getScreenUrl: () => api.get<any, any>('/h5/user/screen-url')
 };
+
+export const adminApi = {
+  getUsers: (page = 1, size = 100) => api.get<any, any>('/admin/users', { params: { page, size } })
+};

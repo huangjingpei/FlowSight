@@ -34,40 +34,36 @@
           <!-- 点位与租户快速切换器 -->
           <div class="ctrl-group">
             <!-- 商户多租户透视切换器 (仅超管可见，商户自身大屏免密直达时自动锁定本商户并隐藏此选择器) -->
-            <el-select
+            <select
               v-if="isAdmin && tenantList.length > 0"
               v-model="activeTenantUserId"
-              placeholder="全域/商户透视"
-              size="small"
-              class="tenant-select"
-              popper-class="screen-select-popper"
+              class="hud-select tenant-select"
               @change="handleTenantChange"
             >
-              <el-option :value="0" label="🌐 FlowSight 全域指挥中心" />
-              <el-option
+              <option :value="0">🌐 FlowSight 全域指挥中心</option>
+              <option
                 v-for="t in tenantList"
                 :key="t.id"
                 :value="t.id"
-                :label="`🏢 ${t.companyName || t.nickname || t.phone}`"
-              />
-            </el-select>
+              >
+                🏢 {{ t.companyName || t.nickname || t.phone }}
+              </option>
+            </select>
 
-            <el-select
+            <select
               v-model="selectedPointId"
-              placeholder="通道选择"
-              size="small"
-              class="point-select"
-              popper-class="screen-select-popper"
+              class="hud-select point-select"
               @change="handlePointChange"
             >
-              <el-option :value="0" :label="activeTenantUserId > 0 ? '🏢 本商户全通道聚合' : '🌐 全域通道聚合态势'" />
-              <el-option
+              <option :value="0">{{ activeTenantUserId > 0 ? '🏢 本商户全通道聚合' : '🌐 全域通道聚合态势' }}</option>
+              <option
                 v-for="p in pointCards"
                 :key="p.pointId"
                 :value="p.pointId"
-                :label="`${p.streamStatus === 'ONLINE' ? '🟢' : '⚪'} ${p.pointName}`"
-              />
-            </el-select>
+              >
+                {{ p.streamStatus === 'ONLINE' ? '🟢' : '⚪' }} {{ p.pointName }}
+              </option>
+            </select>
 
             <!-- 自动轮巡开关 -->
             <button
@@ -326,8 +322,9 @@ import api, { adminApi } from '../api';
 const route = useRoute();
 const router = useRouter();
 
-// 投屏免密 Token 自动注入
+// 投屏免密 Token 自动注入 (同时写入 flowsight_token 与 flowsight_admin_token，兼容 H5 与 Admin)
 if (route.query.token) {
+  localStorage.setItem('flowsight_token', route.query.token as string);
   localStorage.setItem('flowsight_admin_token', route.query.token as string);
 }
 
@@ -465,7 +462,12 @@ const backToAdmin = () => {
   if (route.query.token && window.history.length <= 1) {
     window.close();
   } else {
-    router.push('/overview');
+    // 兼容 Admin 与 H5 两种不同基座路由
+    if (router.getRoutes().some((r) => r.path === '/overview')) {
+      router.push('/overview');
+    } else {
+      router.push('/dashboard');
+    }
   }
 };
 
@@ -1028,11 +1030,32 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
 }
+.hud-select {
+  height: 28px;
+  background-color: rgba(16, 26, 44, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 4px;
+  color: #f0f6fc;
+  font-size: 12px;
+  padding: 0 8px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.15) inset;
+}
+.hud-select:hover, .hud-select:focus {
+  border-color: #00f0ff;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.3) inset;
+}
+.hud-select option {
+  background-color: #0c1626;
+  color: #f0f6fc;
+}
 .tenant-select {
-  width: 175px;
+  width: 185px;
 }
 .point-select {
-  width: 165px;
+  width: 175px;
 }
 :deep(.el-input__wrapper) {
   background-color: rgba(16, 26, 44, 0.8) !important;
