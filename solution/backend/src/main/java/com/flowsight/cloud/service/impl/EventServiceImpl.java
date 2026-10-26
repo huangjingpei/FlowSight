@@ -185,6 +185,8 @@ public class EventServiceImpl implements EventService {
             if (userId != null) {
                 stringRedisTemplate.delete("flowsight:h5:overview:" + userId);
             }
+            // 同时驱逐平台管理员全局概览缓存 (用户 ID 为 1)
+            stringRedisTemplate.delete("flowsight:h5:overview:1");
         } catch (Exception ex) {
             log.warn("主动驱逐 Dashboard Redis 缓存异常: {}", ex.getMessage());
         }
@@ -972,11 +974,14 @@ public class EventServiceImpl implements EventService {
         }
         Long defaultPointId = user.getDefaultPointId();
 
-        // 查询该商户名下所有未删除点位
-        List<BizPoint> points = pointMapper.selectList(new LambdaQueryWrapper<BizPoint>()
-                .eq(BizPoint::getUserId, userId)
+        // 查询该商户名下所有未删除点位 (管理员角色 ROLE_ADMIN 可全局透视全平台所有激活点位)
+        LambdaQueryWrapper<BizPoint> pointWrapper = new LambdaQueryWrapper<BizPoint>()
                 .eq(BizPoint::getIsDeleted, 0)
-                .orderByAsc(BizPoint::getId));
+                .orderByAsc(BizPoint::getId);
+        if (!"ROLE_ADMIN".equalsIgnoreCase(user.getRole())) {
+            pointWrapper.eq(BizPoint::getUserId, userId);
+        }
+        List<BizPoint> points = pointMapper.selectList(pointWrapper);
 
         // 预查业务类型字典构建友好名称映射
         Map<String, String> bizTypeNameMap = new HashMap<>();
