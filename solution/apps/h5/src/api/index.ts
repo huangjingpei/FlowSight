@@ -59,6 +59,7 @@ export interface EventQueryParams {
 export interface DashboardSummaryVO {
   pointId: number;
   pointName: string;
+  bizType?: string;
   clientName: string;
   appVersion: string;
   lastHeartbeat: string;
@@ -76,6 +77,24 @@ export interface DashboardSummaryVO {
     topAgeGroup: string;
   };
   hourlyChart: any[];
+}
+
+export interface EventItemVO {
+  id: number;
+  pointId: number;
+  pointName: string;
+  trackId: number;
+  direction: string;
+  confidence: number;
+  gender: string;
+  ageGroup: string;
+  plateNumber?: string;
+  plateColor?: string;
+  vehicleType?: string;
+  vehicleColor?: string;
+  timestampMs: number;
+  datetime: string;
+  playUrl?: string;
 }
 
 export interface PairingCodeVO {

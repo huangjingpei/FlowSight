@@ -17,7 +17,10 @@
           <span :class="currentEvent.direction === 'ENTRY' ? 'tag-entry' : 'tag-exit'">
             {{ currentEvent.direction === 'ENTRY' ? '🟢 进入' : '🔴 离开' }}
           </span>
-          <span>{{ currentEvent.gender || '未知' }} / {{ currentEvent.ageGroup || '未知' }}</span>
+          <span v-if="currentEvent.plateNumber" style="color: #58a6ff; font-weight: bold;">
+            🚘 {{ currentEvent.plateNumber }} ({{ currentEvent.plateColor || '蓝牌' }}) · {{ currentEvent.vehicleColor || '' }}{{ currentEvent.vehicleType || '机动车' }}
+          </span>
+          <span v-else>{{ currentEvent.gender || '未知' }} / {{ currentEvent.ageGroup || '未知' }}</span>
         </div>
       </div>
 

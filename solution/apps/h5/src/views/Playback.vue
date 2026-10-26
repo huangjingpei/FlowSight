@@ -20,7 +20,7 @@
             <select v-model="filterPointId" class="flat-select" @change="onSearch">
               <option :value="0">全部通道点位</option>
               <option v-for="p in pointOptions" :key="p.id" :value="p.id">
-                [{{ p.id }}] {{ p.pointName }}
+                [{{ p.id }}] {{ p.pointName }} ({{ p.bizType === 'VEHICLE' ? '车流' : '客流' }})
               </option>
             </select>
           </div>
@@ -90,7 +90,10 @@
               </div>
               <div class="meta-sub">
                 <span class="time-str">{{ ev.datetime }}</span>
-                <span class="attr-str">{{ ev.gender || '未知' }} · {{ ev.ageGroup || '未知' }}</span>
+                <span v-if="ev.plateNumber" class="attr-str text-cyan" style="color: #58a6ff; font-weight: 600;">
+                  🚘 {{ ev.plateNumber }} ({{ ev.plateColor || '蓝牌' }}) · {{ ev.vehicleColor || '' }}{{ ev.vehicleType || '机动车' }}
+                </span>
+                <span v-else class="attr-str">{{ ev.gender || '未知' }} · {{ ev.ageGroup || '未知' }}</span>
               </div>
             </div>
 

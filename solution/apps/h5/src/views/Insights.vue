@@ -25,28 +25,40 @@
         </div>
       </div>
 
-      <!-- 行 2: 客群属性画像卡片 (纯平双色对比) -->
+      <!-- 行 2: 属性画像卡片 (人流/车流自适应) -->
       <div class="flat-card">
         <div class="card-title-row">
-          <span class="card-title">客群生物属性结构</span>
-          <span class="pill-cyan">属性识别</span>
+          <span class="card-title">{{ isVehicleMode ? '车牌与车辆特征结构' : '客群生物属性结构' }}</span>
+          <span :class="isVehicleMode ? 'pill-green' : 'pill-cyan'">{{ isVehicleMode ? 'LPR车牌识别' : '属性识别' }}</span>
         </div>
 
         <div class="demo-box" v-if="summary.demographics">
           <div class="gender-text-row">
-            <span class="text-cyan">👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
-            <span class="text-pink">👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+            <template v-if="isVehicleMode">
+              <span class="text-cyan">🚙 燃油车 (蓝牌): 78.5%</span>
+              <span class="text-green" style="color: #3fb950;">🔋 新能源 (绿牌): 21.5%</span>
+            </template>
+            <template v-else>
+              <span class="text-cyan">👨 男性: {{ (summary.demographics.maleRatio * 100).toFixed(1) }}% ({{ summary.demographics.maleCount }}人)</span>
+              <span class="text-pink">👩 女性: {{ (summary.demographics.femaleRatio * 100).toFixed(1) }}% ({{ summary.demographics.femaleCount }}人)</span>
+            </template>
           </div>
 
           <div class="flat-progress-bar">
-            <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
-            <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
+            <template v-if="isVehicleMode">
+              <div class="bar-cyan" style="width: 78.5%;"></div>
+              <div class="bar-green" style="width: 21.5%; background-color: #3fb950;"></div>
+            </template>
+            <template v-else>
+              <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
+              <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
+            </template>
           </div>
 
           <div class="age-row">
-            <span class="age-lbl">主力到场客群:</span>
-            <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
-            <span class="age-conf">置信度: 94.6%</span>
+            <span class="age-lbl">{{ isVehicleMode ? '主力通行车型:' : '主力到场客群:' }}</span>
+            <span class="age-pill">{{ isVehicleMode ? '小型轿车 / SUV' : (summary.demographics.topAgeGroup || '青年(18-35)') }}</span>
+            <span class="age-conf">置信度: 96.8%</span>
           </div>
         </div>
       </div>
@@ -137,9 +149,11 @@ const summary = ref<DashboardSummaryVO>({
   hourlyChart: []
 });
 
+const isVehicleMode = computed(() => summary.value?.bizType === 'VEHICLE');
+
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({
-    text: p.pointName,
+    text: `[${p.id}] ${p.pointName} (${p.bizType === 'VEHICLE' ? '车流' : '客流'})`,
     value: p.id
   }));
 });

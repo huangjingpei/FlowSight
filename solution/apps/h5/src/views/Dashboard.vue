@@ -34,46 +34,46 @@
         </span>
       </div>
 
-      <!-- 行 2: 四大核心客流指标矩阵 (扁平化高反差色块) -->
+      <!-- 行 2: 四大核心客流/车流指标矩阵 (扁平化高反差色块) -->
       <div class="kpi-matrix">
         <!-- 1. 瞬时滞留 -->
         <div class="kpi-block border-cyan">
           <div class="kpi-top">
-            <span class="kpi-title">瞬时在场</span>
+            <span class="kpi-title">{{ isVehicleMode ? '滞留车辆' : '瞬时在场' }}</span>
             <span class="kpi-badge badge-cyan">实时</span>
           </div>
-          <div class="kpi-num text-cyan">{{ summary.currentOccupancy }}<span class="kpi-unit">人</span></div>
-          <div class="kpi-footer">当前通道内滞留感知</div>
+          <div class="kpi-num text-cyan">{{ summary.currentOccupancy }}<span class="kpi-unit">{{ isVehicleMode ? '辆' : '人' }}</span></div>
+          <div class="kpi-footer">{{ isVehicleMode ? '当前通道内滞留车辆' : '当前通道内滞留感知' }}</div>
         </div>
 
         <!-- 2. 今日进入 -->
         <div class="kpi-block border-green">
           <div class="kpi-top">
-            <span class="kpi-title">累计进入 (In)</span>
+            <span class="kpi-title">{{ isVehicleMode ? '累计进车 (In)' : '累计进入 (In)' }}</span>
             <span class="kpi-badge badge-green">进场</span>
           </div>
-          <div class="kpi-num text-green">{{ summary.todayEntry }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">今日累计进门总人次</div>
+          <div class="kpi-num text-green">{{ summary.todayEntry }}<span class="kpi-unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+          <div class="kpi-footer">{{ isVehicleMode ? '今日累计进场车辆总数' : '今日累计进门总人次' }}</div>
         </div>
 
         <!-- 3. 今日离开 -->
         <div class="kpi-block border-orange">
           <div class="kpi-top">
-            <span class="kpi-title">累计离开 (Out)</span>
+            <span class="kpi-title">{{ isVehicleMode ? '累计出车 (Out)' : '累计离开 (Out)' }}</span>
             <span class="kpi-badge badge-orange">出场</span>
           </div>
-          <div class="kpi-num text-orange">{{ summary.todayExit }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">今日累计出门总人次</div>
+          <div class="kpi-num text-orange">{{ summary.todayExit }}<span class="kpi-unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+          <div class="kpi-footer">{{ isVehicleMode ? '今日累计出场车辆总数' : '今日累计出门总人次' }}</div>
         </div>
 
         <!-- 4. 双向总流 -->
         <div class="kpi-block border-purple">
           <div class="kpi-top">
-            <span class="kpi-title">双向总客流</span>
+            <span class="kpi-title">{{ isVehicleMode ? '双向总车流' : '双向总客流' }}</span>
             <span class="kpi-badge badge-purple">通量</span>
           </div>
-          <div class="kpi-num text-purple">{{ summary.todayTotal }}<span class="kpi-unit">人次</span></div>
-          <div class="kpi-footer">双向累计综合总人次</div>
+          <div class="kpi-num text-purple">{{ summary.todayTotal }}<span class="kpi-unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+          <div class="kpi-footer">{{ isVehicleMode ? '双向累计综合总车次' : '双向累计综合总人次' }}</div>
         </div>
       </div>
 
@@ -81,7 +81,12 @@
       <div class="flat-status-bar" :class="isSurged ? 'status-surged' : (summary.currentOccupancy > 20 ? 'status-warn' : 'status-ok')">
         <span class="status-icon">{{ isSurged ? '🚨' : (summary.currentOccupancy > 20 ? '⚠️' : '✓') }}</span>
         <span class="status-msg">
-          {{ isSurged ? `客流超限警戒：瞬时在场达到 ${summary.currentOccupancy} 人 (警戒线: 25人)，流速曲线已切换应急态！` : (summary.currentOccupancy > 20 ? '当前人流密度偏高，已触发人流疏导指引' : '通道通行状态感知与安全基线正常') }}
+          <template v-if="isVehicleMode">
+            {{ isSurged ? `车流超限警戒：滞留车辆达到 ${summary.currentOccupancy} 辆 (警戒线: 25辆)，流速已达瓶颈！` : (summary.currentOccupancy > 20 ? '当前车流密度偏高，已触发通道调度指引' : '车流通行状态感知与通道秩序正常') }}
+          </template>
+          <template v-else>
+            {{ isSurged ? `客流超限警戒：瞬时在场达到 ${summary.currentOccupancy} 人 (警戒线: 25人)，流速曲线已切换应急态！` : (summary.currentOccupancy > 20 ? '当前人流密度偏高，已触发人流疏导指引' : '通道通行状态感知与安全基线正常') }}
+          </template>
         </span>
       </div>
 
@@ -239,6 +244,7 @@ const summary = ref<DashboardSummaryVO>({
 
 const showSnapshotModal = ref(false);
 const isSurged = computed(() => (summary.value.currentOccupancy || 0) >= 25);
+const isVehicleMode = computed(() => summary.value?.bizType === 'VEHICLE');
 
 // 实时动态波形图表实例与定时器
 const pulseChartRef = ref<HTMLDivElement | null>(null);
@@ -253,7 +259,7 @@ const waveExitDelta = ref<number[]>([]);
 
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({
-    text: p.pointName,
+    text: `[${p.id}] ${p.pointName} (${p.bizType === 'VEHICLE' ? '车流' : '客流'})`,
     value: p.id
   }));
 });

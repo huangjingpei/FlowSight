@@ -108,7 +108,7 @@ let timer: any = null;
 
 const pointOptions = computed(() => {
   return pointStore.points.map((p) => ({
-    text: p.pointName,
+    text: `[${p.id}] ${p.pointName} (${p.bizType === 'VEHICLE' ? '车流' : '客流'})`,
     value: p.id
   }));
 });
