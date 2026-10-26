@@ -73,11 +73,13 @@ bool DatabaseManager::init_database(const QString& db_path) {
     q.exec("PRAGMA synchronous = NORMAL;");
     q.exec("PRAGMA busy_timeout = 5000;");
 
-    // 1. ROI 配置历史版本表
+    // 1. ROI 配置历史版本表 (原生完整字段定义，严禁使用 ALTER TABLE)
     q.exec(
         "CREATE TABLE IF NOT EXISTS roi_configs ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  source_id TEXT NOT NULL,"
+        "  roi_id INTEGER DEFAULT 1,"
+        "  name TEXT DEFAULT 'A门主通道',"
         "  roi_version INTEGER NOT NULL,"
         "  ref_width INTEGER NOT NULL,"
         "  ref_height INTEGER NOT NULL,"
@@ -85,21 +87,19 @@ bool DatabaseManager::init_database(const QString& db_path) {
         "  buffer_distance REAL DEFAULT 20.0,"
         "  min_confirm_frames INTEGER DEFAULT 4,"
         "  invert_direction INTEGER DEFAULT 0,"
+        "  color_hex TEXT DEFAULT '#58a6ff',"
+        "  flow_angle_deg REAL DEFAULT 90.0,"
         "  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
         ");"
     );
-    q.exec("ALTER TABLE roi_configs ADD COLUMN min_confirm_frames INTEGER DEFAULT 4;");
-    q.exec("ALTER TABLE roi_configs ADD COLUMN invert_direction INTEGER DEFAULT 0;");
-    q.exec("ALTER TABLE roi_configs ADD COLUMN roi_id INTEGER DEFAULT 1;");
-    q.exec("ALTER TABLE roi_configs ADD COLUMN name TEXT DEFAULT 'A门主通道';");
-    q.exec("ALTER TABLE roi_configs ADD COLUMN color_hex TEXT DEFAULT '#58a6ff';");
-    q.exec("ALTER TABLE roi_configs ADD COLUMN flow_angle_deg REAL DEFAULT 90.0;");
 
-    // 2. 通行明细表 (含短视频切片与属性)
+    // 2. 通行明细表 (含短视频切片、客群画像与车牌车流属性，原生完整定义，严禁使用 ALTER TABLE)
     q.exec(
         "CREATE TABLE IF NOT EXISTS passage_events ("
         "  event_id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  source_id TEXT NOT NULL,"
+        "  roi_id INTEGER DEFAULT 1,"
+        "  roi_name TEXT DEFAULT 'A门主通道',"
         "  timestamp_ms INTEGER NOT NULL,"
         "  track_id INTEGER NOT NULL,"
         "  direction INTEGER NOT NULL,"
@@ -107,18 +107,17 @@ bool DatabaseManager::init_database(const QString& db_path) {
         "  confidence REAL NOT NULL,"
         "  clip_path TEXT DEFAULT '',"
         "  gender TEXT DEFAULT '未知',"
-        "  age_group TEXT DEFAULT '未知'"
+        "  age_group TEXT DEFAULT '未知',"
+        "  foot_x REAL DEFAULT 0.0,"
+        "  foot_y REAL DEFAULT 0.0,"
+        "  plate_number TEXT DEFAULT '',"
+        "  plate_color TEXT DEFAULT '',"
+        "  vehicle_type TEXT DEFAULT '',"
+        "  vehicle_color TEXT DEFAULT ''"
         ");"
     );
-    q.exec("ALTER TABLE passage_events ADD COLUMN roi_id INTEGER DEFAULT 1;");
-    q.exec("ALTER TABLE passage_events ADD COLUMN roi_name TEXT DEFAULT 'A门主通道';");
-    q.exec("ALTER TABLE passage_events ADD COLUMN foot_x REAL DEFAULT 0.0;");
-    q.exec("ALTER TABLE passage_events ADD COLUMN foot_y REAL DEFAULT 0.0;");
-    q.exec("ALTER TABLE passage_events ADD COLUMN plate_number TEXT DEFAULT '';");
-    q.exec("ALTER TABLE passage_events ADD COLUMN plate_color TEXT DEFAULT '';");
-    q.exec("ALTER TABLE passage_events ADD COLUMN vehicle_type TEXT DEFAULT '';");
-    q.exec("ALTER TABLE passage_events ADD COLUMN vehicle_color TEXT DEFAULT '';");
     q.exec("CREATE INDEX IF NOT EXISTS idx_events_ts ON passage_events(timestamp_ms);");
+    q.exec("CREATE INDEX IF NOT EXISTS idx_events_plate ON passage_events(plate_number);");
 
     // 3. 小时级后台预聚合加速表 (P1-6)
     q.exec(

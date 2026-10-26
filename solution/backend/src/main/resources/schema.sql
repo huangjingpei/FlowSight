@@ -1,5 +1,5 @@
 -- FlowSight Cloud Backend Database Initialization Script (MySQL 8.0)
--- B2B 多租户边云协同智能客流 SaaS 平台数据定义与种子初始化
+-- B2B 多租户边云协同智能视觉分析 SaaS 平台数据定义与初始种子管理员
 
 -- 1. 用户认证与多租户客户表
 CREATE TABLE IF NOT EXISTS `sys_user` (
@@ -20,23 +20,12 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
     UNIQUE KEY `uk_phone` (`phone`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与多租户商户基础表';
 
--- 预置种子账号: 超级管理员与两大标杆试点商户客户
--- 1. 超级管理员 (手机号: 13800000000, 密码同号, BCrypt hash)
+-- 预置种子账号: 仅保留超级管理员账号 (手机号: 13800000000, 密码同号: 13800000000)
 INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
-VALUES (1, '13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '平台总管', 'FlowSight SaaS 运营指挥中心', '系统运维部', 999, '2099-12-31 23:59:59')
+VALUES (1, '13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '系统管理员', 'FlowSight SaaS 运营指挥中心', '系统运维部', 999, '2099-12-31 23:59:59')
 ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
 
--- 2. 商户客户 A: 万科物业 (手机号: 13454118762, 密码同号, BCrypt hash)
-INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
-VALUES (2, '13454118762', '$2a$10$pTPz9/fScp/.t97liVhJ.OmlqXEEVyhlZ/rbqFuu.IRFdtY5N73wK', 'ROLE_USER', '万科物业', '万科物业服务有限公司(未来城项目)', '刘经理', 10, '2028-12-31 23:59:59')
-ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
-
--- 3. 商户客户 B: 滨江政务中心 (手机号: 13900000002, 密码同号, BCrypt hash)
-INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
-VALUES (3, '13900000002', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_USER', '滨江政务', '滨江区政务服务中心办事大厅', '张主任', 5, '2028-12-31 23:59:59')
-ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
-
--- 2. 点位资产配置表
+-- 2. 点位资产配置表 (包含业务模式 biz_type 字段，原生定义，无 ALTER TABLE)
 CREATE TABLE IF NOT EXISTS `biz_point` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '点位主键ID',
     `user_id` BIGINT NOT NULL COMMENT '所属商户客户ID',
@@ -59,20 +48,7 @@ CREATE TABLE IF NOT EXISTS `biz_point` (
     KEY `idx_token` (`point_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='监控分析点位资产表';
 
--- 预置商户点位资产数据: 万科名下 2 点位 (人流+车流) + 滨江政务名下 1 点位 (预置默认设备接入密码: Edge@123456)
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (1, 2, '万科西区东门主入口', 'POINT_VK_EAST_01', '杭州市未来科技城万科天街东门主闸机', '', '1920x1080', 'PEDESTRIAN', 'ONLINE', 'ptk_c7c51284a35c43f5a5292927b9baea07', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `stream_status`=VALUES(`stream_status`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
-
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (2, 2, '万科西区地库机动车道', 'POINT_VK_BASE_02', 'B1层地下车库车辆出入道闸', '', '1920x1080', 'VEHICLE', 'OFFLINE', 'ptk_vanke_base_002', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `device_password_hash`=VALUES(`device_password_hash`);
-
-INSERT INTO `biz_point` (`id`, `user_id`, `point_name`, `point_code`, `address`, `camera_rtsp`, `resolution`, `biz_type`, `stream_status`, `point_token`, `device_password_hash`) 
-VALUES (3, 3, '政务审批大厅南大门', 'POINT_GOV_SOUTH_01', '市民中心政务审批大厅1号南门', '', '1920x1080', 'PEDESTRIAN', 'ONLINE', 'ptk_gov_south_003', 'Edge@123456')
-ON DUPLICATE KEY UPDATE `point_name`=VALUES(`point_name`), `user_id`=VALUES(`user_id`), `biz_type`=VALUES(`biz_type`), `point_token`=VALUES(`point_token`), `device_password_hash`=VALUES(`device_password_hash`);
-
--- 3. 通行结构化事件流水明细表 (支持人流属性与车流车牌属性)
+-- 3. 通行结构化事件流水明细表 (原生包含客流属性与车流车牌属性，无需任何 ALTER TABLE)
 CREATE TABLE IF NOT EXISTS `biz_passage_event` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '事件全局唯一流水ID',
     `point_id` BIGINT NOT NULL COMMENT '所属点位ID',
@@ -104,8 +80,8 @@ CREATE TABLE IF NOT EXISTS `biz_stats_hourly` (
     `user_id` BIGINT NOT NULL COMMENT '用户ID',
     `stat_date` DATE NOT NULL COMMENT '统计日期(yyyy-MM-dd)',
     `stat_hour` TINYINT NOT NULL COMMENT '统计小时段(0~23)',
-    `entry_count` INT NOT NULL DEFAULT 0 COMMENT '小时累计进入人数',
-    `exit_count` INT NOT NULL DEFAULT 0 COMMENT '小时累计离开人数',
+    `entry_count` INT NOT NULL DEFAULT 0 COMMENT '小时累计进入量',
+    `exit_count` INT NOT NULL DEFAULT 0 COMMENT '小时累计离开量',
     `male_count` INT NOT NULL DEFAULT 0 COMMENT '男性顾客人次',
     `female_count` INT NOT NULL DEFAULT 0 COMMENT '女性顾客人次',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -122,16 +98,7 @@ CREATE TABLE IF NOT EXISTS `biz_device_heartbeat` (
     `current_fps` FLOAT NOT NULL DEFAULT 0.0 COMMENT '边缘当前处理帧率',
     `infer_latency_ms` FLOAT NOT NULL DEFAULT 0.0 COMMENT '单帧平均推理延迟毫秒',
     `hardware_backend` VARCHAR(32) DEFAULT 'CPU' COMMENT '运行硬件后端(CUDA/CPU/RKNN)',
-    `current_occupancy` INT NOT NULL DEFAULT 0 COMMENT '当前防区滞留人数',
+    `current_occupancy` INT NOT NULL DEFAULT 0 COMMENT '当前防区滞留数',
     `last_heartbeat` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最新心跳时间',
     PRIMARY KEY (`point_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='边缘设备健康心跳表';
-
--- 预置点位 1 与点位 3 的初始实时心跳
-INSERT INTO `biz_device_heartbeat` (`point_id`, `client_name`, `client_version`, `current_fps`, `infer_latency_ms`, `hardware_backend`, `current_occupancy`)
-VALUES (1, 'FlowSight-Node-1', 'v1.2.0', 30.0, 14.5, 'CPU', 3)
-ON DUPLICATE KEY UPDATE `client_name`=VALUES(`client_name`), `current_fps`=VALUES(`current_fps`);
-
-INSERT INTO `biz_device_heartbeat` (`point_id`, `client_name`, `client_version`, `current_fps`, `infer_latency_ms`, `hardware_backend`, `current_occupancy`)
-VALUES (3, 'FlowSight-Gov-Box', 'v1.2.0', 25.0, 18.2, 'CUDA', 8)
-ON DUPLICATE KEY UPDATE `client_name`=VALUES(`client_name`), `current_fps`=VALUES(`current_fps`);
