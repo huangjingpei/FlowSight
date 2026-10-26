@@ -265,50 +265,149 @@
             </div>
           </div>
 
-          <!-- 2. 实时通行事件动态抓拍流水 -->
+          <!-- 2. 实时动态抓拍动态流水 (火车站/机场航班信息大屏 FIDS 滚动表格) -->
           <div class="hud-panel events-panel">
-            <div class="panel-header">
+            <div class="panel-header fids-header">
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-              <span class="panel-title"><i class="title-icon">🚨</i> 实时通行抓拍动态流水</span>
-              <span class="live-dot-pulse">LIVE</span>
+              <div class="header-title-box">
+                <span class="panel-title"><i class="title-icon">🚨</i> 实时动态抓拍动态流水</span>
+                <span class="fids-sub-badge">FIDS 滚动播报</span>
+              </div>
+              <div class="header-status-group">
+                <span class="scroll-status-tag" :class="{ 'is-paused': isTablePaused }">
+                  {{ isTablePaused ? '⏸ 悬停已暂停' : '▶ 动态滚动中' }}
+                </span>
+                <span class="live-dot-pulse">LIVE</span>
+              </div>
             </div>
-            <div class="panel-body stream-container">
-              <div class="event-stream-list" v-if="eventList.length > 0">
-                <div
-                  v-for="(ev, idx) in eventList"
-                  :key="ev.id || idx"
-                  class="stream-card"
-                  :class="ev.direction === 'ENTRY' ? 'card-entry' : 'card-exit'"
-                >
-                  <div class="card-icon">
-                    <span v-if="ev.direction === 'ENTRY'" class="badge-entry">入</span>
-                    <span v-else class="badge-exit">出</span>
-                  </div>
-                  <div class="card-meta">
-                    <div class="meta-row">
-                      <span class="ev-time">{{ formatTime(ev.timestampMs || ev.datetime) }}</span>
-                      <span class="ev-point">{{ ev.pointName || currentPointName }}</span>
+
+            <div class="panel-body fids-table-panel">
+              <!-- 火车站航班屏固定表头 -->
+              <div class="fids-table-header">
+                <div class="fids-col col-time">抓拍时间</div>
+                <div class="fids-col col-point">监测点位</div>
+                <div class="fids-col col-dir">通行方向</div>
+                <div class="fids-col col-attr">识别特征画像</div>
+                <div class="fids-col col-conf">置信度</div>
+                <div class="fids-col col-action">切片</div>
+              </div>
+
+              <!-- 火车站航班屏无缝连续平滑滚动体 -->
+              <div
+                class="fids-scroll-viewport"
+                ref="fidsScrollRef"
+                @mouseenter="onTableMouseEnter"
+                @mouseleave="onTableMouseLeave"
+              >
+                <div class="fids-scroll-track" v-if="displayEventList.length > 0">
+                  <div
+                    v-for="(ev, idx) in displayEventList"
+                    :key="`${ev.id || ev.timestampMs}_${idx}`"
+                    class="fids-row"
+                    :class="[
+                      idx % 2 === 0 ? 'row-even' : 'row-odd',
+                      ev.direction === 'ENTRY' ? 'row-entry' : 'row-exit',
+                      { 'has-clip': !!(ev.playUrl || ev.clipUrl) }
+                    ]"
+                    @click="handleRowClick(ev)"
+                  >
+                    <!-- 1. 时间 -->
+                    <div class="fids-col col-time">
+                      <span class="fids-time-mono">{{ formatTime(ev.timestampMs || ev.datetime) }}</span>
                     </div>
-                    <div class="meta-row sub-row">
-                      <span class="ev-attr">
-                        {{ ev.gender || '未知' }} · {{ ev.ageGroup || '未知' }}
+
+                    <!-- 2. 点位 -->
+                    <div class="fids-col col-point" :title="ev.pointName || currentPointName">
+                      <span class="point-pill">
+                        <span class="point-dot"></span>
+                        <span class="point-name-text">{{ ev.pointName || currentPointName }}</span>
                       </span>
-                      <span class="ev-conf">置信度: {{ Math.round((ev.confidence || 0.9) * 100) }}%</span>
                     </div>
-                  </div>
-                  <div class="card-thumb" v-if="ev.playUrl || ev.clipUrl">
-                    <span class="play-badge">▶ 切片</span>
+
+                    <!-- 3. 方向 (机场航班式 ARR / DEP 动态指示牌) -->
+                    <div class="fids-col col-dir">
+                      <span v-if="ev.direction === 'ENTRY'" class="fids-badge badge-arr">
+                        <i class="dir-icon">↘</i> 进 [ARR]
+                      </span>
+                      <span v-else class="fids-badge badge-dep">
+                        <i class="dir-icon">↗</i> 出 [DEP]
+                      </span>
+                    </div>
+
+                    <!-- 4. 智能识别特征画像 -->
+                    <div class="fids-col col-attr">
+                      <span v-if="ev.plateNumber" class="attr-veh-tag">
+                        🚗 <span class="plate-highlight">{{ ev.plateNumber }}</span>
+                        <span v-if="ev.vehicleColor || ev.vehicleType" class="sub-detail">
+                          · {{ ev.vehicleColor }}{{ ev.vehicleType }}
+                        </span>
+                      </span>
+                      <span v-else-if="ev.gender || ev.ageGroup" class="attr-ped-tag">
+                        👤 {{ ev.gender || '行人' }} · {{ ev.ageGroup || '未知' }}
+                      </span>
+                      <span v-else class="attr-ped-tag text-muted">
+                        👤 动态目标
+                      </span>
+                    </div>
+
+                    <!-- 5. 置信度 -->
+                    <div class="fids-col col-conf">
+                      <span class="conf-mono">{{ formatConfidence(ev.confidence) }}</span>
+                    </div>
+
+                    <!-- 6. 证据切片操作 -->
+                    <div class="fids-col col-action">
+                      <button
+                        v-if="ev.playUrl || ev.clipUrl"
+                        class="fids-clip-btn"
+                        @click.stop="openClipModal(ev)"
+                        title="点击播放视频存证切片"
+                      >
+                        ▶ 播放
+                      </button>
+                      <span v-else class="fids-no-clip">就绪</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div v-else class="stream-empty">
-                <span class="empty-icon">📡</span>
-                <span>等待现场通行事件流入...</span>
+
+                <div v-else class="stream-empty">
+                  <span class="empty-icon">📡</span>
+                  <span>现场雷达待命中，等待新通行事件流入...</span>
+                </div>
               </div>
             </div>
           </div>
         </section>
       </main>
+    </div>
+
+    <!-- 抓拍视频切片 HUD 回放弹窗 -->
+    <div v-if="clipModalVisible" class="fids-modal-overlay" @click.self="closeClipModal">
+      <div class="fids-modal-box">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="icon">📹</span>
+            <span>抓拍事件切片回放 · 现场存证核验</span>
+          </div>
+          <button class="modal-close-btn" @click="closeClipModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <video
+            v-if="currentClipUrl"
+            :src="currentClipUrl"
+            controls
+            autoplay
+            class="clip-video-player"
+          ></video>
+          <div class="modal-meta-bar">
+            <div class="meta-item"><span class="k">监控点位:</span> <span class="v">{{ currentClipMeta.pointName }}</span></div>
+            <div class="meta-item"><span class="k">抓拍时间:</span> <span class="v font-mono">{{ currentClipMeta.time }}</span></div>
+            <div class="meta-item"><span class="k">事件方向:</span> <span class="v" :class="currentClipMeta.direction === 'ENTRY' ? 'text-entry' : 'text-exit'">{{ currentClipMeta.direction === 'ENTRY' ? '↘ 入场 [ARR]' : '↗ 离场 [DEP]' }}</span></div>
+            <div class="meta-item"><span class="k">目标画像:</span> <span class="v">{{ currentClipMeta.attributes }}</span></div>
+            <div class="meta-item"><span class="k">置信度:</span> <span class="v text-cyan">{{ currentClipMeta.confidence }}</span></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -407,6 +506,112 @@ const peakHourInfo = ref('');
 
 // 最新流水
 const eventList = ref<any[]>([]);
+
+// ==================== 火车站/机场 FIDS 动态流水无缝滚动引擎 ====================
+const fidsScrollRef = ref<HTMLElement | null>(null);
+const isTablePaused = ref(false);
+let scrollAnimationId: number | null = null;
+let lastScrollTimestamp = 0;
+
+const onTableMouseEnter = () => {
+  isTablePaused.value = true;
+};
+
+const onTableMouseLeave = () => {
+  isTablePaused.value = false;
+};
+
+const formatConfidence = (conf: any) => {
+  if (conf === null || conf === undefined) return '98.5%';
+  const num = Number(conf);
+  if (isNaN(num)) return '98.5%';
+  const pct = num <= 1.0 ? num * 100 : num;
+  return pct.toFixed(1) + '%';
+};
+
+// 构造无缝循环数据源：首尾相接无限滚动
+const displayEventList = computed(() => {
+  const list = eventList.value;
+  if (!list || list.length === 0) return [];
+  if (list.length < 8) {
+    return [...list, ...list, ...list, ...list];
+  }
+  return [...list, ...list];
+});
+
+const startInfiniteScroll = () => {
+  if (scrollAnimationId) {
+    cancelAnimationFrame(scrollAnimationId);
+    scrollAnimationId = null;
+  }
+  lastScrollTimestamp = 0;
+
+  const step = (now: number) => {
+    if (!lastScrollTimestamp) lastScrollTimestamp = now;
+    const elapsed = now - lastScrollTimestamp;
+    lastScrollTimestamp = now;
+
+    if (!isTablePaused.value && fidsScrollRef.value && displayEventList.value.length > 0) {
+      const el = fidsScrollRef.value;
+      // 匀速向上平滑滚动（每秒约 32px，完全无感平移）
+      const delta = (32 * elapsed) / 1000;
+      el.scrollTop += delta;
+
+      const half = el.scrollHeight / 2;
+      if (el.scrollTop >= half && half > 0) {
+        el.scrollTop = el.scrollTop - half;
+      }
+    }
+    scrollAnimationId = requestAnimationFrame(step);
+  };
+
+  scrollAnimationId = requestAnimationFrame(step);
+};
+
+const stopInfiniteScroll = () => {
+  if (scrollAnimationId) {
+    cancelAnimationFrame(scrollAnimationId);
+    scrollAnimationId = null;
+  }
+};
+
+// ==================== 现场切片 HUD 视频弹窗 ====================
+const clipModalVisible = ref(false);
+const currentClipUrl = ref('');
+const currentClipMeta = ref({
+  pointName: '',
+  time: '',
+  direction: 'ENTRY',
+  attributes: '',
+  confidence: '95%'
+});
+
+const openClipModal = (ev: any) => {
+  const url = ev.playUrl || ev.clipUrl;
+  if (!url) return;
+  currentClipUrl.value = url;
+  currentClipMeta.value = {
+    pointName: ev.pointName || currentPointName.value,
+    time: formatTime(ev.timestampMs || ev.datetime),
+    direction: ev.direction || 'ENTRY',
+    attributes: ev.plateNumber
+      ? `车牌: ${ev.plateNumber} · ${ev.vehicleColor || ''}${ev.vehicleType || '车辆'}`
+      : `${ev.gender || '行人'} · ${ev.ageGroup || '未知'}`,
+    confidence: formatConfidence(ev.confidence)
+  };
+  clipModalVisible.value = true;
+};
+
+const closeClipModal = () => {
+  clipModalVisible.value = false;
+  currentClipUrl.value = '';
+};
+
+const handleRowClick = (ev: any) => {
+  if (ev.playUrl || ev.clipUrl) {
+    openClipModal(ev);
+  }
+};
 
 // ==================== 图表实例与引用 ====================
 const flowChartRef = ref<HTMLElement | null>(null);
@@ -575,7 +780,7 @@ const fetchData = async () => {
     // 5. 拉取最新通行流水 (传递 activeTenantUserId 确保数据严格隔离)
     const eventParams: any = {
       page: 1,
-      size: 12
+      size: 25
     };
     if (selectedPointId.value > 0) {
       eventParams.pointId = selectedPointId.value;
@@ -825,6 +1030,7 @@ onMounted(() => {
   nextTick(() => {
     loadUserProfileAndTenants();
     fetchData();
+    startInfiniteScroll();
   });
 
   // 每 4 秒拉取一次最新缓存态势
@@ -842,6 +1048,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  stopInfiniteScroll();
   window.removeEventListener('resize', updateScale);
   if (clockTimer) clearInterval(clockTimer);
   if (dataPollingTimer) clearInterval(dataPollingTimer);
@@ -1500,9 +1707,58 @@ onUnmounted(() => {
   min-height: 130px;
 }
 
+/* ==================== 实时动态抓拍动态流水 (火车站/机场航班信息大屏 FIDS 表格) ==================== */
 .events-panel {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+.fids-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fids-sub-badge {
+  font-size: 10px;
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.header-status-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scroll-status-tag {
+  font-size: 11px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 1px 8px;
+  border-radius: 10px;
+  transition: all 0.25s ease;
+}
+
+.scroll-status-tag.is-paused {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
 .live-dot-pulse {
   font-size: 10px;
   color: #ff3366;
@@ -1513,85 +1769,245 @@ onUnmounted(() => {
   animation: pulse-beacon 1.5s infinite;
 }
 
-.stream-container {
-  padding: 6px;
-  overflow: hidden;
-}
-.event-stream-list {
+.fids-table-panel {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-/* 隐藏原生滚动条 */
-.event-stream-list::-webkit-scrollbar {
-  width: 4px;
-}
-.event-stream-list::-webkit-scrollbar-thumb {
-  background: rgba(0, 240, 255, 0.2);
-  border-radius: 2px;
+  padding: 6px 8px 10px;
+  overflow: hidden;
 }
 
-.stream-card {
+/* 固定表头 */
+.fids-table-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  background: rgba(16, 26, 44, 0.7);
-  border-left: 3px solid #00f0ff;
-  transition: all 0.25s;
+  height: 32px;
+  background: rgba(12, 22, 40, 0.95);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 4px 4px 0 0;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7dd3fc;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
-.stream-card.card-exit {
+
+.fids-col {
+  padding: 0 3px;
+  box-sizing: border-box;
+}
+
+.col-time {
+  width: 66px;
+  flex-shrink: 0;
+}
+
+.col-point {
+  width: 86px;
+  flex-shrink: 0;
+}
+
+.col-dir {
+  width: 76px;
+  flex-shrink: 0;
+}
+
+.col-attr {
+  flex: 1;
+  min-width: 85px;
+}
+
+.col-conf {
+  width: 48px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.col-action {
+  width: 52px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* 连续平滑无缝滚动视口 */
+.fids-scroll-viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  /* 机场大屏特有的顶部与底部边缘微弱羽化渐变 */
+  mask-image: linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
+}
+
+.fids-scroll-track {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 4px;
+}
+
+/* 滚动表格行 (类似火车站航班翻滚式黑曜石高对比度条目) */
+.fids-row {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #f1f5f9;
+  border-left: 3px solid #00f0ff;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.fids-row.row-even {
+  background: rgba(16, 28, 48, 0.65);
+}
+
+.fids-row.row-odd {
+  background: rgba(10, 20, 36, 0.45);
+}
+
+.fids-row.row-exit {
   border-left-color: #ff3366;
 }
-.stream-card:hover {
-  background: rgba(0, 240, 255, 0.1);
+
+.fids-row:hover {
+  background: rgba(0, 240, 255, 0.16);
+  box-shadow: inset 0 0 12px rgba(0, 240, 255, 0.25);
+  cursor: pointer;
+  transform: translateX(2px);
 }
-.badge-entry {
-  display: inline-block;
-  padding: 2px 6px;
-  background: rgba(0, 240, 255, 0.15);
-  color: #00f0ff;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: bold;
+
+.fids-row.has-clip:hover .fids-clip-btn {
+  background: #00f0ff;
+  color: #030712;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.8);
 }
-.badge-exit {
-  display: inline-block;
-  padding: 2px 6px;
-  background: rgba(255, 51, 102, 0.15);
-  color: #ff3366;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: bold;
-}
-.card-meta {
-  flex: 1;
-}
-.meta-row {
-  display: flex;
-  justify-content: space-between;
+
+/* 单元格微视觉样式 */
+.fids-time-mono {
+  font-family: 'JetBrains Mono', 'Roboto Mono', Consolas, monospace;
   font-size: 12px;
-  color: #f0f6fc;
+  font-weight: 600;
+  color: #38bdf8;
+  letter-spacing: 0.5px;
 }
-.sub-row {
+
+.point-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.point-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #00f0ff;
+  box-shadow: 0 0 6px #00f0ff;
+  flex-shrink: 0;
+}
+
+.point-name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
-  color: #8b9cb5;
-  margin-top: 3px;
+  color: #e2e8f0;
 }
-.ev-conf {
+
+/* 机场/火车站式进出场状态标签 [ARR] / [DEP] */
+.fids-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.badge-arr {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+}
+
+.badge-dep {
+  color: #ff3366;
+  background: rgba(255, 51, 102, 0.15);
+  border: 1px solid rgba(255, 51, 102, 0.4);
+}
+
+.dir-icon {
+  font-style: normal;
+  font-weight: bold;
+}
+
+/* 属性特征识别 */
+.attr-veh-tag {
+  color: #cbd5e1;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.plate-highlight {
+  color: #facc15;
+  font-weight: 700;
+  background: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  padding: 0 4px;
+  border-radius: 2px;
+  font-family: monospace;
+}
+
+.sub-detail {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.attr-ped-tag {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+
+.text-muted {
+  color: #64748b;
+}
+
+.conf-mono {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
   color: #38bdf8;
 }
-.card-thumb {
-  font-size: 11px;
+
+.fids-clip-btn {
+  background: rgba(0, 240, 255, 0.15);
   color: #00f0ff;
-  background: rgba(0, 240, 255, 0.08);
-  padding: 3px 6px;
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  padding: 2px 8px;
   border-radius: 3px;
-  border: 1px solid rgba(0, 240, 255, 0.25);
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fids-clip-btn:hover {
+  background: #00f0ff;
+  color: #030712;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
+}
+
+.fids-no-clip {
+  color: #475569;
+  font-size: 10px;
 }
 
 .stream-empty {
@@ -1599,10 +2015,128 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: #6e7681;
+  height: 220px;
+  color: #64748b;
   font-size: 13px;
   gap: 8px;
+}
+
+/* ==================== 抓拍视频存证切片回放弹窗 ==================== */
+.fids-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(3, 7, 18, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fids-modal-box {
+  width: 780px;
+  max-width: 92vw;
+  background: #0b1528;
+  border: 1px solid #00f0ff;
+  border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0, 240, 255, 0.35);
+  overflow: hidden;
+  animation: modal-pop 0.25s ease-out;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 18px;
+  background: rgba(16, 28, 48, 0.95);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #00f0ff;
+  letter-spacing: 0.5px;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 18px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.modal-close-btn:hover {
+  color: #ff3366;
+}
+
+.modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clip-video-player {
+  width: 100%;
+  max-height: 420px;
+  background: #000;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.modal-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 14px;
+  background: rgba(16, 26, 44, 0.7);
+  border-radius: 4px;
+  border: 1px solid rgba(43, 55, 78, 0.5);
+  font-size: 12px;
+}
+
+.meta-item .k {
+  color: #8b9cb5;
+  margin-right: 4px;
+}
+
+.meta-item .v {
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.font-mono {
+  font-family: monospace;
+}
+
+.text-entry {
+  color: #00f0ff !important;
+}
+
+.text-exit {
+  color: #ff3366 !important;
+}
+
+.text-cyan {
+  color: #38bdf8 !important;
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes pulse-beacon {
