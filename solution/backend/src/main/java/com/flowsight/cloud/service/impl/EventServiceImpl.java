@@ -373,7 +373,15 @@ public class EventServiceImpl implements EventService {
     @Override
     public void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto) {
         BizPoint point = pointMapper.selectById(pointId);
+        if (point != null) {
+            recordHeartbeat(point, dto);
+        }
+    }
+
+    @Override
+    public void recordHeartbeat(BizPoint point, EdgeHeartbeatDTO dto) {
         if (point == null) return;
+        Long pointId = point.getId();
 
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
         boolean isNew = (hb == null);
@@ -397,16 +405,21 @@ public class EventServiceImpl implements EventService {
             heartbeatMapper.updateById(hb);
         }
 
-        // 根据状态标志判断是否下线
+        // 根据状态标志判断是否下线或上线 (状态无变化时严禁重复触发 updateById，保护数据库 WAL 与 I/O)
         if ("OFFLINE".equalsIgnoreCase(dto.getStatus())) {
-            point.setStreamStatus("OFFLINE");
+            if (!"OFFLINE".equalsIgnoreCase(point.getStreamStatus())) {
+                point.setStreamStatus("OFFLINE");
+                pointMapper.updateById(point);
+            }
             hb.setCurrentOccupancy(0);
             hb.setCurrentFps(0.0f);
             heartbeatMapper.updateById(hb);
         } else {
-            point.setStreamStatus("ONLINE");
+            if (!"ONLINE".equalsIgnoreCase(point.getStreamStatus())) {
+                point.setStreamStatus("ONLINE");
+                pointMapper.updateById(point);
+            }
         }
-        pointMapper.updateById(point);
     }
 
     @Override

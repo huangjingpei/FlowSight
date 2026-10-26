@@ -45,7 +45,8 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 采用 SLF4J 统一日志通道，替代无条件 StdOutImpl 控制台强刷，杜绝控制台 I/O 阻塞
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       id-type: auto
@@ -67,4 +68,5 @@ jwt:
 logging:
   level:
     root: INFO
-    com.flowsight.cloud: DEBUG
+    com.flowsight.cloud: INFO
+    com.flowsight.cloud.mapper: WARN

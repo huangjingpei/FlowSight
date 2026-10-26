@@ -95,7 +95,7 @@ public class EdgeIngestController {
     public Result<Void> heartbeat(@RequestHeader(value = "X-Point-Token", required = false) String token,
                                   @RequestBody EdgeHeartbeatDTO dto) {
         BizPoint point = authenticateEdge(token);
-        eventService.recordHeartbeat(point.getId(), dto);
+        eventService.recordHeartbeat(point, dto);
         return Result.success(null);
     }
 

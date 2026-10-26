@@ -13,6 +13,9 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 边缘设备在线状态看门狗服务
@@ -30,6 +33,7 @@ public class HeartbeatWatchdog {
 
     @Scheduled(fixedRate = 5000)
     public void scanDeviceHeartbeats() {
+        // 1. 查询当前所有在线的点位
         List<BizPoint> onlinePoints = pointMapper.selectList(new LambdaQueryWrapper<BizPoint>()
                 .eq(BizPoint::getStreamStatus, "ONLINE"));
 
@@ -37,9 +41,16 @@ public class HeartbeatWatchdog {
             return;
         }
 
+        // 2. 批量查询对应心跳记录，消除循环单条查询的 N+1 数据库性能隐患
+        List<Long> pointIds = onlinePoints.stream().map(BizPoint::getId).collect(Collectors.toList());
+        List<BizDeviceHeartbeat> heartbeats = heartbeatMapper.selectBatchIds(pointIds);
+        Map<Long, BizDeviceHeartbeat> hbMap = (heartbeats != null) ?
+                heartbeats.stream().collect(Collectors.toMap(BizDeviceHeartbeat::getPointId, Function.identity(), (a, b) -> a))
+                : Map.of();
+
         LocalDateTime now = LocalDateTime.now();
         for (BizPoint point : onlinePoints) {
-            BizDeviceHeartbeat hb = heartbeatMapper.selectById(point.getId());
+            BizDeviceHeartbeat hb = hbMap.get(point.getId());
             boolean isTimeout = false;
             if (hb == null || hb.getLastHeartbeat() == null) {
                 isTimeout = true;

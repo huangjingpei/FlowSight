@@ -15,6 +15,7 @@ public interface EventService {
     String uploadEdgeClip(Long pointId, Integer trackId, Long timestamp, MultipartFile file);
     String uploadEdgeSnapshot(Long pointId, MultipartFile file);
     void recordHeartbeat(Long pointId, EdgeHeartbeatDTO dto);
+    void recordHeartbeat(com.flowsight.cloud.entity.BizPoint point, EdgeHeartbeatDTO dto);
     DashboardSummaryVO getDashboardSummary(Long pointId);
     TrendReportVO getTrendReport(Long pointId, String dimension, Integer days);
     Page<EventItemVO> pageEvents(Long userId, Long pointId, String startDate, String endDate, String direction, int page, int size);
