@@ -689,21 +689,30 @@ const loadUserProfileAndTenants = async () => {
       const company = profileRes.companyName || profileRes.nickname || profileRes.phone;
       currentMerchantName.value = company;
 
-      if (activeTenantUserId.value > 0) {
+      // 关键多租户安全隔离保障：
+      // 若当前登录者是企业商户 (ROLE_USER)，强制将当前大屏严格锁定到商户自身名下与企业全称，清空超管租户列表，杜绝串商户！
+      if (!isAdmin.value) {
+        activeTenantUserId.value = profileRes.id;
         screenTitle.value = `${company} · 智能视觉全景调度大屏`;
+        tenantList.value = [];
       } else {
-        screenTitle.value = 'FlowSight 运营指挥中心 · 全域智能视觉大屏';
-      }
+        // 平台超级管理员模式：支持全域透视或透视指定商户
+        if (activeTenantUserId.value > 0) {
+          screenTitle.value = `${company} · 智能视觉全景调度大屏`;
+        } else {
+          screenTitle.value = 'FlowSight 运营指挥中心 · 全域智能视觉大屏';
+        }
 
-      // 如果当前登录身份是平台超级管理员，拉取商户用户列表供快速切屏
-      if (isAdmin.value && tenantList.value.length === 0) {
-        try {
-          const userRes: any = await adminApi.getUsers(1, 100);
-          if (userRes && userRes.records) {
-            tenantList.value = userRes.records.filter((u: any) => u.role !== 'ROLE_ADMIN');
+        // 如果当前登录身份是平台超级管理员，拉取商户用户列表供快速切屏
+        if (tenantList.value.length === 0) {
+          try {
+            const userRes: any = await adminApi.getUsers(1, 100);
+            if (userRes && userRes.records) {
+              tenantList.value = userRes.records.filter((u: any) => u.role !== 'ROLE_ADMIN');
+            }
+          } catch (e) {
+            console.warn('[DigitalScreen] 拉取商户列表异常:', e);
           }
-        } catch (e) {
-          console.warn('[DigitalScreen] 拉取商户列表异常:', e);
         }
       }
     }
@@ -1026,10 +1035,10 @@ onMounted(() => {
   updateClock();
   clockTimer = setInterval(updateClock, 1000);
 
-  // 初次拉取数据与渲染图表
-  nextTick(() => {
-    loadUserProfileAndTenants();
-    fetchData();
+  // 初次按序装载：先锁定商户租户身份，再加载专属通道数据与无缝滚动
+  nextTick(async () => {
+    await loadUserProfileAndTenants();
+    await fetchData();
     startInfiniteScroll();
   });
 

@@ -627,7 +627,10 @@ const handleCopyScreenUrl = () => {
 
 const handleOpenScreenPreview = () => {
   if (fullScreenUrl.value) {
-    window.open(fullScreenUrl.value, '_blank');
+    const win = window.open(fullScreenUrl.value, '_blank');
+    if (!win) {
+      window.location.href = fullScreenUrl.value;
+    }
   }
 };
 
@@ -651,6 +654,12 @@ const handleSelectDefaultPoint = async (pointId: number | null) => {
 const openModal = (type: ModalType) => {
   activeModal.value = type;
   if (type === 'digitalScreen') {
+    screenInfo.value = {
+      userId: userProfile.value.id || 0,
+      companyName: userProfile.value.companyName || userProfile.value.nickname || '',
+      screenToken: '',
+      screenUrl: ''
+    };
     loadScreenUrl();
   }
 };
@@ -887,6 +896,13 @@ const handleLogout = () => {
     dashboardStore.clearCache();
     localStorage.removeItem('flowsight_token');
     localStorage.removeItem('flowsight_user');
+    localStorage.removeItem('flowsight_admin_token');
+    screenInfo.value = {
+      userId: 0,
+      companyName: '',
+      screenToken: '',
+      screenUrl: ''
+    };
     showToast('已安全登出');
     router.push('/login');
   }).catch(() => {});
