@@ -31,8 +31,27 @@
         </div>
 
         <div class="header-right">
-          <!-- 点位快速切换器 -->
+          <!-- 点位与租户快速切换器 -->
           <div class="ctrl-group">
+            <!-- 商户多租户透视切换器 (仅超管可见，商户自身大屏免密直达时自动锁定本商户并隐藏此选择器) -->
+            <el-select
+              v-if="isAdmin && tenantList.length > 0"
+              v-model="activeTenantUserId"
+              placeholder="全域/商户透视"
+              size="small"
+              class="tenant-select"
+              popper-class="screen-select-popper"
+              @change="handleTenantChange"
+            >
+              <el-option :value="0" label="🌐 FlowSight 全域指挥中心" />
+              <el-option
+                v-for="t in tenantList"
+                :key="t.id"
+                :value="t.id"
+                :label="`🏢 ${t.companyName || t.nickname || t.phone}`"
+              />
+            </el-select>
+
             <el-select
               v-model="selectedPointId"
               placeholder="通道选择"
@@ -41,7 +60,7 @@
               popper-class="screen-select-popper"
               @change="handlePointChange"
             >
-              <el-option :value="0" label="🌐 全域通道聚合态势" />
+              <el-option :value="0" :label="activeTenantUserId > 0 ? '🏢 本商户全通道聚合' : '🌐 全域通道聚合态势'" />
               <el-option
                 v-for="p in pointCards"
                 :key="p.pointId"
@@ -300,11 +319,23 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import * as echarts from 'echarts';
-import api from '../api';
+import api, { adminApi } from '../api';
 
+const route = useRoute();
 const router = useRouter();
+
+// 投屏免密 Token 自动注入
+if (route.query.token) {
+  localStorage.setItem('flowsight_admin_token', route.query.token as string);
+}
+
+// 多租户隔离状态
+const activeTenantUserId = ref<number>(route.query.userId ? Number(route.query.userId) : 0);
+const isAdmin = ref(false);
+const tenantList = ref<any[]>([]);
+const currentMerchantName = ref('');
 
 // ==================== 自适应等比缩放引擎 ====================
 const screenWrapperRef = ref<HTMLElement | null>(null);
@@ -431,21 +462,72 @@ const toggleFullscreen = () => {
 };
 
 const backToAdmin = () => {
-  router.push('/overview');
+  if (route.query.token && window.history.length <= 1) {
+    window.close();
+  } else {
+    router.push('/overview');
+  }
+};
+
+// ==================== 租户信息与资料同步 ====================
+const loadUserProfileAndTenants = async () => {
+  try {
+    const params: any = {};
+    if (activeTenantUserId.value > 0) {
+      params.targetUserId = activeTenantUserId.value;
+    }
+    const profileRes: any = await api.get('/h5/user/profile', { params });
+    if (profileRes) {
+      isAdmin.value = profileRes.role === 'ROLE_ADMIN';
+      const company = profileRes.companyName || profileRes.nickname || profileRes.phone;
+      currentMerchantName.value = company;
+
+      if (activeTenantUserId.value > 0) {
+        screenTitle.value = `${company} · 智能视觉全景调度大屏`;
+      } else {
+        screenTitle.value = 'FlowSight 运营指挥中心 · 全域智能视觉大屏';
+      }
+
+      // 如果当前登录身份是平台超级管理员，拉取商户用户列表供快速切屏
+      if (isAdmin.value && tenantList.value.length === 0) {
+        try {
+          const userRes: any = await adminApi.getUsers(1, 100);
+          if (userRes && userRes.records) {
+            tenantList.value = userRes.records.filter((u: any) => u.role !== 'ROLE_ADMIN');
+          }
+        } catch (e) {
+          console.warn('[DigitalScreen] 拉取商户列表异常:', e);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[DigitalScreen] 获取商户资料异常:', err);
+  }
+};
+
+const handleTenantChange = () => {
+  selectedPointId.value = 0;
+  loadUserProfileAndTenants();
+  fetchData();
 };
 
 // ==================== 数据装载与渲染 ====================
 const fetchData = async () => {
   try {
-    // 1. 获取全局概览 (带 Redis <2ms 极速缓存)
-    const overviewRes: any = await api.get('/h5/dashboard/overview');
+    const params: any = {};
+    if (activeTenantUserId.value > 0) {
+      params.targetUserId = activeTenantUserId.value;
+    }
+
+    // 1. 获取全局/租户概览 (带 Redis <2ms 极速缓存，根据 activeTenantUserId 严格数据隔离)
+    const overviewRes: any = await api.get('/h5/dashboard/overview', { params });
     if (overviewRes && overviewRes.globalMetrics) {
       const gm = overviewRes.globalMetrics;
       totalCount.value = gm.totalPoints || 0;
       onlineCount.value = gm.onlinePoints || 0;
       pointCards.value = overviewRes.pointCards || [];
 
-      // 若未选择特定点位，展示全局汇总
+      // 若未选择特定点位，展示当前商户(或全域)汇总
       if (selectedPointId.value === 0) {
         todayTotal.value = (gm.totalPedestrianEntry || 0) + (gm.totalPedestrianExit || 0) + (gm.totalVehicleEntry || 0) + (gm.totalVehicleExit || 0);
         todayEntry.value = (gm.totalPedestrianEntry || 0) + (gm.totalVehicleEntry || 0);
@@ -478,6 +560,8 @@ const fetchData = async () => {
         // 刷新 24 小时各时段对比柱状图
         renderHourlyChart(summaryRes.hourlyChart || []);
       }
+    } else {
+      renderHourlyChart([]);
     }
 
     // 3. 刷新实时流速折线图 (近 6 小时时序)
@@ -486,14 +570,18 @@ const fetchData = async () => {
     // 4. 刷新客群画像环形图
     renderAgeChart();
 
-    // 5. 拉取最新通行流水
-    const eventsRes: any = await api.get('/h5/events', {
-      params: {
-        pointId: selectedPointId.value > 0 ? selectedPointId.value : undefined,
-        page: 1,
-        size: 12
-      }
-    });
+    // 5. 拉取最新通行流水 (传递 activeTenantUserId 确保数据严格隔离)
+    const eventParams: any = {
+      page: 1,
+      size: 12
+    };
+    if (selectedPointId.value > 0) {
+      eventParams.pointId = selectedPointId.value;
+    }
+    if (activeTenantUserId.value > 0) {
+      eventParams.targetUserId = activeTenantUserId.value;
+    }
+    const eventsRes: any = await api.get('/h5/events', { params: eventParams });
     if (eventsRes && eventsRes.records) {
       eventList.value = eventsRes.records;
     }
@@ -733,6 +821,7 @@ onMounted(() => {
 
   // 初次拉取数据与渲染图表
   nextTick(() => {
+    loadUserProfileAndTenants();
     fetchData();
   });
 
@@ -931,7 +1020,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 480px;
+  min-width: 480px;
   justify-content: flex-end;
 }
 .ctrl-group {
@@ -939,8 +1028,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
 }
-.point-select {
+.tenant-select {
   width: 175px;
+}
+.point-select {
+  width: 165px;
 }
 :deep(.el-input__wrapper) {
   background-color: rgba(16, 26, 44, 0.8) !important;

@@ -1,6 +1,7 @@
 package com.flowsight.cloud.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.flowsight.cloud.common.JwtUtil;
 import com.flowsight.cloud.common.Result;
 import com.flowsight.cloud.dto.ChangePasswordDTO;
 import com.flowsight.cloud.dto.ResetDevicePasswordDTO;
@@ -21,7 +22,9 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/h5")
@@ -36,6 +39,9 @@ public class H5DashboardController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private JwtUtil jwtUtil;
+
     private void checkPointOwnership(Long pointId, HttpServletRequest request) {
         String role = (String) request.getAttribute("role");
         if ("ROLE_ADMIN".equalsIgnoreCase(role)) return;
@@ -47,14 +53,22 @@ public class H5DashboardController {
     }
 
     @GetMapping("/points")
-    public Result<List<PointVO>> listMyPoints(HttpServletRequest request) {
+    public Result<List<PointVO>> listMyPoints(@RequestParam(required = false) Long targetUserId, HttpServletRequest request) {
+        String role = (String) request.getAttribute("role");
         Long userId = (Long) request.getAttribute("userId");
+        if ("ROLE_ADMIN".equalsIgnoreCase(role) && targetUserId != null && targetUserId > 0) {
+            userId = targetUserId;
+        }
         return Result.success(pointService.listUserPoints(userId));
     }
 
     @GetMapping("/dashboard/overview")
-    public Result<DashboardOverviewVO> getDashboardOverview(HttpServletRequest request) {
+    public Result<DashboardOverviewVO> getDashboardOverview(@RequestParam(required = false) Long targetUserId, HttpServletRequest request) {
+        String role = (String) request.getAttribute("role");
         Long userId = (Long) request.getAttribute("userId");
+        if ("ROLE_ADMIN".equalsIgnoreCase(role) && targetUserId != null && targetUserId > 0) {
+            userId = targetUserId;
+        }
         return Result.success(eventService.getDashboardOverview(userId));
     }
 
@@ -74,14 +88,19 @@ public class H5DashboardController {
     }
 
     @GetMapping("/events")
-    public Result<Page<EventItemVO>> listEvents(@RequestParam(required = false) Long pointId,
+    public Result<Page<EventItemVO>> listEvents(@RequestParam(required = false) Long targetUserId,
+                                                @RequestParam(required = false) Long pointId,
                                                 @RequestParam(required = false) String startDate,
                                                 @RequestParam(required = false) String endDate,
                                                 @RequestParam(required = false) String direction,
                                                 @RequestParam(defaultValue = "1") int page,
                                                 @RequestParam(defaultValue = "10") int size,
                                                 HttpServletRequest request) {
+        String role = (String) request.getAttribute("role");
         Long userId = (Long) request.getAttribute("userId");
+        if ("ROLE_ADMIN".equalsIgnoreCase(role) && targetUserId != null && targetUserId > 0) {
+            userId = targetUserId;
+        }
         if (pointId != null && pointId > 0) {
             checkPointOwnership(pointId, request);
         }
@@ -89,13 +108,36 @@ public class H5DashboardController {
     }
 
     @GetMapping("/user/profile")
-    public Result<UserVO> getUserProfile(HttpServletRequest request) {
+    public Result<UserVO> getUserProfile(@RequestParam(required = false) Long targetUserId, HttpServletRequest request) {
+        String role = (String) request.getAttribute("role");
         Long userId = (Long) request.getAttribute("userId");
+        if ("ROLE_ADMIN".equalsIgnoreCase(role) && targetUserId != null && targetUserId > 0) {
+            userId = targetUserId;
+        }
         UserVO user = userService.getUserById(userId);
         if (user == null) {
             throw new IllegalArgumentException("当前登录商户不存在或已被注销");
         }
         return Result.success(user);
+    }
+
+    /**
+     * 商户获取自身专属数字大屏免密直达投屏 URL 与长效 Token (180天有效)
+     */
+    @GetMapping("/user/screen-url")
+    public Result<Map<String, Object>> getMyScreenUrl(HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        UserVO user = userService.getUserById(userId);
+        if (user == null) {
+            throw new IllegalArgumentException("当前商户用户不存在");
+        }
+        String screenToken = jwtUtil.generateScreenToken(user.getId(), user.getPhone(), user.getRole());
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", user.getId());
+        map.put("companyName", user.getCompanyName() != null && !user.getCompanyName().isEmpty() ? user.getCompanyName() : user.getNickname());
+        map.put("screenToken", screenToken);
+        map.put("screenUrl", "/#/screen?token=" + screenToken + "&userId=" + user.getId());
+        return Result.success("商户大屏投屏凭据就绪", map);
     }
 
     @PostMapping("/user/password")

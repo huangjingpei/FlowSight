@@ -107,6 +107,17 @@
             <span class="cell-chevron">›</span>
           </div>
         </div>
+
+        <div class="menu-cell" @click="openModal('digitalScreen')">
+          <div class="cell-left">
+            <span class="cell-icon">🖥️</span>
+            <span class="cell-title">我的专属数字大屏</span>
+          </div>
+          <div class="cell-right">
+            <span class="cell-value" style="color: var(--fs-primary, #00D2FF);">投屏直达</span>
+            <span class="cell-chevron">›</span>
+          </div>
+        </div>
       </div>
 
       <!-- 分组 3: 界面显示 -->
@@ -473,6 +484,48 @@
       </div>
     </div>
 
+    <!-- 弹窗 10: 商户专属数字大屏投屏直达 -->
+    <div v-if="activeModal === 'digitalScreen'" class="dialog-overlay" @click.self="closeModal">
+      <div class="dialog-card">
+        <div class="dialog-header">
+          <span class="dh-title">🖥️ 专属数字大屏投屏直达</span>
+          <button class="dh-close" @click="closeModal">✕</button>
+        </div>
+        <div class="dialog-body">
+          <div class="screen-dialog-alert">
+            <span class="sda-icon">🔒</span>
+            <div class="sda-text">
+              本链接已附带您的商户长效免密安全凭据（180天有效），专用于企业前台电视、展厅监控墙或指挥大屏挂载，数据与其它客户严格物理隔离。
+            </div>
+          </div>
+
+          <div class="modal-sub-meta" style="margin-top: 12px;">
+            <span class="msm-k">所属企业</span>
+            <span class="msm-v">{{ screenInfo.companyName || userProfile.companyName || '企业商户' }}</span>
+          </div>
+
+          <div class="screen-url-box">
+            <div class="sub-label">大屏直达地址 (含免密凭证与用户标识)</div>
+            <textarea
+              class="screen-url-textarea"
+              readonly
+              :value="fullScreenUrl"
+              rows="3"
+            ></textarea>
+          </div>
+
+          <div class="modal-action-row" style="margin-top: 16px; display: flex; gap: 10px;">
+            <button class="btn-modal-action btn-cyan-fill" style="flex: 1;" @click="handleCopyScreenUrl">
+              📋 复制直达地址
+            </button>
+            <button class="btn-modal-action" style="flex: 1; background: rgba(0,210,255,0.12); color: #00D2FF; border: 1px solid rgba(0,210,255,0.3);" @click="handleOpenScreenPreview">
+              🚀 预览打开
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -536,8 +589,47 @@ const loadUserProfile = async () => {
 };
 
 // 对话框弹窗状态管理 (取代页面内部折叠)
-type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | 'defaultPoint' | null;
+type ModalType = 'pairing' | 'password' | 'devicePwd' | 'demographics' | 'refreshRate' | 'deviceInfo' | 'themeMode' | 'fontSize' | 'defaultPoint' | 'digitalScreen' | null;
 const activeModal = ref<ModalType>(null);
+
+// 商户专属数字大屏投屏凭证与地址
+const screenInfo = ref<any>({
+  userId: 0,
+  companyName: '',
+  screenToken: '',
+  screenUrl: ''
+});
+
+const fullScreenUrl = computed(() => {
+  if (!screenInfo.value?.screenUrl) return '';
+  return window.location.origin + screenInfo.value.screenUrl;
+});
+
+const loadScreenUrl = async () => {
+  try {
+    const res: any = await h5Api.getScreenUrl();
+    if (res) {
+      screenInfo.value = res;
+    }
+  } catch (e) {
+    showToast('获取大屏投屏链接失败');
+  }
+};
+
+const handleCopyScreenUrl = () => {
+  if (!fullScreenUrl.value) return;
+  navigator.clipboard.writeText(fullScreenUrl.value).then(() => {
+    showToast('大屏专属直达链接已复制到剪贴板！');
+  }).catch(() => {
+    showToast('复制失败，请长按文本手动复制');
+  });
+};
+
+const handleOpenScreenPreview = () => {
+  if (fullScreenUrl.value) {
+    window.open(fullScreenUrl.value, '_blank');
+  }
+};
 
 const currentDefaultPointLabel = computed(() => {
   if (!pointStore.defaultPointId) return '跟随首项';
@@ -558,6 +650,9 @@ const handleSelectDefaultPoint = async (pointId: number | null) => {
 
 const openModal = (type: ModalType) => {
   activeModal.value = type;
+  if (type === 'digitalScreen') {
+    loadScreenUrl();
+  }
 };
 
 const closeModal = () => {
@@ -1145,6 +1240,43 @@ onUnmounted(() => {
 .cyan-code {
   color: #00D2FF;
   font-family: monospace;
+}
+
+.screen-dialog-alert {
+  display: flex;
+  gap: 8px;
+  background: rgba(0, 210, 255, 0.08);
+  border: 1px solid rgba(0, 210, 255, 0.25);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fs-text-sub, #94A3B8);
+}
+.sda-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.screen-url-box {
+  margin-top: 10px;
+}
+.screen-url-box .sub-label {
+  font-size: 11px;
+  color: var(--fs-text-dim, #7A8CA5);
+  margin-bottom: 4px;
+}
+.screen-url-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--fs-card-border, #1F293D);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--fs-primary, #00D2FF);
+  font-family: monospace;
+  resize: none;
+  word-break: break-all;
 }
 
 /* 按钮样式规范 */

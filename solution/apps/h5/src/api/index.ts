@@ -158,5 +158,6 @@ export const h5Api = {
   changePassword: (data: { oldPassword: string; newPassword: string }) => api.post('/h5/user/password', data),
   getPointCredential: (pointId: number) => api.get(`/h5/points/${pointId}/credential`),
   resetDevicePassword: (pointId: number, data: { newDevicePassword: string }) => api.post(`/h5/points/${pointId}/device-password`, data),
-  generatePairingCode: (pointId: number) => api.post(`/h5/points/${pointId}/pairing-code`)
+  generatePairingCode: (pointId: number) => api.post(`/h5/points/${pointId}/pairing-code`),
+  getScreenUrl: () => api.get<any, any>('/h5/user/screen-url')
 };

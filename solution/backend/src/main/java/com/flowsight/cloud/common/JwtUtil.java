@@ -50,6 +50,28 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * 生成商户专属数字大屏免密投屏 Token (180天长效凭证，专用于电视机与展厅大屏挂载)
+     */
+    public String generateScreenToken(Long userId, String phone, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("phone", phone);
+        claims.put("role", role != null ? role : "ROLE_USER");
+        claims.put("isScreen", true);
+
+        long now = System.currentTimeMillis();
+        long expireTime = now + 180L * 24 * 3600 * 1000L;
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(phone)
+                .setIssuedAt(new Date(now))
+                .setExpiration(new Date(expireTime))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
     public Claims parseToken(String token) {
         try {
             return Jwts.parserBuilder()

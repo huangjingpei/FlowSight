@@ -1,6 +1,7 @@
 package com.flowsight.cloud.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.flowsight.cloud.common.JwtUtil;
 import com.flowsight.cloud.common.Result;
 import com.flowsight.cloud.dto.UserCreateDTO;
 import com.flowsight.cloud.dto.UserUpdateDTO;
@@ -11,12 +12,18 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/admin/users")
 public class AdminUserController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private JwtUtil jwtUtil;
 
     private void checkAdmin(HttpServletRequest request) {
         String role = (String) request.getAttribute("role");
@@ -59,5 +66,25 @@ public class AdminUserController {
     public Result<UserVO> getUser(@PathVariable Long id, HttpServletRequest request) {
         checkAdmin(request);
         return Result.success(userService.getUserById(id));
+    }
+
+    /**
+     * 生成/获取商户客户专属数字大屏免密直达投屏 URL 与长效 Token
+     */
+    @GetMapping("/{id}/screen-url")
+    public Result<Map<String, Object>> getMerchantScreenUrl(@PathVariable Long id, HttpServletRequest request) {
+        checkAdmin(request);
+        UserVO user = userService.getUserById(id);
+        if (user == null) {
+            throw new IllegalArgumentException("商户用户不存在");
+        }
+        String screenToken = jwtUtil.generateScreenToken(user.getId(), user.getPhone(), user.getRole());
+        Map<String, Object> map = new HashMap<>();
+        map.put("userId", user.getId());
+        map.put("phone", user.getPhone());
+        map.put("companyName", user.getCompanyName() != null && !user.getCompanyName().isEmpty() ? user.getCompanyName() : user.getNickname());
+        map.put("screenToken", screenToken);
+        map.put("screenUrl", "/#/screen?token=" + screenToken + "&userId=" + user.getId());
+        return Result.success("商户大屏专属投屏凭据就绪", map);
     }
 }
