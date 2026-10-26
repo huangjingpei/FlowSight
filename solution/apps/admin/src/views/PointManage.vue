@@ -25,6 +25,18 @@
               <el-button icon="Search" @click="fetchPoints" />
             </template>
           </el-input>
+
+          <el-select
+            v-model="filterBizType"
+            placeholder="业务感知模式"
+            style="width: 150px; margin-left: 12px;"
+            clearable
+            @change="fetchPoints"
+          >
+            <el-option label="全部感知模式" value="" />
+            <el-option label="🚶 客流感知" value="PEDESTRIAN" />
+            <el-option label="🚗 车流感知" value="VEHICLE" />
+          </el-select>
         </div>
 
         <el-button type="primary" icon="Plus" @click="openCreateDialog">
@@ -43,6 +55,17 @@
           <template #default="{ row }">
             <el-tag type="warning" size="small" style="font-family: monospace; font-weight: bold;">
               {{ row.pointCode }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="bizType" label="感知业务模式" width="130" align="center">
+          <template #default="{ row }">
+            <el-tag
+              :type="row.bizType === 'VEHICLE' ? 'warning' : 'success'"
+              size="small"
+              style="font-weight: bold; border-radius: 4px;"
+            >
+              {{ row.bizType === 'VEHICLE' ? '🚗 车流感知' : '🚶 客流感知' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -115,6 +138,15 @@
         <el-form-item label="点位名称" prop="pointName">
           <el-input v-model="createForm.pointName" placeholder="例如: 正门主通道 / 收银区" />
         </el-form-item>
+        <el-form-item label="业务感知模式" prop="bizType">
+          <el-radio-group v-model="createForm.bizType">
+            <el-radio-button label="PEDESTRIAN">🚶 客流分析 (人数与性别年龄)</el-radio-button>
+            <el-radio-button label="VEHICLE">🚗 车流分析 (机动车与车牌车型)</el-radio-button>
+          </el-radio-group>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            {{ createForm.bizType === 'VEHICLE' ? '将调度边缘端 YOLO 机动车检测与 LPR 车牌识别算法' : '将调度边缘端 YOLO 人体检测与性别年龄推断算法' }}
+          </div>
+        </el-form-item>
         <el-form-item label="点位编码">
           <el-input v-model="createForm.pointCode" placeholder="例如: POINT_VK_EAST_01 (留空则系统自动生成)" />
         </el-form-item>
@@ -147,6 +179,15 @@
       <el-form :model="editForm" label-width="110px">
         <el-form-item label="点位名称">
           <el-input v-model="editForm.pointName" />
+        </el-form-item>
+        <el-form-item label="业务感知模式">
+          <el-radio-group v-model="editForm.bizType">
+            <el-radio-button label="PEDESTRIAN">🚶 客流分析</el-radio-button>
+            <el-radio-button label="VEHICLE">🚗 车流分析</el-radio-button>
+          </el-radio-group>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            修改感知模式后，现场绑定的 FlowSight.exe 客户端在同步配置时将自动无感热切换算法模型
+          </div>
         </el-form-item>
         <el-form-item label="点位编码">
           <el-input v-model="editForm.pointCode" placeholder="例如: POINT_VK_EAST_01" />
@@ -188,6 +229,7 @@ const router = useRouter();
 const loading = ref(false);
 const submitLoading = ref(false);
 const keyword = ref('');
+const filterBizType = ref('');
 const page = ref(1);
 const size = ref(10);
 const total = ref(0);
@@ -203,6 +245,7 @@ const createForm = reactive({
   userId: undefined as number | undefined,
   pointName: '',
   pointCode: '',
+  bizType: 'PEDESTRIAN',
   devicePassword: '',
   address: '',
   cameraRtsp: '',
@@ -219,6 +262,7 @@ const currentEditId = ref<number | null>(null);
 const editForm = reactive({
   pointName: '',
   pointCode: '',
+  bizType: 'PEDESTRIAN',
   devicePassword: '',
   address: '',
   cameraRtsp: '',
@@ -228,7 +272,7 @@ const editForm = reactive({
 const fetchPoints = async () => {
   loading.value = true;
   try {
-    const res: any = await adminApi.getPoints(page.value, size.value, filteredUserId.value, keyword.value);
+    const res: any = await adminApi.getPoints(page.value, size.value, filteredUserId.value, keyword.value, filterBizType.value);
     tableData.value = res.records || [];
     total.value = res.total || 0;
   } catch (e) {
@@ -258,6 +302,7 @@ const openCreateDialog = () => {
   createForm.userId = filteredUserId.value;
   createForm.pointName = '';
   createForm.pointCode = '';
+  createForm.bizType = 'PEDESTRIAN';
   createForm.devicePassword = '';
   createForm.address = '';
   createForm.cameraRtsp = '';
@@ -288,6 +333,7 @@ const openEditDialog = (row: any) => {
   currentEditId.value = row.id;
   editForm.pointName = row.pointName;
   editForm.pointCode = row.pointCode || '';
+  editForm.bizType = row.bizType || 'PEDESTRIAN';
   editForm.devicePassword = '';
   editForm.address = row.address;
   editForm.cameraRtsp = row.cameraRtsp;

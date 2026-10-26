@@ -40,6 +40,17 @@
       <el-table :data="pointList" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="pointName" label="点位名称" width="160" />
+        <el-table-column prop="bizType" label="感知模式" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag
+              :type="row.bizType === 'VEHICLE' ? 'warning' : 'success'"
+              size="small"
+              style="font-weight: bold; border-radius: 4px;"
+            >
+              {{ row.bizType === 'VEHICLE' ? '🚗 车流' : '🚶 客流' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="归属商户企业" width="180">
           <template #default="{ row }">
             <div style="font-weight: 500; color: #303133;">
@@ -61,7 +72,7 @@
         </el-table-column>
         <el-table-column prop="currentOccupancy" label="瞬时滞留" width="100">
           <template #default="{ row }">
-            <span style="font-weight: bold; color: #1989fa;">{{ row.currentOccupancy || 0 }} 人</span>
+            <span style="font-weight: bold; color: #1989fa;">{{ row.currentOccupancy || 0 }} {{ row.bizType === 'VEHICLE' ? '辆' : '人' }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="streamStatus" label="状态" width="100">

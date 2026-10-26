@@ -41,7 +41,7 @@ export const adminApi = {
   updateUser: (id: number, data: any) => api.put(`/admin/users/${id}`, data),
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
 
-  getPoints: (page = 1, size = 10, userId?: number, keyword = '') => api.get('/points', { params: { page, size, userId, keyword } }),
+  getPoints: (page = 1, size = 10, userId?: number, keyword = '', bizType = '') => api.get('/points', { params: { page, size, userId, keyword, bizType } }),
   createPoint: (data: any) => api.post('/points', data),
   updatePoint: (id: number, data: any) => api.put(`/points/${id}`, data),
   deletePoint: (id: number) => api.delete(`/points/${id}`),

@@ -58,10 +58,11 @@ public class PointServiceImpl implements PointService {
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Override
-    public Page<PointVO> pagePoints(int page, int size, Long userId, String keyword) {
+    public Page<PointVO> pagePoints(int page, int size, Long userId, String keyword, String bizType) {
         Page<BizPoint> pointPage = new Page<>(page, size);
         LambdaQueryWrapper<BizPoint> wrapper = new LambdaQueryWrapper<BizPoint>()
                 .eq(userId != null, BizPoint::getUserId, userId)
+                .eq(bizType != null && !bizType.trim().isEmpty(), BizPoint::getBizType, bizType)
                 .and(keyword != null && !keyword.trim().isEmpty(), w -> w
                         .like(BizPoint::getPointName, keyword)
                         .or().like(BizPoint::getAddress, keyword)

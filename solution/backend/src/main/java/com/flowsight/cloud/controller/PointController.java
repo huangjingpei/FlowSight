@@ -25,13 +25,14 @@ public class PointController {
                                             @RequestParam(defaultValue = "10") int size,
                                             @RequestParam(required = false) Long userId,
                                             @RequestParam(required = false) String keyword,
+                                            @RequestParam(required = false) String bizType,
                                             HttpServletRequest request) {
         String role = (String) request.getAttribute("role");
         Long currentUserId = (Long) request.getAttribute("userId");
 
         // 若不是管理员，强制只能查自己名下的点位
         Long targetUserId = "ROLE_ADMIN".equalsIgnoreCase(role) ? userId : currentUserId;
-        return Result.success(pointService.pagePoints(page, size, targetUserId, keyword));
+        return Result.success(pointService.pagePoints(page, size, targetUserId, keyword, bizType));
     }
 
     @GetMapping("/my")

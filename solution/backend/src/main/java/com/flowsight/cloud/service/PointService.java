@@ -15,7 +15,7 @@ import com.flowsight.cloud.vo.PointVO;
 import java.util.List;
 
 public interface PointService {
-    Page<PointVO> pagePoints(int page, int size, Long userId, String keyword);
+    Page<PointVO> pagePoints(int page, int size, Long userId, String keyword, String bizType);
     List<PointVO> listUserPoints(Long userId);
     PointVO createPoint(PointCreateDTO dto);
     void updatePoint(Long id, PointUpdateDTO dto);
