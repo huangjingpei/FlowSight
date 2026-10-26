@@ -41,6 +41,14 @@ public class PointController {
         return Result.success(pointService.listUserPoints(currentUserId));
     }
 
+    /**
+     * 获取系统推荐的唯一点位编码 (全局唯一，防重分配)
+     */
+    @GetMapping("/generate-code")
+    public Result<String> generatePointCode(@RequestParam(defaultValue = "PEDESTRIAN") String bizType) {
+        return Result.success("生成唯一点位编码就绪", pointService.generateUniquePointCode(bizType));
+    }
+
     @PostMapping
     public Result<PointVO> createPoint(@Valid @RequestBody PointCreateDTO dto, HttpServletRequest request) {
         String role = (String) request.getAttribute("role");

@@ -139,7 +139,7 @@
           <el-input v-model="createForm.pointName" placeholder="例如: 正门主通道 / 收银区" />
         </el-form-item>
         <el-form-item label="业务感知模式" prop="bizType">
-          <el-radio-group v-model="createForm.bizType">
+          <el-radio-group v-model="createForm.bizType" @change="handleBizTypeChange">
             <el-radio-button label="PEDESTRIAN">🚶 客流分析 (人数与性别年龄)</el-radio-button>
             <el-radio-button label="VEHICLE">🚗 车流分析 (机动车与车牌车型)</el-radio-button>
           </el-radio-group>
@@ -147,8 +147,17 @@
             {{ createForm.bizType === 'VEHICLE' ? '将调度边缘端 YOLO 机动车检测与 LPR 车牌识别算法' : '将调度边缘端 YOLO 人体检测与性别年龄推断算法' }}
           </div>
         </el-form-item>
-        <el-form-item label="点位编码">
-          <el-input v-model="createForm.pointCode" placeholder="例如: POINT_VK_EAST_01 (留空则系统自动生成)" />
+        <el-form-item label="点位编码" prop="pointCode">
+          <el-input v-model="createForm.pointCode" placeholder="系统自动分配全局唯一编码，也可手动指定">
+            <template #append>
+              <el-button @click="refreshSuggestedCode()">
+                <el-icon><Refresh /></el-icon> 换一个
+              </el-button>
+            </template>
+          </el-input>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            系统自动分配全局唯一编码（例如 PT_PED_20261026_XXXX），杜绝重复；也可手动输入自定义编码
+          </div>
         </el-form-item>
         <el-form-item label="设备密码(密码2)">
           <el-input v-model="createForm.devicePassword" placeholder="边缘设备接入密码 (留空默认: Edge@123456)" />
@@ -190,7 +199,16 @@
           </div>
         </el-form-item>
         <el-form-item label="点位编码">
-          <el-input v-model="editForm.pointCode" placeholder="例如: POINT_VK_EAST_01" />
+          <el-input v-model="editForm.pointCode" placeholder="例如: PT_PED_20261026_01">
+            <template #append>
+              <el-button @click="refreshEditSuggestedCode()">
+                <el-icon><Refresh /></el-icon> 换一个
+              </el-button>
+            </template>
+          </el-input>
+          <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+            点位编码为全系统全局唯一凭据，后端会自动拦截重名编码
+          </div>
         </el-form-item>
         <el-form-item label="重置设备密码">
           <el-input v-model="editForm.devicePassword" placeholder="留空则不修改当前设备密码" />
@@ -298,7 +316,38 @@ const clearUserFilter = () => {
   fetchPoints();
 };
 
-const openCreateDialog = () => {
+const refreshSuggestedCode = async (bizType?: string) => {
+  try {
+    const type = bizType || createForm.bizType || 'PEDESTRIAN';
+    const res: any = await adminApi.generatePointCode(type);
+    if (res.code === 200 && res.data) {
+      createForm.pointCode = res.data;
+    }
+  } catch (e) {
+    console.error('获取推荐编码失败', e);
+  }
+};
+
+const handleBizTypeChange = (val: any) => {
+  createForm.bizType = val;
+  // 若当前编码为空或为系统生成的默认格式，则自动匹配生成新模式前缀编码
+  if (!createForm.pointCode || createForm.pointCode.startsWith('PT_')) {
+    refreshSuggestedCode(val);
+  }
+};
+
+const refreshEditSuggestedCode = async () => {
+  try {
+    const res: any = await adminApi.generatePointCode(editForm.bizType || 'PEDESTRIAN');
+    if (res.code === 200 && res.data) {
+      editForm.pointCode = res.data;
+    }
+  } catch (e) {
+    console.error('获取推荐编码失败', e);
+  }
+};
+
+const openCreateDialog = async () => {
   createForm.userId = filteredUserId.value;
   createForm.pointName = '';
   createForm.pointCode = '';
@@ -309,6 +358,7 @@ const openCreateDialog = () => {
   createForm.resolution = '1920x1080';
   loadUserOptions();
   createVisible.value = true;
+  await refreshSuggestedCode('PEDESTRIAN');
 };
 
 const submitCreate = async () => {

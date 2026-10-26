@@ -25,7 +25,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
@@ -102,11 +104,19 @@ public class PointServiceImpl implements PointService {
         BizPoint point = new BizPoint();
         point.setUserId(dto.getUserId());
         point.setPointName(dto.getPointName());
-        if (dto.getPointCode() != null && !dto.getPointCode().trim().isEmpty()) {
-            point.setPointCode(dto.getPointCode().trim());
+
+        String targetCode = dto.getPointCode() != null ? dto.getPointCode().trim() : "";
+        if (targetCode.isEmpty()) {
+            targetCode = generateUniquePointCode(dto.getBizType());
         } else {
-            point.setPointCode("POINT_" + System.currentTimeMillis() % 1000000);
+            // 严格全局防重分配校验
+            Long dupCount = pointMapper.selectCount(new LambdaQueryWrapper<BizPoint>()
+                    .eq(BizPoint::getPointCode, targetCode));
+            if (dupCount != null && dupCount > 0) {
+                throw new IllegalArgumentException("点位编码【" + targetCode + "】已被使用，请勿重复分配！");
+            }
         }
+        point.setPointCode(targetCode);
         String devPwd = (dto.getDevicePassword() != null && !dto.getDevicePassword().trim().isEmpty())
                 ? dto.getDevicePassword().trim() : "Edge@123456";
         point.setDevicePasswordHash(passwordEncoder.encode(devPwd));
@@ -129,7 +139,16 @@ public class PointServiceImpl implements PointService {
         }
         if (dto.getPointName() != null) point.setPointName(dto.getPointName());
         if (dto.getPointCode() != null && !dto.getPointCode().trim().isEmpty()) {
-            point.setPointCode(dto.getPointCode().trim());
+            String newCode = dto.getPointCode().trim();
+            if (!newCode.equalsIgnoreCase(point.getPointCode())) {
+                Long dupCount = pointMapper.selectCount(new LambdaQueryWrapper<BizPoint>()
+                        .eq(BizPoint::getPointCode, newCode)
+                        .ne(BizPoint::getId, id));
+                if (dupCount != null && dupCount > 0) {
+                    throw new IllegalArgumentException("点位编码【" + newCode + "】已被其他点位占用，无法修改！");
+                }
+                point.setPointCode(newCode);
+            }
         }
         if (dto.getDevicePassword() != null && !dto.getDevicePassword().trim().isEmpty()) {
             point.setDevicePasswordHash(passwordEncoder.encode(dto.getDevicePassword().trim()));
@@ -513,5 +532,21 @@ public class PointServiceImpl implements PointService {
         }
         log.info("[PointService] 点位 ID: {}, 点位名称: '{}' 已被客户端 '{}' 主动解绑下线并释放独占锁",
                 pointId, point.getPointName(), clientName);
+    }
+
+    @Override
+    public String generateUniquePointCode(String bizType) {
+        String prefix = "VEHICLE".equalsIgnoreCase(bizType) ? "PT_VEH_" : "PT_PED_";
+        String dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        for (int i = 0; i < 30; i++) {
+            String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 5).toUpperCase();
+            String candidate = prefix + dateStr + "_" + suffix;
+            Long count = pointMapper.selectCount(new LambdaQueryWrapper<BizPoint>()
+                    .eq(BizPoint::getPointCode, candidate));
+            if (count == null || count == 0) {
+                return candidate;
+            }
+        }
+        return prefix + dateStr + "_" + (System.currentTimeMillis() % 100000);
     }
 }

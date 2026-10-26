@@ -45,5 +45,6 @@ export const adminApi = {
   createPoint: (data: any) => api.post('/points', data),
   updatePoint: (id: number, data: any) => api.put(`/points/${id}`, data),
   deletePoint: (id: number) => api.delete(`/points/${id}`),
-  refreshToken: (id: number) => api.post(`/points/${id}/token/refresh`)
+  refreshToken: (id: number) => api.post(`/points/${id}/token/refresh`),
+  generatePointCode: (bizType = 'PEDESTRIAN') => api.get('/points/generate-code', { params: { bizType } })
 };

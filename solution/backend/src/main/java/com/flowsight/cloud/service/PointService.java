@@ -23,6 +23,7 @@ public interface PointService {
     PointVO getPointById(Long id);
     BizPoint getPointByToken(String token);
     String refreshToken(Long id);
+    String generateUniquePointCode(String bizType);
 
     // 双密码体系接口
     DeviceLoginVO loginWithDeviceCredentials(DeviceLoginDTO dto);
