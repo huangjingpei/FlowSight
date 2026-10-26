@@ -92,6 +92,7 @@ void RealtimeAverageChartWidget::add_passage(const PassageEvent& ev) {
     while (!event_log_.empty() && event_log_.front().time_ms < cutoff_ms) {
         event_log_.pop_front();
     }
+    recalculate_history(); // 实时即时重算并平滑，提升视觉响应速度
     update();
 }
 
@@ -127,7 +128,15 @@ void RealtimeAverageChartWidget::recalculate_history() {
 
         float rate_min = (static_cast<float>(w_cnt) / window_sec_) * 60.0f;
         peak_rate_ = std::max(peak_rate_, rate_min);
-        history_.push_back({t, w_cnt, rate_min, w_entry, w_exit});
+        history_.push_back({t, w_cnt, rate_min, rate_min, w_entry, w_exit});
+    }
+
+    // 均值平滑处理：应用 3 点高斯核 (0.20, 0.60, 0.20)，消除离散脉冲方波阶跃感，形成柔和自然的流动波形
+    for (size_t i = 0; i < history_.size(); ++i) {
+        float p_prev = (i > 0) ? history_[i - 1].rate_per_min : history_[i].rate_per_min;
+        float p_curr = history_[i].rate_per_min;
+        float p_next = (i + 1 < history_.size()) ? history_[i + 1].rate_per_min : history_[i].rate_per_min;
+        history_[i].smooth_rate = 0.20f * p_prev + 0.60f * p_curr + 0.20f * p_next;
     }
 }
 
@@ -149,12 +158,20 @@ void RealtimeAverageChartWidget::on_timer_tick() {
 
     float rate_min = (static_cast<float>(w_cnt) / window_sec_) * 60.0f;
     peak_rate_ = std::max(peak_rate_, rate_min);
-    history_.push_back({now_ms, w_cnt, rate_min, w_entry, w_exit});
+    history_.push_back({now_ms, w_cnt, rate_min, rate_min, w_entry, w_exit});
 
     // 剔除超出显示跨度的数据
     qint64 cutoff_ms = now_ms - display_span_sec_ * 1000;
     while (!history_.empty() && history_.front().time_ms < cutoff_ms) {
         history_.pop_front();
+    }
+
+    // 滚动更新均值平滑序列
+    for (size_t i = 0; i < history_.size(); ++i) {
+        float p_prev = (i > 0) ? history_[i - 1].rate_per_min : history_[i].rate_per_min;
+        float p_curr = history_[i].rate_per_min;
+        float p_next = (i + 1 < history_.size()) ? history_[i + 1].rate_per_min : history_[i].rate_per_min;
+        history_[i].smooth_rate = 0.20f * p_prev + 0.60f * p_curr + 0.20f * p_next;
     }
 
     // 剔除过老的原始事件记录 (保留3分钟)
@@ -266,6 +283,92 @@ void RealtimeAverageChartWidget::draw_background_and_grid(QPainter& p, const QRe
     p.restore();
 }
 
+namespace {
+    // 基于 Fritsch-Carlson 算法的保单调三次贝塞尔平滑样条曲线生成器
+    // 保证局部极值处一阶导数连续且切线水平(无过冲无振荡)，平坦段与基线永不下冲为负数
+    void build_monotone_cubic_path(const std::vector<QPointF>& points,
+                                   double baseline_y,
+                                   QPainterPath& path_curve,
+                                   QPainterPath& path_fill,
+                                   double min_y, double max_y) {
+        if (points.empty()) return;
+
+        path_curve.moveTo(points.front());
+        path_fill.moveTo(points.front().x(), baseline_y);
+        path_fill.lineTo(points.front());
+
+        if (points.size() == 1) {
+            path_fill.lineTo(points.front().x(), baseline_y);
+            path_fill.closeSubpath();
+            return;
+        }
+
+        if (points.size() == 2) {
+            path_curve.lineTo(points.back());
+            path_fill.lineTo(points.back());
+            path_fill.lineTo(points.back().x(), baseline_y);
+            path_fill.closeSubpath();
+            return;
+        }
+
+        const size_t n = points.size();
+        std::vector<double> dx(n - 1), dy(n - 1), m(n - 1);
+        for (size_t i = 0; i < n - 1; ++i) {
+            dx[i] = points[i + 1].x() - points[i].x();
+            dy[i] = points[i + 1].y() - points[i].y();
+            m[i] = (std::abs(dx[i]) > 1e-5) ? (dy[i] / dx[i]) : 0.0;
+        }
+
+        std::vector<double> tangents(n, 0.0);
+        tangents[0] = m[0];
+        tangents[n - 1] = m[n - 2];
+        for (size_t i = 1; i < n - 1; ++i) {
+            if (m[i - 1] * m[i] <= 0.0) {
+                // 极值点切线置为水平，消除波峰与波谷处的过冲振铃效应
+                tangents[i] = 0.0;
+            } else {
+                tangents[i] = (m[i - 1] + m[i]) / 2.0;
+            }
+        }
+
+        // Fritsch-Carlson 条件调整
+        for (size_t i = 0; i < n - 1; ++i) {
+            if (std::abs(m[i]) < 1e-5) {
+                tangents[i] = 0.0;
+                tangents[i + 1] = 0.0;
+            } else {
+                double alpha = tangents[i] / m[i];
+                double beta = tangents[i + 1] / m[i];
+                double dist = alpha * alpha + beta * beta;
+                if (dist > 9.0) {
+                    double tau = 3.0 / std::sqrt(dist);
+                    tangents[i] = tau * alpha * m[i];
+                    tangents[i + 1] = tau * beta * m[i];
+                }
+            }
+        }
+
+        // 构造光滑三次贝塞尔曲线段
+        for (size_t i = 0; i < n - 1; ++i) {
+            double h = dx[i];
+            QPointF p1 = points[i];
+            QPointF p2 = points[i + 1];
+            QPointF c1(p1.x() + h / 3.0, p1.y() + tangents[i] * h / 3.0);
+            QPointF c2(p2.x() - h / 3.0, p2.y() - tangents[i + 1] * h / 3.0);
+
+            // 限制在图表区域内，防止边缘毛刺
+            c1.setY(std::clamp(c1.y(), min_y, max_y));
+            c2.setY(std::clamp(c2.y(), min_y, max_y));
+
+            path_curve.cubicTo(c1, c2, p2);
+            path_fill.cubicTo(c1, c2, p2);
+        }
+
+        path_fill.lineTo(points.back().x(), baseline_y);
+        path_fill.closeSubpath();
+    }
+}
+
 void RealtimeAverageChartWidget::draw_curves(QPainter& p, const QRect& plot_rect, float max_rate) {
     if (history_.size() < 2) return;
 
@@ -284,52 +387,48 @@ void RealtimeAverageChartWidget::draw_curves(QPainter& p, const QRect& plot_rect
         return plot_rect.left() + ratio * plot_rect.width();
     };
 
+    // 收集所有平滑走势采样点
+    std::vector<QPointF> points;
+    points.reserve(history_.size());
+    for (const auto& pt : history_) {
+        points.emplace_back(time_to_x(pt.time_ms), rate_to_y(pt.smooth_rate));
+    }
+
     QPainterPath path_curve;
     QPainterPath path_fill;
+    build_monotone_cubic_path(points, plot_rect.bottom(), path_curve, path_fill, plot_rect.top(), plot_rect.bottom());
 
-    for (size_t i = 0; i < history_.size(); ++i) {
-        double x = time_to_x(history_[i].time_ms);
-        double y = rate_to_y(history_[i].rate_per_min);
+    // 1. 区域平滑渐变辉光填充 (多阶温暖琥珀金渐变)
+    QLinearGradient grad(QPointF(0, plot_rect.top()), QPointF(0, plot_rect.bottom()));
+    grad.setColorAt(0.0, QColor(255, 165, 2, 75));
+    grad.setColorAt(0.4, QColor(255, 165, 2, 28));
+    grad.setColorAt(1.0, QColor(255, 165, 2, 0));
+    p.setPen(Qt::NoPen);
+    p.setBrush(grad);
+    p.drawPath(path_fill);
 
-        if (i == 0) {
-            path_curve.moveTo(x, y);
-            path_fill.moveTo(x, plot_rect.bottom());
-            path_fill.lineTo(x, y);
-        } else {
-            path_curve.lineTo(x, y);
-            path_fill.lineTo(x, y);
-        }
-    }
-
-    if (!history_.empty()) {
-        double last_x = time_to_x(history_.back().time_ms);
-        path_fill.lineTo(last_x, plot_rect.bottom());
-        path_fill.closeSubpath();
-
-        // 渐变辉光填充
-        QLinearGradient grad(QPointF(0, plot_rect.top()), QPointF(0, plot_rect.bottom()));
-        grad.setColorAt(0.0, QColor(255, 165, 2, 60));
-        grad.setColorAt(1.0, QColor(255, 165, 2, 2));
-        p.setPen(Qt::NoPen);
-        p.setBrush(grad);
-        p.drawPath(path_fill);
-    }
-
-    // 绘制主均值曲线 (亮橙色)
-    p.setPen(QPen(QColor("#ffa502"), 2.2));
+    // 2. 绘制平滑均值贝塞尔主曲线 (抗锯齿圆角描边)
+    QPen curve_pen(QColor("#ffa502"), 2.5);
+    curve_pen.setCapStyle(Qt::RoundCap);
+    curve_pen.setJoinStyle(Qt::RoundJoin);
+    p.setPen(curve_pen);
     p.setBrush(Qt::NoBrush);
     p.drawPath(path_curve);
 
-    // 最新点发光标记
-    const auto& latest = history_.back();
-    double hx = time_to_x(latest.time_ms);
-    double hy = rate_to_y(latest.rate_per_min);
-
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(255, 165, 2, 80));
-    p.drawEllipse(QPointF(hx, hy), 6, 6);
-    p.setBrush(QColor("#ffa502"));
-    p.drawEllipse(QPointF(hx, hy), 3.5, 3.5);
+    // 3. 最新实时点发光环 (呼吸光圈与高光核)
+    if (!points.empty()) {
+        const QPointF& latest = points.back();
+        // 外层微光光晕
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 165, 2, 45));
+        p.drawEllipse(latest, 7.5, 7.5);
+        // 主光环
+        p.setBrush(QColor(255, 165, 2, 160));
+        p.drawEllipse(latest, 4.2, 4.2);
+        // 核心白亮光点
+        p.setBrush(QColor("#ffffff"));
+        p.drawEllipse(latest, 2.0, 2.0);
+    }
 
     p.restore();
 }
@@ -345,13 +444,25 @@ void RealtimeAverageChartWidget::draw_hover_card(QPainter& p, const QRect& plot_
     double ratio = static_cast<double>(pt.time_ms - t_start) / (t_end - t_start);
     int guide_x = plot_rect.left() + static_cast<int>(ratio * plot_rect.width());
 
-    // 垂直引导线
-    p.setPen(QPen(QColor("#ffa502"), 1, Qt::DashLine));
+    auto rate_to_y = [&](float rate) -> double {
+        double r = static_cast<double>(rate) / std::max(1.0f, max_rate);
+        return plot_rect.bottom() - r * plot_rect.height();
+    };
+
+    double cur_y = rate_to_y(pt.smooth_rate);
+
+    // 垂直引导虚线
+    p.setPen(QPen(QColor(255, 165, 2, 140), 1, Qt::DashLine));
     p.drawLine(guide_x, plot_rect.top(), guide_x, plot_rect.bottom());
 
+    // 曲线交叉点动态聚焦环
+    p.setPen(QPen(QColor("#ffffff"), 1.8));
+    p.setBrush(QColor("#ffa502"));
+    p.drawEllipse(QPointF(guide_x, cur_y), 4.5, 4.5);
+
     // 悬停卡片
-    int card_w = 160;
-    int card_h = 86;
+    int card_w = 168;
+    int card_h = 88;
     int card_x = guide_x + 12;
     int card_y = last_mouse_pos_.y() - card_h / 2;
 
@@ -361,7 +472,7 @@ void RealtimeAverageChartWidget::draw_hover_card(QPainter& p, const QRect& plot_
 
     QRect card_rect(card_x, card_y, card_w, card_h);
     p.setPen(QPen(QColor("#ffa502"), 1));
-    p.setBrush(QColor(13, 17, 23, 235));
+    p.setBrush(QColor(13, 17, 23, 238));
     p.drawRoundedRect(card_rect, 6, 6);
 
     p.setFont(QFont("Segoe UI", 9, QFont::Bold));
@@ -373,11 +484,11 @@ void RealtimeAverageChartWidget::draw_hover_card(QPainter& p, const QRect& plot_
     p.drawText(card_x + 10, card_y + 36, QString("👥 窗口通行: %1 人 (进%2/出%3)").arg(pt.window_count).arg(pt.entry_count).arg(pt.exit_count));
 
     p.setPen(QColor("#00d2d3"));
-    p.drawText(card_x + 10, card_y + 52, QString("⚡ 折算速率: %1 人次/分").arg(QString::number(pt.rate_per_min, 'f', 1)));
+    p.drawText(card_x + 10, card_y + 53, QString("⚡ 折算速率: %1 人次/分").arg(QString::number(pt.rate_per_min, 'f', 1)));
 
     float r_sec = pt.rate_per_min / 60.0f;
     p.setPen(QColor("#a29bfe"));
-    p.drawText(card_x + 10, card_y + 68, QString("📊 瞬时密度: %1 人/秒").arg(QString::number(r_sec, 'f', 2)));
+    p.drawText(card_x + 10, card_y + 70, QString("📊 瞬时密度: %1 人/秒").arg(QString::number(r_sec, 'f', 2)));
 
     p.restore();
 }

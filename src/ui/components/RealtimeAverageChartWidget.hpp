@@ -34,6 +34,7 @@ private:
         qint64 time_ms = 0;
         int window_count = 0;     // 窗口内实际通行人次
         float rate_per_min = 0.0f;// 折算每分钟通行速率
+        float smooth_rate = 0.0f; // 高斯平滑移动走势速率 (人次/分)
         int entry_count = 0;
         int exit_count = 0;
     };

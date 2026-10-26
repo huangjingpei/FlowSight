@@ -206,6 +206,97 @@ void RealtimeTotalChartWidget::draw_background_and_grid(QPainter& p, const QRect
     p.restore();
 }
 
+namespace {
+    // 基于 Fritsch-Carlson 算法的保单调三次贝塞尔平滑样条曲线生成器
+    void build_monotone_cubic_path(const std::vector<QPointF>& points,
+                                   double baseline_y,
+                                   QPainterPath& path_curve,
+                                   QPainterPath* path_fill,
+                                   double min_y, double max_y) {
+        if (points.empty()) return;
+
+        path_curve.moveTo(points.front());
+        if (path_fill) {
+            path_fill->moveTo(points.front().x(), baseline_y);
+            path_fill->lineTo(points.front());
+        }
+
+        if (points.size() == 1) {
+            if (path_fill) {
+                path_fill->lineTo(points.front().x(), baseline_y);
+                path_fill->closeSubpath();
+            }
+            return;
+        }
+
+        if (points.size() == 2) {
+            path_curve.lineTo(points.back());
+            if (path_fill) {
+                path_fill->lineTo(points.back());
+                path_fill->lineTo(points.back().x(), baseline_y);
+                path_fill->closeSubpath();
+            }
+            return;
+        }
+
+        const size_t n = points.size();
+        std::vector<double> dx(n - 1), dy(n - 1), m(n - 1);
+        for (size_t i = 0; i < n - 1; ++i) {
+            dx[i] = points[i + 1].x() - points[i].x();
+            dy[i] = points[i + 1].y() - points[i].y();
+            m[i] = (std::abs(dx[i]) > 1e-5) ? (dy[i] / dx[i]) : 0.0;
+        }
+
+        std::vector<double> tangents(n, 0.0);
+        tangents[0] = m[0];
+        tangents[n - 1] = m[n - 2];
+        for (size_t i = 1; i < n - 1; ++i) {
+            if (m[i - 1] * m[i] <= 0.0) {
+                tangents[i] = 0.0;
+            } else {
+                tangents[i] = (m[i - 1] + m[i]) / 2.0;
+            }
+        }
+
+        for (size_t i = 0; i < n - 1; ++i) {
+            if (std::abs(m[i]) < 1e-5) {
+                tangents[i] = 0.0;
+                tangents[i + 1] = 0.0;
+            } else {
+                double alpha = tangents[i] / m[i];
+                double beta = tangents[i + 1] / m[i];
+                double dist = alpha * alpha + beta * beta;
+                if (dist > 9.0) {
+                    double tau = 3.0 / std::sqrt(dist);
+                    tangents[i] = tau * alpha * m[i];
+                    tangents[i + 1] = tau * beta * m[i];
+                }
+            }
+        }
+
+        for (size_t i = 0; i < n - 1; ++i) {
+            double h = dx[i];
+            QPointF p1 = points[i];
+            QPointF p2 = points[i + 1];
+            QPointF c1(p1.x() + h / 3.0, p1.y() + tangents[i] * h / 3.0);
+            QPointF c2(p2.x() - h / 3.0, p2.y() - tangents[i + 1] * h / 3.0);
+
+            c1.setY(std::clamp(c1.y(), min_y, max_y));
+            c2.setY(std::clamp(c2.y(), min_y, max_y));
+
+            path_curve.cubicTo(c1, c2, p2);
+            if (path_fill) {
+                path_fill->cubicTo(c1, c2, p2);
+            }
+        }
+
+        if (path_fill) {
+            path_fill->lineTo(points.back().x(), baseline_y);
+            path_fill->closeSubpath();
+        }
+    }
+}
+
 void RealtimeTotalChartWidget::draw_curves(QPainter& p, const QRect& plot_rect, int min_val, int max_val) {
     if (history_.size() < 2) return;
 
@@ -224,58 +315,47 @@ void RealtimeTotalChartWidget::draw_curves(QPainter& p, const QRect& plot_rect, 
         return plot_rect.left() + ratio * plot_rect.width();
     };
 
-    QPainterPath path_total;
-    QPainterPath path_entry;
-    QPainterPath path_exit;
-    QPainterPath path_fill;
+    std::vector<QPointF> pts_total, pts_entry, pts_exit;
+    pts_total.reserve(history_.size());
+    pts_entry.reserve(history_.size());
+    pts_exit.reserve(history_.size());
 
-    for (size_t i = 0; i < history_.size(); ++i) {
-        double x = time_to_x(history_[i].time_ms);
-        double y_tot = val_to_y(history_[i].total);
-        double y_ent = val_to_y(history_[i].entry);
-        double y_ext = val_to_y(history_[i].exit);
-
-        if (i == 0) {
-            path_total.moveTo(x, y_tot);
-            path_entry.moveTo(x, y_ent);
-            path_exit.moveTo(x, y_ext);
-            path_fill.moveTo(x, plot_rect.bottom());
-            path_fill.lineTo(x, y_tot);
-        } else {
-            path_total.lineTo(x, y_tot);
-            path_entry.lineTo(x, y_ent);
-            path_exit.lineTo(x, y_ext);
-            path_fill.lineTo(x, y_tot);
-        }
+    for (const auto& pt : history_) {
+        double x = time_to_x(pt.time_ms);
+        pts_total.emplace_back(x, val_to_y(pt.total));
+        pts_entry.emplace_back(x, val_to_y(pt.entry));
+        pts_exit.emplace_back(x, val_to_y(pt.exit));
     }
 
-    // 闭合面积区域
-    if (!history_.empty()) {
-        double last_x = time_to_x(history_.back().time_ms);
-        path_fill.lineTo(last_x, plot_rect.bottom());
-        path_fill.closeSubpath();
+    QPainterPath path_total, path_fill, path_entry, path_exit;
+    build_monotone_cubic_path(pts_total, plot_rect.bottom(), path_total, &path_fill, plot_rect.top(), plot_rect.bottom());
+    build_monotone_cubic_path(pts_entry, plot_rect.bottom(), path_entry, nullptr, plot_rect.top(), plot_rect.bottom());
+    build_monotone_cubic_path(pts_exit, plot_rect.bottom(), path_exit, nullptr, plot_rect.top(), plot_rect.bottom());
 
-        // 绘制总计下方的渐变辉光
-        QLinearGradient grad(QPointF(0, plot_rect.top()), QPointF(0, plot_rect.bottom()));
-        grad.setColorAt(0.0, QColor(56, 139, 253, 55));
-        grad.setColorAt(1.0, QColor(56, 139, 253, 2));
-        p.setPen(Qt::NoPen);
-        p.setBrush(grad);
-        p.drawPath(path_fill);
-    }
+    // 绘制总计下方的渐变辉光
+    QLinearGradient grad(QPointF(0, plot_rect.top()), QPointF(0, plot_rect.bottom()));
+    grad.setColorAt(0.0, QColor(56, 139, 253, 60));
+    grad.setColorAt(0.5, QColor(56, 139, 253, 20));
+    grad.setColorAt(1.0, QColor(56, 139, 253, 0));
+    p.setPen(Qt::NoPen);
+    p.setBrush(grad);
+    p.drawPath(path_fill);
 
-    // 绘制曲线
+    // 绘制平滑曲线 (抗锯齿圆角端点)
     // 1. 累计进 (绿色)
-    p.setPen(QPen(QColor("#2ea043"), 1.8));
+    QPen pen_entry(QColor("#2ea043"), 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    p.setPen(pen_entry);
     p.setBrush(Qt::NoBrush);
     p.drawPath(path_entry);
 
     // 2. 累计出 (红色)
-    p.setPen(QPen(QColor("#f85149"), 1.8));
+    QPen pen_exit(QColor("#f85149"), 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    p.setPen(pen_exit);
     p.drawPath(path_exit);
 
     // 3. 总计 (科技蓝，粗线)
-    p.setPen(QPen(QColor("#388bfd"), 2.4));
+    QPen pen_total(QColor("#388bfd"), 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    p.setPen(pen_total);
     p.drawPath(path_total);
 
     // 在最新点绘制发光圆环点
@@ -284,10 +364,12 @@ void RealtimeTotalChartWidget::draw_curves(QPainter& p, const QRect& plot_rect, 
     double hy = val_to_y(latest.total);
 
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(56, 139, 253, 80));
-    p.drawEllipse(QPointF(hx, hy), 6, 6);
+    p.setBrush(QColor(56, 139, 253, 60));
+    p.drawEllipse(QPointF(hx, hy), 7.5, 7.5);
     p.setBrush(QColor("#388bfd"));
-    p.drawEllipse(QPointF(hx, hy), 3.5, 3.5);
+    p.drawEllipse(QPointF(hx, hy), 4.0, 4.0);
+    p.setBrush(QColor("#ffffff"));
+    p.drawEllipse(QPointF(hx, hy), 2.0, 2.0);
 
     p.restore();
 }
@@ -304,8 +386,18 @@ void RealtimeTotalChartWidget::draw_hover_card(QPainter& p, const QRect& plot_re
     int guide_x = plot_rect.left() + static_cast<int>(ratio * plot_rect.width());
 
     // 垂直引导虚线
-    p.setPen(QPen(QColor("#58a6ff"), 1, Qt::DashLine));
+    p.setPen(QPen(QColor(56, 139, 253, 160), 1, Qt::DashLine));
     p.drawLine(guide_x, plot_rect.top(), guide_x, plot_rect.bottom());
+
+    auto val_to_y = [&](int val) -> double {
+        double r = static_cast<double>(val - min_val) / std::max(1, (max_val - min_val));
+        return plot_rect.bottom() - r * plot_rect.height();
+    };
+
+    // 绘制曲线交点动态聚焦环
+    p.setPen(QPen(QColor("#ffffff"), 1.8));
+    p.setBrush(QColor("#388bfd"));
+    p.drawEllipse(QPointF(guide_x, val_to_y(pt.total)), 4.0, 4.0);
 
     // 悬停卡片
     int card_w = 150;
