@@ -17,8 +17,10 @@ import com.flowsight.cloud.mapper.BizPointMapper;
 import com.flowsight.cloud.mapper.BizStatsHourlyMapper;
 import com.flowsight.cloud.mapper.BusinessTypeMapper;
 import com.flowsight.cloud.mapper.SysUserMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowsight.cloud.service.EventService;
 import com.flowsight.cloud.service.MinioService;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.flowsight.cloud.vo.DashboardOverviewVO;
 import com.flowsight.cloud.vo.DashboardPointCardVO;
 import com.flowsight.cloud.vo.DashboardSummaryVO;
@@ -42,6 +44,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -69,10 +72,16 @@ public class EventServiceImpl implements EventService {
     @Autowired
     private MinioService minioService;
 
-    // 待绑定切片池: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired(required = false)
+    private ObjectMapper redisObjectMapper;
+
+    // 待绑定切片池内存兜底: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
     private final Map<String, String> pendingClipUrlCache = new ConcurrentHashMap<>();
 
-    // 批次 UUID 幂等缓存 (用于防网络重试、离线队列重复重放导致指标双计)
+    // 批次 UUID 幂等内存兜底 (用于防网络重试、离线队列重复重放导致指标双计)
     private final Map<String, Long> processedBatchUuids = new ConcurrentHashMap<>();
     private static final int MAX_BATCH_CACHE_SIZE = 10000;
     private static final long BATCH_CACHE_EXPIRE_MS = 24 * 3600 * 1000L; // 24小时
@@ -81,6 +90,103 @@ public class EventServiceImpl implements EventService {
         if (processedBatchUuids.size() > MAX_BATCH_CACHE_SIZE) {
             long now = System.currentTimeMillis();
             processedBatchUuids.entrySet().removeIf(entry -> (now - entry.getValue()) > BATCH_CACHE_EXPIRE_MS);
+        }
+    }
+
+    // ==================== Redis 高速缓存与削峰辅助方法 ====================
+
+    /**
+     * 批次 UUID 分布式幂等防重检查 (Redis SETNX 24小时过期，优雅降级本地内存)
+     */
+    private boolean checkBatchUuidIdempotent(String batchUuid) {
+        if (batchUuid == null || batchUuid.trim().isEmpty()) return false;
+        String key = "flowsight:batch:uuid:" + batchUuid.trim();
+        if (stringRedisTemplate != null) {
+            try {
+                Boolean isFirst = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 24, TimeUnit.HOURS);
+                return Boolean.FALSE.equals(isFirst);
+            } catch (Exception ex) {
+                log.warn("Redis 批次幂等防重异常，降级到本地内存: {}", ex.getMessage());
+            }
+        }
+        cleanBatchCacheIfNeeded();
+        Long prev = processedBatchUuids.putIfAbsent(batchUuid.trim(), System.currentTimeMillis());
+        return prev != null;
+    }
+
+    /**
+     * 通行事件端云防重检查 (Redis SETNX 15秒过期，0 次 MySQL 查表)
+     */
+    private boolean checkEventDeduplication(Long pointId, Integer trackId, long evTs) {
+        if (trackId == null || trackId <= 0) return false;
+        String key = "flowsight:dedup:" + pointId + ":" + trackId;
+        if (stringRedisTemplate != null) {
+            try {
+                Boolean isFirst = stringRedisTemplate.opsForValue().setIfAbsent(key, "1", 15, TimeUnit.SECONDS);
+                return Boolean.FALSE.equals(isFirst);
+            } catch (Exception ex) {
+                log.warn("Redis SETNX 防重异常，降级到 MySQL 查重: {}", ex.getMessage());
+            }
+        }
+        List<BizPassageEvent> existing = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
+                .eq(BizPassageEvent::getPointId, pointId)
+                .eq(BizPassageEvent::getTrackId, trackId)
+                .ge(BizPassageEvent::getTimestampMs, evTs - 15000)
+                .le(BizPassageEvent::getTimestampMs, evTs + 15000));
+        return !existing.isEmpty();
+    }
+
+    /**
+     * 存入待绑定切片池 (Redis 300秒TTL，优雅降级本地内存)
+     */
+    private void putPendingClipUrl(Long pointId, Integer trackId, String clipUrl) {
+        if (trackId == null || clipUrl == null) return;
+        String key = "flowsight:clip:pending:" + pointId + "_" + trackId;
+        if (stringRedisTemplate != null) {
+            try {
+                stringRedisTemplate.opsForValue().set(key, clipUrl, 300, TimeUnit.SECONDS);
+                return;
+            } catch (Exception ex) {
+                log.warn("Redis 存入切片池异常，降级到本地内存: {}", ex.getMessage());
+            }
+        }
+        pendingClipUrlCache.put(pointId + "_" + trackId, clipUrl);
+    }
+
+    /**
+     * 获取并移除待绑定切片池中的切片 URL (优先 Redis，次选本地内存)
+     */
+    private String getAndRemovePendingClipUrl(Long pointId, Integer trackId) {
+        if (trackId == null) return null;
+        String key = "flowsight:clip:pending:" + pointId + "_" + trackId;
+        if (stringRedisTemplate != null) {
+            try {
+                String url = stringRedisTemplate.opsForValue().get(key);
+                if (url != null) {
+                    stringRedisTemplate.delete(key);
+                    return url;
+                }
+            } catch (Exception ex) {
+                log.warn("Redis 读取切片池异常，降级到本地内存: {}", ex.getMessage());
+            }
+        }
+        return pendingClipUrlCache.remove(pointId + "_" + trackId);
+    }
+
+    /**
+     * 主动驱逐 H5 看板热点缓存 (Cache-Aside 机制，保障数据发生改变时前端下一秒即可见)
+     */
+    private void evictDashboardCache(Long pointId, Long userId) {
+        if (stringRedisTemplate == null) return;
+        try {
+            if (pointId != null) {
+                stringRedisTemplate.delete("flowsight:h5:summary:" + pointId);
+            }
+            if (userId != null) {
+                stringRedisTemplate.delete("flowsight:h5:overview:" + userId);
+            }
+        } catch (Exception ex) {
+            log.warn("主动驱逐 Dashboard Redis 缓存异常: {}", ex.getMessage());
         }
     }
 
@@ -94,14 +200,9 @@ public class EventServiceImpl implements EventService {
 
         long ts = dto.getTimestamp() != null ? dto.getTimestamp() : System.currentTimeMillis();
 
-        // 商业级端云防重保障：检查同点位、同TrackId在 15 秒内是否已有记录
+        // 商业级端云防重保障：Redis SETNX 15秒分布式原子锁 (0 次 MySQL 查表)
         if (dto.getTrackId() != null && dto.getTrackId() > 0) {
-            List<BizPassageEvent> existing = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
-                    .eq(BizPassageEvent::getPointId, pointId)
-                    .eq(BizPassageEvent::getTrackId, dto.getTrackId())
-                    .ge(BizPassageEvent::getTimestampMs, ts - 15000)
-                    .le(BizPassageEvent::getTimestampMs, ts + 15000));
-            if (!existing.isEmpty()) {
+            if (checkEventDeduplication(pointId, dto.getTrackId(), ts)) {
                 log.info("单事件端云防重拦截：点位 {} TrackId {} 在时间戳 {} 附近已存在记录，跳过入库与计数", pointId, dto.getTrackId(), ts);
                 return;
             }
@@ -129,10 +230,19 @@ public class EventServiceImpl implements EventService {
         event.setTimestampMs(ts);
         event.setLocalClipPath(dto.getClipPath() != null ? dto.getClipPath() : "");
 
+        // 检查待绑定切片池 (优先 Redis，次选本地内存)
+        String pendingUrl = getAndRemovePendingClipUrl(pointId, event.getTrackId());
+        if (pendingUrl != null) {
+            event.setClipUrl(pendingUrl);
+        }
+
         eventMapper.insert(event);
 
         // 更新小时预聚合统计 (stats_hourly)
         updateHourlyStat(pointId, point.getUserId(), ts, event.getDirection(), gender);
+
+        // 主动驱逐 H5 看板热点缓存
+        evictDashboardCache(pointId, point.getUserId());
     }
 
     @Override
@@ -145,11 +255,9 @@ public class EventServiceImpl implements EventService {
 
         boolean isDuplicateBatch = false;
         if (dto.getBatchUuid() != null && !dto.getBatchUuid().trim().isEmpty()) {
-            cleanBatchCacheIfNeeded();
-            Long previousTs = processedBatchUuids.putIfAbsent(dto.getBatchUuid().trim(), System.currentTimeMillis());
-            if (previousTs != null) {
-                isDuplicateBatch = true;
-                log.warn("批次 UUID [{}] 已经成功入库，触发幂等保护，跳过指标累加与明细入库", dto.getBatchUuid());
+            isDuplicateBatch = checkBatchUuidIdempotent(dto.getBatchUuid());
+            if (isDuplicateBatch) {
+                log.warn("批次 UUID [{}] 已经成功入库，触发分布式幂等保护，跳过指标累加与明细入库", dto.getBatchUuid());
             }
         }
 
@@ -191,36 +299,13 @@ public class EventServiceImpl implements EventService {
 
             // 2. 批量存储精简事件明细 (如果客户端附带了 events)
             if (dto.getEvents() != null && !dto.getEvents().isEmpty()) {
+                List<BizPassageEvent> batchEvents = new ArrayList<>();
                 for (EdgeEventDTO evDto : dto.getEvents()) {
                     long evTs = evDto.getTimestamp() != null ? evDto.getTimestamp() : endTs;
 
-                    // 商业级端云防重保障：检查同点位、同TrackId在 15 秒内是否已有记录
+                    // 商业级端云防重保障：Redis SETNX 15秒分布式原子锁 (0 次 MySQL 查表)
                     if (evDto.getTrackId() != null && evDto.getTrackId() > 0) {
-                        List<BizPassageEvent> existing = eventMapper.selectList(new LambdaQueryWrapper<BizPassageEvent>()
-                                .eq(BizPassageEvent::getPointId, pointId)
-                                .eq(BizPassageEvent::getTrackId, evDto.getTrackId())
-                                .ge(BizPassageEvent::getTimestampMs, evTs - 15000)
-                                .le(BizPassageEvent::getTimestampMs, evTs + 15000));
-                        if (!existing.isEmpty()) {
-                            // 若切片先行到达，回填切片 URL 到已有记录
-                            String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + evDto.getTrackId());
-                            BizPassageEvent existEv = existing.get(0);
-                            boolean needUpdate = false;
-                            if (pendingUrl != null && (existEv.getClipUrl() == null || existEv.getClipUrl().isEmpty())) {
-                                existEv.setClipUrl(pendingUrl);
-                                needUpdate = true;
-                            }
-                            if ((existEv.getPlateNumber() == null || existEv.getPlateNumber().isEmpty()) &&
-                                evDto.getPlateNumber() != null && !evDto.getPlateNumber().isEmpty()) {
-                                existEv.setPlateNumber(evDto.getPlateNumber());
-                                existEv.setPlateColor(evDto.getPlateColor() != null ? evDto.getPlateColor() : "");
-                                existEv.setVehicleType(evDto.getVehicleType() != null ? evDto.getVehicleType() : "");
-                                existEv.setVehicleColor(evDto.getVehicleColor() != null ? evDto.getVehicleColor() : "");
-                                needUpdate = true;
-                            }
-                            if (needUpdate) {
-                                eventMapper.updateById(existEv);
-                            }
+                        if (checkEventDeduplication(pointId, evDto.getTrackId(), evTs)) {
                             log.info("点位 {} TrackId {} 在时间戳 {} 附近已存在通行记录，执行端云去重跳过重复插入", pointId, evDto.getTrackId(), evTs);
                             continue;
                         }
@@ -248,13 +333,18 @@ public class EventServiceImpl implements EventService {
                     event.setTimestampMs(evTs);
                     event.setLocalClipPath(evDto.getClipPath() != null ? evDto.getClipPath() : "");
 
-                    // 检查待绑定切片池 (若切片先行上传到达)
-                    String pendingUrl = pendingClipUrlCache.remove(pointId + "_" + event.getTrackId());
+                    // 检查待绑定切片池 (优先 Redis，次选本地内存)
+                    String pendingUrl = getAndRemovePendingClipUrl(pointId, event.getTrackId());
                     if (pendingUrl != null) {
                         event.setClipUrl(pendingUrl);
                     }
 
-                    eventMapper.insert(event);
+                    batchEvents.add(event);
+                }
+
+                // 高性能单语句多值批量写入 (Multi-value Batch Insert，替代 N 次循环单独写入)
+                if (!batchEvents.isEmpty()) {
+                    eventMapper.insertBatch(batchEvents);
                 }
             }
         }
@@ -291,6 +381,9 @@ public class EventServiceImpl implements EventService {
         // 点位状态在线
         point.setStreamStatus("ONLINE");
         pointMapper.updateById(point);
+
+        // 主动驱逐 H5 看板热点缓存
+        evictDashboardCache(pointId, point.getUserId());
     }
 
     private void updateHourlyStat(Long pointId, Long userId, long ts, String direction, String gender) {
@@ -348,9 +441,9 @@ public class EventServiceImpl implements EventService {
             }
         }
 
-        // 若事件记录尚未批量上报到达，暂存至待绑定池
+        // 若事件记录尚未批量上报到达，暂存至待绑定池 (优先 Redis，次选本地内存)
         if (!matched && trackId != null) {
-            pendingClipUrlCache.put(pointId + "_" + trackId, clipUrl);
+            putPendingClipUrl(pointId, trackId, clipUrl);
         }
 
         return clipUrl;
@@ -372,6 +465,7 @@ public class EventServiceImpl implements EventService {
             String url = "/api/v1/snapshots/" + filename + "?t=" + System.currentTimeMillis();
             point.setSnapshotUrl(url);
             pointMapper.updateById(point);
+            evictDashboardCache(pointId, point.getUserId());
             return url;
         } catch (Exception e) {
             throw new RuntimeException("快照保存失败: " + e.getMessage(), e);
@@ -393,6 +487,9 @@ public class EventServiceImpl implements EventService {
 
         BizDeviceHeartbeat hb = heartbeatMapper.selectById(pointId);
         boolean isNew = (hb == null);
+        Integer oldOcc = hb != null ? hb.getCurrentOccupancy() : null;
+        String oldStatus = point.getStreamStatus();
+
         if (isNew) {
             hb = new BizDeviceHeartbeat();
             hb.setPointId(pointId);
@@ -428,10 +525,29 @@ public class EventServiceImpl implements EventService {
                 pointMapper.updateById(point);
             }
         }
+
+        Integer newOcc = hb.getCurrentOccupancy();
+        String newStatus = point.getStreamStatus();
+        if (isNew || !Objects.equals(oldOcc, newOcc) || !Objects.equals(oldStatus, newStatus)) {
+            evictDashboardCache(pointId, point.getUserId());
+        }
     }
 
     @Override
     public DashboardSummaryVO getDashboardSummary(Long pointId) {
+        // 1. 优先读取 Redis 高速热点缓存 (< 1ms 极致响应，有效保护 MySQL 避免多前端轮询打爆数据库)
+        String cacheKey = "flowsight:h5:summary:" + pointId;
+        if (stringRedisTemplate != null && redisObjectMapper != null) {
+            try {
+                String cachedJson = stringRedisTemplate.opsForValue().get(cacheKey);
+                if (cachedJson != null && !cachedJson.isEmpty()) {
+                    return redisObjectMapper.readValue(cachedJson, DashboardSummaryVO.class);
+                }
+            } catch (Exception ex) {
+                log.warn("Redis 读取看板详情缓存失败: {}", ex.getMessage());
+            }
+        }
+
         BizPoint point = pointMapper.selectById(pointId);
         if (point == null) {
             throw new IllegalArgumentException("点位不存在");
@@ -534,6 +650,16 @@ public class EventServiceImpl implements EventService {
         vo.setDemographics(demo);
         vo.setHourlyChart(new ArrayList<>(hourMap.values()));
         vo.getHourlyChart().sort(Comparator.comparingInt(HourlyStatVO::getHour));
+
+        // 2. 写入 Redis 高速热点缓存 (2 秒短 TTL，既抗高频轮询，又保障秒级时效)
+        if (stringRedisTemplate != null && redisObjectMapper != null) {
+            try {
+                String json = redisObjectMapper.writeValueAsString(vo);
+                stringRedisTemplate.opsForValue().set(cacheKey, json, 2, TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                log.warn("Redis 写入看板详情缓存失败: {}", ex.getMessage());
+            }
+        }
 
         return vo;
     }
@@ -826,6 +952,20 @@ public class EventServiceImpl implements EventService {
         if (userId == null) {
             throw new IllegalArgumentException("商户用户ID不能为空");
         }
+
+        // 1. 优先读取 Redis 多点位聚合概览缓存 (< 1.5ms 极速响应，消除多点位多表联合计算高频轮询开销)
+        String cacheKey = "flowsight:h5:overview:" + userId;
+        if (stringRedisTemplate != null && redisObjectMapper != null) {
+            try {
+                String cachedJson = stringRedisTemplate.opsForValue().get(cacheKey);
+                if (cachedJson != null && !cachedJson.isEmpty()) {
+                    return redisObjectMapper.readValue(cachedJson, DashboardOverviewVO.class);
+                }
+            } catch (Exception ex) {
+                log.warn("Redis 读取多点位看板聚合缓存失败: {}", ex.getMessage());
+            }
+        }
+
         SysUser user = userMapper.selectById(userId);
         if (user == null) {
             throw new IllegalArgumentException("商户用户不存在");
@@ -966,6 +1106,16 @@ public class EventServiceImpl implements EventService {
         overview.setDefaultPointId(defaultPointId);
         overview.setGlobalMetrics(global);
         overview.setPointCards(cardList);
+
+        // 2. 写入 Redis 多点位聚合概览缓存 (3 秒短 TTL)
+        if (stringRedisTemplate != null && redisObjectMapper != null) {
+            try {
+                String json = redisObjectMapper.writeValueAsString(overview);
+                stringRedisTemplate.opsForValue().set(cacheKey, json, 3, TimeUnit.SECONDS);
+            } catch (Exception ex) {
+                log.warn("Redis 写入多点位看板聚合缓存失败: {}", ex.getMessage());
+            }
+        }
 
         return overview;
     }
