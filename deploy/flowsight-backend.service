@@ -1,0 +1,17 @@
+[Unit]
+Description=FlowSight Cloud Backend Service
+After=network.target mysql.service redis-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/flowsight
+ExecStart=/usr/lib/jvm/java-17-openjdk-amd64/bin/java -Xms512m -Xmx1024m -XX:+UseG1GC -jar /opt/flowsight/flowsight-backend.jar --spring.profiles.active=prod --spring.config.additional-location=file:/opt/flowsight/application-prod.yml
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/flowsight/logs/backend.log
+StandardError=append:/opt/flowsight/logs/backend.error.log
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

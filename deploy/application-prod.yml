@@ -1,0 +1,66 @@
+server:
+  port: 8088
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: flowsight-cloud-backend
+  profiles:
+    active: prod
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/flowsight_cloud?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries=true
+    username: flowsight
+    password: ZXCVbnm,=-09
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      encoding: UTF-8
+      continue-on-error: true
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: ZXCVbnm,=-09
+      timeout: 5000ms
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+minio:
+  endpoint: http://127.0.0.1:9000
+  access-key: kapian
+  secret-key: Kapian@2024
+  bucket-name: flowsight-clips
+
+jwt:
+  secret: c29tZXZlcnlzZWNyZXRrZXlmb3JmbG93c2lnaHRhdXRoZW50aWNhdGlvbjEyMzQ1Ng==
+  expire-hours: 72
+
+logging:
+  level:
+    root: INFO
