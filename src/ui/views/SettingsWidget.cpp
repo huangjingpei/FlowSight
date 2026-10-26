@@ -62,18 +62,12 @@ void SettingsWidget::setup_ui() {
     cloud_layout->setContentsMargins(14, 14, 14, 14);
     cloud_layout->setSpacing(10);
 
-    // 行 1: 服务地址与节点标识
+    // 行 1: 服务地址 (节点名称由系统自动静默识别主机名，无需人工输入)
     auto* cloud_row1 = new QHBoxLayout();
     cloud_row1->addWidget(new QLabel("云端中台 URL:", this));
     cloud_url_edit_ = new QLineEdit(cfg.get_cloud_server_url(), this);
     cloud_url_edit_->setPlaceholderText("例如: http://localhost:8080");
     cloud_row1->addWidget(cloud_url_edit_, 1);
-
-    cloud_row1->addSpacing(16);
-    cloud_row1->addWidget(new QLabel("本节点名称:", this));
-    cloud_client_name_edit_ = new QLineEdit(cfg.get_cloud_client_name(), this);
-    cloud_client_name_edit_->setPlaceholderText("例如: FlowSight-Node-1");
-    cloud_row1->addWidget(cloud_client_name_edit_, 1);
     cloud_layout->addLayout(cloud_row1);
 
     // 行 2: 商户账号登录与点位拉取
@@ -334,8 +328,7 @@ void SettingsWidget::setup_ui() {
             }
 
             cloud_point_combo_->clear();
-            QString my_client = cloud_client_name_edit_->text().trimmed();
-            if (my_client.isEmpty()) my_client = "FlowSight-Node-1";
+            QString my_client = ConfigManager::instance().get_cloud_client_name();
 
             for (const auto& val : points) {
                 QJsonObject p = val.toObject();
@@ -393,9 +386,7 @@ void SettingsWidget::setup_ui() {
         bool isOccupied = map["occupied"].toBool();
         QString boundClient = map["boundClient"].toString();
         QString url = cloud_url_edit_->text().trimmed();
-        QString client_name = cloud_client_name_edit_->text().trimmed();
-
-        if (client_name.isEmpty()) client_name = "FlowSight-Node-1";
+        QString client_name = ConfigManager::instance().get_cloud_client_name();
 
         bool force = false;
         if (isOccupied && !boundClient.isEmpty() && boundClient != client_name) {
@@ -534,7 +525,6 @@ void SettingsWidget::on_btn_save() {
     cfg.set_webhook_timeout_ms(webhook_timeout_spin_->value());
 
     cfg.set_cloud_server_url(cloud_url_edit_->text().trimmed());
-    cfg.set_cloud_client_name(cloud_client_name_edit_->text().trimmed());
     cfg.set_cloud_user_phone(cloud_phone_edit_->text().trimmed());
 
     cfg.save();

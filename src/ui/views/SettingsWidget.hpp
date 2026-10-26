@@ -44,7 +44,6 @@ private:
 
     // 云端中台手机号密码登录与点位绑定
     QLineEdit* cloud_url_edit_ = nullptr;
-    QLineEdit* cloud_client_name_edit_ = nullptr;
 
     // 6 位动态数字配对码极简秒级接入 (推荐)
     QLineEdit* cloud_pairing_code_edit_ = nullptr;

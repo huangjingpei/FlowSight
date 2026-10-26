@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QSettings>
+#include <QSysInfo>
 
 class ConfigManager : public QObject {
     Q_OBJECT
@@ -59,7 +60,13 @@ public:
     QString get_cloud_server_url() const { return cloud_server_url_; }
     void set_cloud_server_url(const QString& val) { cloud_server_url_ = val; }
 
-    QString get_cloud_client_name() const { return cloud_client_name_; }
+    QString get_cloud_client_name() const {
+        if (cloud_client_name_.isEmpty() || cloud_client_name_ == "FlowSight-Node-1") {
+            QString host = QSysInfo::machineHostName();
+            return host.isEmpty() ? "FlowSight-Node" : QString("FlowSight-%1").arg(host);
+        }
+        return cloud_client_name_;
+    }
     void set_cloud_client_name(const QString& val) { cloud_client_name_ = val; }
 
     QString get_cloud_user_phone() const { return cloud_user_phone_; }
@@ -118,7 +125,7 @@ private:
 
     // 云端中台持久化配置 (双密码体系)
     QString cloud_server_url_ = "http://localhost:8080";
-    QString cloud_client_name_ = "FlowSight-Node-1";
+    QString cloud_client_name_ = "";
     QString cloud_user_phone_ = "";
     QString cloud_company_name_ = "";
     qint64 cloud_point_id_ = 0;

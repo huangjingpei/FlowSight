@@ -40,7 +40,11 @@ void ConfigManager::load(const QString& ini_path) {
     webhook_timeout_ms_ = settings.value("Webhook/TimeoutMs", 3000).toInt();
 
     cloud_server_url_ = settings.value("Cloud/ServerUrl", "http://localhost:8080").toString();
-    cloud_client_name_ = settings.value("Cloud/ClientName", "FlowSight-Node-1").toString();
+    QString default_host = QString("FlowSight-%1").arg(QSysInfo::machineHostName());
+    cloud_client_name_ = settings.value("Cloud/ClientName", default_host).toString();
+    if (cloud_client_name_.isEmpty() || cloud_client_name_ == "FlowSight-Node-1") {
+        cloud_client_name_ = default_host;
+    }
     cloud_user_phone_ = settings.value("Cloud/UserPhone", "").toString();
     cloud_company_name_ = settings.value("Cloud/CompanyName", "").toString();
     cloud_point_id_ = settings.value("Cloud/PointId", 0).toLongLong();
