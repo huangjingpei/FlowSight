@@ -28,6 +28,26 @@
       </el-col>
     </el-row>
 
+    <!-- 实时数字大屏一键投屏横幅 -->
+    <el-card shadow="hover" class="screen-hero-card mb-4">
+      <div class="screen-hero-content">
+        <div class="hero-left">
+          <div class="hero-icon">🖥️</div>
+          <div class="hero-text">
+            <div class="hero-title">FlowSight 智能视觉数字全景大屏 (指挥中心 / 展厅投屏模式)</div>
+            <div class="hero-desc">
+              基于 1920×1080 等比缩放引擎，集成深色科技 HUD、实时流速走势、现场视像遥测、24小时时段分布及最新通行瀑布流，支持多通道自动轮巡与一键全屏展示。
+            </div>
+          </div>
+        </div>
+        <div class="hero-right">
+          <el-button type="primary" size="large" class="open-screen-large-btn" @click="openScreen">
+            🚀 立即打开全景数字大屏 (新窗口)
+          </el-button>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 点位实时监控列表概览 -->
     <el-card shadow="never" class="mt-4">
       <template #header>
@@ -115,12 +135,64 @@ const fetchData = async () => {
   }
 };
 
+const openScreen = () => {
+  window.open('#/screen', '_blank');
+};
+
 onMounted(() => {
   fetchData();
 });
 </script>
 
 <style scoped>
+.screen-hero-card {
+  background: linear-gradient(135deg, #0d1526 0%, #162444 100%);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 114, 255, 0.15);
+}
+.screen-hero-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+.hero-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hero-icon {
+  font-size: 38px;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.6));
+}
+.hero-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #00f0ff;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.hero-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  max-width: 820px;
+  line-height: 1.5;
+}
+.open-screen-large-btn {
+  background: linear-gradient(90deg, #0072ff 0%, #00f0ff 100%);
+  border: none;
+  font-weight: 700;
+  font-size: 15px;
+  color: #030712;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.5);
+  transition: all 0.3s;
+}
+.open-screen-large-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.8);
+}
+
 .mb-4 {
   margin-bottom: 20px;
 }
