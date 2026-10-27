@@ -1,8 +1,11 @@
 #!/bin/bash
 # ==============================================================================
-# FlowSight 边云协同智能物联与视觉多租户平台 - 一键自动化部署脚本
-# 适用环境: Ubuntu 22.04 LTS / Debian 11+
-# 域名: https://flowsight.1t90.com
+# FlowSight 边云协同智能物联与视觉多租户平台 - 自适应一键部署脚本 (Universal Deployer)
+# 支持环境:
+#   1. Windows Git Shell / Git Bash (本地一键打包、SFTP上传、远程构建与验证)
+#   2. Linux Server (Ubuntu 22.04 LTS / Debian 11+ 服务器端本地部署)
+# 生产域名: https://flowsight.1t90.com
+# 目标服务器: 124.221.179.44
 # ==============================================================================
 
 set -e
@@ -14,6 +17,52 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OS_TYPE="$(uname -s)"
+
+# ==============================================================================
+# 模式 A: Windows Git Shell / Git Bash 本地执行模式
+# ==============================================================================
+case "${OS_TYPE}" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT*)
+        echo -e "${CYAN}================================================================${NC}"
+        echo -e "${CYAN}  FlowSight 远程自动化部署流水线 (Windows Git Shell 本地模式)   ${NC}"
+        echo -e "${CYAN}  目标服务器: root@124.221.179.44 | 域名: https://flowsight.1t90.com  ${NC}"
+        echo -e "${CYAN}================================================================${NC}"
+        
+        # 寻找本地 Python 解释器
+        PYTHON_BIN=""
+        if command -v python >/dev/null 2>&1; then
+            PYTHON_BIN="python"
+        elif command -v python3 >/dev/null 2>&1; then
+            PYTHON_BIN="python3"
+        elif [ -f "/c/Users/Administrator/AppData/Local/Programs/Python/Python312/python.exe" ]; then
+            PYTHON_BIN="/c/Users/Administrator/AppData/Local/Programs/Python/Python312/python.exe"
+        fi
+
+        if [ -n "${PYTHON_BIN}" ]; then
+            # 检查 paramiko
+            if ! ${PYTHON_BIN} -c "import paramiko" >/dev/null 2>&1; then
+                echo -e "${YELLOW}[提示] 正在为本地 Python 安装 paramiko 远程通信组件...${NC}"
+                ${PYTHON_BIN} -m pip install paramiko
+            fi
+            
+            REMOTE_SCRIPT="${SCRIPT_DIR}/remote_deploy.py"
+            if [ ! -f "${REMOTE_SCRIPT}" ]; then
+                REMOTE_SCRIPT="${SCRIPT_DIR}/deploy/remote_deploy.py"
+            fi
+            
+            exec ${PYTHON_BIN} "${REMOTE_SCRIPT}" "$@"
+        else
+            echo -e "${RED}[错误] 未在系统 PATH 中检测到 Python。请安装 Python 3 或将其添加到环境变量。${NC}"
+            exit 1
+        fi
+        ;;
+esac
+
+# ==============================================================================
+# 模式 B: Linux 远程服务器本地执行模式
+# ==============================================================================
 log_info() {
     echo -e "${GREEN}[FlowSight-INFO]${NC} $1"
 }
@@ -24,7 +73,6 @@ log_error() {
     echo -e "${RED}[FlowSight-ERROR]${NC} $1"
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_DIR="/opt/flowsight"
 MYSQL_USER="flowsight"
 MYSQL_PASS="ZXCVbnm,=-09"
@@ -99,34 +147,11 @@ if [ -d "${SCRIPT_DIR}/admin" ]; then
 fi
 if [ -d "${SCRIPT_DIR}/clips" ]; then
     cp -rf "${SCRIPT_DIR}/clips/"* "${TARGET_DIR}/clips/"
-    log_info "事件抓拍短视频回放池更新完成 (${TARGET_DIR}/clips)"
+    log_info "视频切片存证流初始化完成 (${TARGET_DIR}/clips)"
 fi
 
-# 6. 配置 SSL 证书与 Nginx 反向代理
-log_info "5/7 配置 SSL 证书与 Nginx 路由矩阵..."
-CERT_FILE="/etc/ssl/1t90.com/flowsight.1t90.com_bundle.pem"
-KEY_FILE="/etc/ssl/1t90.com/flowsight.1t90.com.key"
-
-if [ ! -f "${CERT_FILE}" ] || [ ! -f "${KEY_FILE}" ]; then
-    log_warn "未检测到已存在的 flowsight.1t90.com SSL 证书，正在自动签发自签名证书保障 HTTPS 握手..."
-    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-        -keyout "${KEY_FILE}" \
-        -out "${CERT_FILE}" \
-        -subj "/C=CN/ST=Zhejiang/L=Hangzhou/O=FlowSight/OU=Cloud/CN=flowsight.1t90.com" \
-        -addext "subjectAltName=DNS:flowsight.1t90.com,DNS:localhost,IP:124.221.179.44"
-fi
-
-if [ -f "${SCRIPT_DIR}/flowsight.conf" ]; then
-    cp -f "${SCRIPT_DIR}/flowsight.conf" /etc/nginx/sites-available/flowsight.conf
-    ln -sf /etc/nginx/sites-available/flowsight.conf /etc/nginx/sites-enabled/flowsight.conf
-fi
-
-nginx -t
-systemctl reload nginx
-log_info "Nginx 路由与证书重载就绪！"
-
-# 7. 部署 Java 后端微服务与 Systemd 守护进程
-log_info "6/7 部署云端 Java 后端微服务..."
+# 6. 部署后端 Spring Boot 生产 Jar
+log_info "5/7 部署 Java 后端服务与生产配置..."
 if [ -f "${SCRIPT_DIR}/flowsight-backend.jar" ]; then
     cp -f "${SCRIPT_DIR}/flowsight-backend.jar" "${TARGET_DIR}/flowsight-backend.jar"
 fi
@@ -134,48 +159,50 @@ if [ -f "${SCRIPT_DIR}/application-prod.yml" ]; then
     cp -f "${SCRIPT_DIR}/application-prod.yml" "${TARGET_DIR}/application-prod.yml"
 fi
 
+# 7. 配置 Nginx 反向代理与 SSL
+log_info "6/7 配置 Nginx 站点与 SSL 反向代理..."
+if [ -f "${SCRIPT_DIR}/flowsight.conf" ]; then
+    cp -f "${SCRIPT_DIR}/flowsight.conf" /etc/nginx/sites-available/flowsight.conf
+    ln -sf /etc/nginx/sites-available/flowsight.conf /etc/nginx/sites-enabled/flowsight.conf
+    nginx -t
+    systemctl reload nginx
+    log_info "Nginx 配置重载成功"
+fi
+
+# 8. 配置并重启 Systemd 后台服务
+log_info "7/7 配置 Systemd 守护进程并启动服务..."
 if [ -f "${SCRIPT_DIR}/flowsight-backend.service" ]; then
     cp -f "${SCRIPT_DIR}/flowsight-backend.service" /etc/systemd/system/flowsight-backend.service
     systemctl daemon-reload
     systemctl enable flowsight-backend
     systemctl restart flowsight-backend
-    log_info "FlowSight 后端 systemd 守护进程已启动！"
+    log_info "flowsight-backend 守护服务已重启"
 fi
 
-# 8. 服务健康探测与冒烟测试
-log_info "7/7 执行服务健康探测与端口核验..."
+# 9. 服务健康自检探活
+log_info "正在进行服务健康探活检测..."
 SUCCESS=0
 for i in {1..30}; do
     if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:${BACKEND_PORT}/api/v1/auth/login | grep -qE "200|400|405"; then
         SUCCESS=1
+        echo ""
+        log_info "✅ 后端接口与网关探活响应正常 (HTTP 200/400)！"
         break
     fi
     echo -n "."
     sleep 2
 done
-echo ""
 
-if [ $SUCCESS -eq 1 ]; then
-    log_info "✅ FlowSight 云端后端服务已成功启动并就绪 (Port: ${BACKEND_PORT})"
-else
-    log_error "❌ 后端启动检测超时，请检查日志: tail -n 50 /opt/flowsight/logs/backend.error.log"
+if [ $SUCCESS -ne 1 ]; then
+    log_error "后端服务在 60 秒内未就绪，请使用 'journalctl -u flowsight-backend -n 50' 排查日志"
     exit 1
 fi
 
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${GREEN}       🎉 FlowSight 边云协同物联网 SaaS 平台部署成功！          ${NC}"
+echo -e "${GREEN}  🎉 FlowSight 平台部署完成！服务运行状态良好                   ${NC}"
 echo -e "${GREEN}================================================================${NC}"
-echo -e "访问地址列表:"
-echo -e "  🌐 官方生产 HTTPS 门户:  ${CYAN}https://flowsight.1t90.com/${NC}"
-echo -e "  💻 PC 运营管理中台:      ${CYAN}https://flowsight.1t90.com/admin/${NC}"
-echo -e "  📱 H5 移动决策与数字大屏: ${CYAN}https://flowsight.1t90.com/#/screen${NC}"
-echo -e "  ⚡ 独立端口快速通道:"
-echo -e "     - H5 / 数字大屏通道:  ${BLUE}http://124.221.179.44:3000/${NC}"
-echo -e "     - PC 管理后台通道:    ${BLUE}http://124.221.179.44:3001/${NC}"
-echo -e "     - 聚合调度网关:       ${BLUE}http://124.221.179.44:8888/${NC}"
-echo -e "----------------------------------------------------------------"
-echo -e "预置系统账号:"
-echo -e "  - 平台超级管理员: 手机号 ${YELLOW}13800000000${NC} / 密码 ${YELLOW}13800000000${NC}"
-echo -e "  - 商户 1 (未来科技城): 手机号 ${YELLOW}13454118763${NC} / 密码 ${YELLOW}13454118763${NC}"
-echo -e "  - 商户 2 (杭州栩文科技): 手机号 ${YELLOW}13454118762${NC} / 密码 ${YELLOW}13454118762${NC}"
+echo -e "  • 官方 HTTPS 生产域名: https://flowsight.1t90.com/"
+echo -e "  • 移动端 H5 免证书端口: http://124.221.179.44:3000/"
+echo -e "  • PC 管理后台免证书端口: http://124.221.179.44:3001/"
+echo -e "  • 统一导航门户端口:     http://124.221.179.44:8888/"
 echo -e "${GREEN}================================================================${NC}"
