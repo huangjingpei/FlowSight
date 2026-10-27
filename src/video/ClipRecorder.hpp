@@ -11,6 +11,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
@@ -18,8 +19,13 @@
 class ClipRecorder {
 public:
     explicit ClipRecorder(size_t max_buffer_frames = 90) : max_buffer_size_(max_buffer_frames) {
-        running_.store(true);
-        worker_thread_ = std::thread(&ClipRecorder::worker_loop, this);
+        state_ = std::make_shared<SharedState>();
+        state_->running.store(true);
+        // 将 state_ 按值捕获传入后台工作线程，确保即使 ClipRecorder 对象本身被外部提前析构，
+        // 后台线程所引用的锁、条件变量与任务队列依然合法存活，彻底根绝 Use-After-Free 崩溃
+        worker_thread_ = std::thread([state = state_]() {
+            worker_loop(state);
+        });
     }
 
     ~ClipRecorder() {
@@ -27,9 +33,11 @@ public:
     }
 
     void stop() {
+        if (!state_) return;
+
         bool expected = true;
-        if (!running_.compare_exchange_strong(expected, false)) {
-            // 已在停止中或已停止，若当前不在 worker_thread_ 内部，等待其退出
+        if (!state_->running.compare_exchange_strong(expected, false)) {
+            // 已在停止中或已停止，若当前不在 worker_thread_ 内部，等待其安全退出
             if (worker_thread_.joinable() && std::this_thread::get_id() != worker_thread_.get_id()) {
                 try {
                     worker_thread_.join();
@@ -40,12 +48,12 @@ public:
 
         // 立即排空积压队列，杜绝阻塞主退出流程
         {
-            std::lock_guard<std::mutex> lock(task_mtx_);
-            while (!task_queue_.empty()) {
-                task_queue_.pop();
+            std::lock_guard<std::mutex> lock(state_->task_mtx);
+            while (!state_->task_queue.empty()) {
+                state_->task_queue.pop();
             }
         }
-        cv_.notify_all();
+        state_->cv.notify_all();
 
         if (worker_thread_.joinable() && std::this_thread::get_id() != worker_thread_.get_id()) {
             try {
@@ -61,7 +69,7 @@ public:
 
     // 每帧送入画面构建带时间戳的环形缓冲（约 3 秒）
     void push_frame(const cv::Mat& frame) {
-        if (!running_.load() || frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;
+        if (!state_ || !state_->running.load() || frame.empty() || frame.cols <= 0 || frame.rows <= 0) return;
         int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
 
@@ -84,7 +92,7 @@ public:
     // 触发进出事件时调用：将切片投递到任务队列，由后台独立线程平滑排队编码保存
     // 关键物理校准: 视频切片编码封装严格与摄像头原生采集帧率 (stream_fps, 默认25) 1:1 等速对齐，彻底根除回放“快进感”
     std::string save_clip_async(const std::string& output_dir, int track_id, int64_t timestamp_ms, int stream_fps = 25) {
-        if (!running_.load()) return "";
+        if (!state_ || !state_->running.load()) return "";
         std::vector<cv::Mat> snapshot;
         int actual_fps = (stream_fps >= 10 && stream_fps <= 60) ? stream_fps : 25;
         {
@@ -110,15 +118,15 @@ public:
                                "_t" + std::to_string(track_id) + ".mp4";
 
         {
-            std::lock_guard<std::mutex> lock(task_mtx_);
-            if (!running_.load()) return "";
+            std::lock_guard<std::mutex> lock(state_->task_mtx);
+            if (!state_->running.load()) return "";
             // 队列积压保护：限制最多 3 个切片排队，淘汰旧任务防范堆积
-            while (task_queue_.size() >= 3) {
-                task_queue_.pop();
+            while (state_->task_queue.size() >= 3) {
+                state_->task_queue.pop();
             }
-            task_queue_.push(ClipTask{std::move(snapshot), filename, actual_fps});
+            state_->task_queue.push(ClipTask{std::move(snapshot), filename, actual_fps});
         }
-        cv_.notify_one();
+        state_->cv.notify_one();
 
         return filename;
     }
@@ -135,25 +143,37 @@ private:
         int fps = 25;
     };
 
-    void worker_loop() {
-        while (running_.load()) {
+    // 独立生命周期共享状态结构体：供后台 Worker 线程持有，解耦父对象生命周期
+    struct SharedState {
+        std::atomic<bool> running{false};
+        std::mutex task_mtx;
+        std::condition_variable cv;
+        std::queue<ClipTask> task_queue;
+    };
+
+    static void worker_loop(std::shared_ptr<SharedState> state) {
+        if (!state) return;
+
+        while (state->running.load()) {
             ClipTask task;
             {
-                std::unique_lock<std::mutex> lock(task_mtx_);
-                cv_.wait(lock, [this]() {
-                    return !running_.load() || !task_queue_.empty();
+                std::unique_lock<std::mutex> lock(state->task_mtx);
+                // 关键升级：使用 wait_for 增加 100ms 守护超时，配合 state 智能指针生命周期保活，
+                // 彻底杜绝 lambda 捕获 dangling this 产生的 0xC0000005 崩溃与通知丢失死锁
+                state->cv.wait_for(lock, std::chrono::milliseconds(100), [&state]() {
+                    return !state->running.load() || !state->task_queue.empty();
                 });
 
-                if (!running_.load()) {
+                if (!state->running.load()) {
                     break;
                 }
 
-                if (task_queue_.empty()) {
+                if (state->task_queue.empty()) {
                     continue;
                 }
 
-                task = std::move(task_queue_.front());
-                task_queue_.pop();
+                task = std::move(state->task_queue.front());
+                state->task_queue.pop();
             }
 
             if (task.snapshot.empty()) continue;
@@ -168,6 +188,7 @@ private:
                         break;
                     }
                 }
+
                 if (w <= 0 || h <= 0) {
                     qWarning() << "[ClipRecorder] 切片任务中无可用的有效画面尺寸，跳过:" << QString::fromStdString(task.filename);
                     continue;
@@ -220,7 +241,7 @@ private:
 
                 // 4. 逐帧严格校准尺寸与通道后安全写入，杜绝底层 ffmpeg sws_scale / memcpy 越界奔溃
                 for (const auto& f : task.snapshot) {
-                    if (!running_.load()) break; // 退出检查
+                    if (!state->running.load()) break; // 退出检查
                     if (f.empty() || f.cols <= 0 || f.rows <= 0) continue;
 
                     cv::Mat ready_frame;
@@ -259,12 +280,8 @@ private:
     std::deque<BufferedFrame> frame_buffer_;
     std::mutex mtx_;
 
-    // 线程池队列与后台编码 Worker
-    // 关键依赖拓扑顺序：running_ -> task_mtx_ -> cv_ -> task_queue_ -> worker_thread_
-    // 保证在析构函数触发逆序销毁时，worker_thread_ 必先被完全销毁并 join，绝对杜绝访问已释放的锁与队列
-    std::atomic<bool> running_{false};
-    std::mutex task_mtx_;
-    std::condition_variable cv_;
-    std::queue<ClipTask> task_queue_;
+    // 线程安全与生命周期解耦模型：使用 SharedState 确保即使 ClipRecorder 对象析构，
+    // 后台工作线程依然安全持有合法资源，绝不访问野指针
+    std::shared_ptr<SharedState> state_;
     std::thread worker_thread_;
 };
