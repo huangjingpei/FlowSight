@@ -29,6 +29,9 @@ uploads/
 # Release distribution outputs
 dist/FlowSight_*
 dist/*.zip
+deploy/*.zip
+deploy/*_nginx/
+*.key
 
 # Large Models (auto-assembled from part1/part2)
 models/pedestrian_gender_int8.onnx
