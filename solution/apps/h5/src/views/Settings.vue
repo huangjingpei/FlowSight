@@ -983,12 +983,23 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 10px 12px 24px 12px;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  padding: 10px 12px 60px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   box-sizing: border-box;
+}
+
+/* 保证各模块与分组决不被 flex 挤压变形，保证内容真实高度并支持流畅滑屏 */
+.profile-card,
+.group-title,
+.menu-group,
+.logout-btn-box {
+  flex-shrink: 0;
 }
 
 /* 商户卡片 */
@@ -1068,6 +1079,8 @@ onUnmounted(() => {
 }
 
 .menu-cell {
+  flex-shrink: 0;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
