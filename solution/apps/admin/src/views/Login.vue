@@ -35,8 +35,8 @@ const formRef = ref();
 const loading = ref(false);
 
 const form = reactive({
-  phone: '13800000000',
-  password: '同手机号或设置的密码'
+  phone: '',
+  password: ''
 });
 
 const rules = {
