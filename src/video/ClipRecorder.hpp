@@ -12,6 +12,9 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#ifdef _WIN32
+#include <objbase.h>
+#endif
 #include <QDir>
 #include <QFileInfo>
 #include <QDebug>
@@ -82,7 +85,9 @@ public:
         if (frame.cols > 1280) {
             cv::Mat downscaled;
             float scale = 1280.0f / static_cast<float>(frame.cols);
-            cv::resize(frame, downscaled, cv::Size(1280, static_cast<int>(frame.rows * scale)));
+            int target_w = 1280;
+            int target_h = (static_cast<int>(frame.rows * scale) / 2) * 2; // 强制偶数尺寸，杜绝编码越界
+            cv::resize(frame, downscaled, cv::Size(target_w, target_h));
             frame_buffer_.push_back(BufferedFrame{downscaled, now_ms});
         } else {
             frame_buffer_.push_back(BufferedFrame{frame.clone(), now_ms});
@@ -154,6 +159,14 @@ private:
     static void worker_loop(std::shared_ptr<SharedState> state) {
         if (!state) return;
 
+#ifdef _WIN32
+        struct ComGuard {
+            HRESULT hr;
+            ComGuard() { hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED); }
+            ~ComGuard() { if (SUCCEEDED(hr)) CoUninitialize(); }
+        } com_guard;
+#endif
+
         while (state->running.load()) {
             ClipTask task;
             {
@@ -180,66 +193,69 @@ private:
 
             try {
                 // 1. 寻找首个非空有效帧确定切片基准分辨率
-                int w = 0, h = 0;
+                int raw_w = 0, raw_h = 0;
                 for (const auto& f : task.snapshot) {
                     if (!f.empty() && f.cols > 0 && f.rows > 0) {
-                        w = f.cols;
-                        h = f.rows;
+                        raw_w = f.cols;
+                        raw_h = f.rows;
                         break;
                     }
                 }
 
-                if (w <= 0 || h <= 0) {
+                if (raw_w <= 0 || raw_h <= 0) {
                     qWarning() << "[ClipRecorder] 切片任务中无可用的有效画面尺寸，跳过:" << QString::fromStdString(task.filename);
                     continue;
                 }
+
+                // 强制对齐为偶数尺寸：视频编码（YUV420）必须为偶数分辨率，奇数尺寸会导致底层 memcpy 越界奔溃 (0xC0000005)
+                int w = (raw_w / 2) * 2;
+                int h = (raw_h / 2) * 2;
+                if (w < 64 || h < 64) continue;
 
                 // 2. 保证目标保存路径上层目录真实存在
                 QFileInfo fi(QString::fromStdString(task.filename));
                 QDir().mkpath(fi.dir().absolutePath());
                 std::string native_path = QDir::toNativeSeparators(QString::fromStdString(task.filename)).toStdString();
 
-                // 3. 逐级尝试 H.264 / MP4 兼容编码器打开 VideoWriter
-                cv::VideoWriter writer;
-                const std::vector<int> codecs = {
-                    cv::VideoWriter::fourcc('a', 'v', 'c', '1'),
-                    cv::VideoWriter::fourcc('H', '2', '6', '4'),
-                    cv::VideoWriter::fourcc('X', '2', '6', '4'),
-                    cv::VideoWriter::fourcc('m', 'p', '4', 'v'),
-                    cv::VideoWriter::fourcc('M', 'P', '4', 'V'),
-                    cv::VideoWriter::fourcc('X', 'V', 'I', 'D')
+                // 3. 稳健初始化 VideoWriter：优先使用 OpenCV 自带 FFmpeg 原生内置的 mp4v 编码器
+                // 注意：绝不可在同一个 cv::VideoWriter 实例上连续循环 open/release，若前一次抛出异常，
+                // 底层 COM/FFMPEG 句柄残存会导致下一次 release 触发 0xC0000005 访问冲突
+                std::unique_ptr<cv::VideoWriter> writer;
+
+                struct CodecAttempt {
+                    int apiPreference;
+                    int fourcc;
                 };
 
-                for (int fourcc : codecs) {
+                const std::vector<CodecAttempt> attempts = {
+                    { cv::CAP_FFMPEG, cv::VideoWriter::fourcc('m', 'p', '4', 'v') }, // 黄金标准：FFmpeg 内置零依赖 MP4
+                    { cv::CAP_ANY,    cv::VideoWriter::fourcc('m', 'p', '4', 'v') },
+                    { cv::CAP_FFMPEG, cv::VideoWriter::fourcc('a', 'v', 'c', '1') },
+                    { cv::CAP_ANY,    cv::VideoWriter::fourcc('M', 'J', 'P', 'G') }  // 终极保底：MJPG
+                };
+
+                for (const auto& att : attempts) {
                     try {
-                        if (writer.open(native_path, cv::CAP_FFMPEG, fourcc, task.fps, cv::Size(w, h), true)) {
-                            if (writer.isOpened()) break;
+                        auto attempt_writer = std::make_unique<cv::VideoWriter>();
+                        if (attempt_writer->open(native_path, att.apiPreference, att.fourcc, task.fps, cv::Size(w, h), true)) {
+                            if (attempt_writer->isOpened()) {
+                                writer = std::move(attempt_writer);
+                                break;
+                            }
                         }
-                    } catch (...) {}
-                    writer.release();
-                    try {
-                        if (writer.open(native_path, fourcc, task.fps, cv::Size(w, h), true)) {
-                            if (writer.isOpened()) break;
-                        }
-                    } catch (...) {}
-                    writer.release();
+                    } catch (...) {
+                        // 局部 attempt_writer 自动作用域析构，绝不污染全局状态
+                    }
                 }
 
-                // 兜底尝试 MJPG 编码
-                if (!writer.isOpened()) {
-                    try {
-                        writer.open(native_path, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), task.fps, cv::Size(w, h), true);
-                    } catch (...) {}
-                }
-
-                // 关键核心防崩校验：若未能成功打开 VideoWriter，绝不可执行 writer.write()！
-                if (!writer.isOpened()) {
+                // 关键核心防崩校验：若未能成功打开 VideoWriter，绝不可执行 writer->write()！
+                if (!writer || !writer->isOpened()) {
                     qWarning() << "[ClipRecorder] 警告: 无法初始化 VideoWriter 编码器，跳过保存切片:"
                                << QString::fromStdString(native_path) << "分辨率:" << w << "x" << h << "FPS:" << task.fps;
                     continue;
                 }
 
-                // 4. 逐帧严格校准尺寸与通道后安全写入，杜绝底层 ffmpeg sws_scale / memcpy 越界奔溃
+                // 4. 逐帧严格校准尺寸、通道与连续内存后安全写入，杜绝底层 ffmpeg sws_scale / memcpy 越界奔溃
                 for (const auto& f : task.snapshot) {
                     if (!state->running.load()) break; // 退出检查
                     if (f.empty() || f.cols <= 0 || f.rows <= 0) continue;
@@ -257,8 +273,13 @@ private:
                         cv::cvtColor(ready_frame, ready_frame, cv::COLOR_BGRA2BGR);
                     }
 
+                    // 关键保护：强制保证数据内存连续性
+                    if (!ready_frame.isContinuous()) {
+                        ready_frame = ready_frame.clone();
+                    }
+
                     try {
-                        writer.write(ready_frame);
+                        writer->write(ready_frame);
                     } catch (const std::exception& e) {
                         qWarning() << "[ClipRecorder] 写入视频帧异常:" << e.what();
                         break;
@@ -267,7 +288,7 @@ private:
                         break;
                     }
                 }
-                writer.release();
+                writer->release();
             } catch (const std::exception& e) {
                 qWarning() << "[ClipRecorder] 处理切片任务异常:" << e.what();
             } catch (...) {
