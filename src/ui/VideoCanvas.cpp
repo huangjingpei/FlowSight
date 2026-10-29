@@ -858,7 +858,7 @@ void VideoCanvas::draw_standby_screen(QPainter& painter) {
     title_font.setStyleHint(QFont::SansSerif);
     painter.setFont(title_font);
     painter.setPen(QColor(240, 246, 252));
-    painter.drawText(content_x, content_y + 20, "FlowSight AI 智能客流感知系统");
+    painter.drawText(content_x, content_y + 20, "客流智能统计系统");
 
     // 4. 副标题
     content_y += 30;

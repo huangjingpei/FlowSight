@@ -355,7 +355,7 @@
             </div>
             <div class="meta-row">
               <span class="m-k">边端节点</span>
-              <span class="m-v">{{ summary.clientName || 'FlowSight-Edge-Node-01' }}</span>
+              <span class="m-v">{{ summary.clientName || '客流采集节点-01' }}</span>
             </div>
             <div class="meta-row">
               <span class="m-k">软件版本</span>
@@ -438,7 +438,7 @@
         </div>
         <div class="dialog-body">
           <div class="dialog-tip" style="margin-bottom: 12px; font-size: 12px; color: var(--fs-text-dim, #7A8CA5); line-height: 1.4;">
-            选择每次登录或重新打开 FlowSight 时优先默认进入的业务通道。
+            选择每次登录或重新打开系统时优先默认进入的业务通道。
           </div>
           <div class="rate-select-list">
             <!-- 默认首项 (自动不锁定) -->
@@ -890,7 +890,7 @@ const loadSummary = async () => {
 const handleLogout = () => {
   showDialog({
     title: '安全退出',
-    message: '确定要退出当前 FlowSight 决策账号吗？',
+    message: '确定要退出当前客流智能统计系统账号吗？',
     showCancelButton: true
   }).then(() => {
     dashboardStore.clearCache();

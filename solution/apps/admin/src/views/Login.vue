@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-title">
         <span class="logo">👁️</span>
-        <h2>FlowSight 运营管理平台</h2>
+        <h2>客流智能统计系统 运营管理平台</h2>
         <p>多租户客流大数据与边缘设备管控中心</p>
       </div>
 

@@ -429,10 +429,10 @@ const currentCompanyName = computed(() => {
     const raw = localStorage.getItem('flowsight_user');
     if (raw) {
       const u = JSON.parse(raw);
-      return u.companyName || u.nickname || 'FlowSight 实时监控';
+      return u.companyName || u.nickname || '客流智能统计系统 实时监控';
     }
   } catch (e) {}
-  return 'FlowSight 实时监控';
+  return '客流智能统计系统 实时监控';
 });
 
 const syncUserProfile = async () => {

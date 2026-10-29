@@ -36,4 +36,5 @@ deploy/*_nginx/
 # Large Models (auto-assembled from part1/part2)
 models/pedestrian_gender_int8.onnx
 scratch/
+test_*.mp4
 

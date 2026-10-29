@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
 
 -- 预置种子账号: 仅保留超级管理员账号 (手机号: 13800000000, 密码同号: 13800000000)
 INSERT INTO `sys_user` (`id`, `phone`, `password_hash`, `role`, `nickname`, `company_name`, `contact_person`, `point_quota`, `expire_time`) 
-VALUES (1, '13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '系统管理员', 'FlowSight SaaS 运营指挥中心', '系统运维部', 999, '2099-12-31 23:59:59')
+VALUES (1, '13800000000', '$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce', 'ROLE_ADMIN', '系统管理员', '客流智能统计系统 运营指挥中心', '系统运维部', 999, '2099-12-31 23:59:59')
 ON DUPLICATE KEY UPDATE `company_name`=VALUES(`company_name`), `contact_person`=VALUES(`contact_person`), `point_quota`=VALUES(`point_quota`);
 
 -- 2. 点位资产配置表 (包含业务模式 biz_type 字段，原生定义，无 ALTER TABLE)

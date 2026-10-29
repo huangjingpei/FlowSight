@@ -28,7 +28,7 @@
 #include <QDir>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("FlowSight 智能客流分析系统 v1.2");
+    setWindowTitle("客流智能统计系统 v1.2");
     resize(1366, 800);
     setMinimumSize(1100, 680);
 
@@ -333,8 +333,8 @@ void MainWindow::setup_ui() {
     brand_layout->setContentsMargins(14, 10, 10, 10);
     brand_layout->setSpacing(2);
 
-    auto* brand_title = new QLabel("FLOWSIGHT", brand_widget);
-    brand_title->setStyleSheet("color: #388bfd; font-weight: 900; font-size: 15px; letter-spacing: 1px;");
+    auto* brand_title = new QLabel("客流智能统计系统", brand_widget);
+    brand_title->setStyleSheet("color: #388bfd; font-weight: bold; font-size: 13px; letter-spacing: 0.5px;");
     auto* brand_sub = new QLabel("NVR 客流分析控制台", brand_widget);
     brand_sub->setStyleSheet("color: #8c96a3; font-size: 11px;");
     brand_layout->addWidget(brand_title);

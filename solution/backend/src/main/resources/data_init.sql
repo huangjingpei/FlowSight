@@ -1,4 +1,4 @@
-﻿-- MySQL dump 10.13  Distrib 8.0.39, for Win64 (x86_64)
+-- MySQL dump 10.13  Distrib 8.0.39, for Win64 (x86_64)
 --
 -- Host: localhost    Database: flowsight_cloud
 -- ------------------------------------------------------
@@ -48,7 +48,7 @@ CREATE TABLE `sys_user` (
 
 LOCK TABLES `sys_user` WRITE;
 /*!40000 ALTER TABLE `sys_user` DISABLE KEYS */;
-INSERT INTO `sys_user` VALUES (1,'13800000000','$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce','ROLE_ADMIN','系统管理员','FlowSight SaaS 运营指挥中心','系统运维部',999,NULL,'2099-12-31 23:59:59','',1,'2026-10-26 10:25:52','2026-10-26 10:25:52'),(2,'13454118762','$2a$10$G5SxS/6gDfUCX20ZOf1WrewwXw0gHfq894R2egst0xzwM2nAuXrbq','ROLE_USER','客流测试','杭州栩文科技有限公司','黄敬佩',5,2,'2027-10-26 02:29:05','',1,'2026-10-26 10:30:01','2026-10-27 00:02:22'),(3,'13454118763','$2a$10$y7P2L9lCrg3yhZQtJq1w3eDLEch4MjivBFjtkWNw83OseTCO9avEG','ROLE_USER','未来科技城一期居民区','未来科技城一期','13454118763',5,NULL,'2027-10-26 14:56:00','',1,'2026-10-26 22:57:12','2026-10-26 22:57:12');
+INSERT INTO `sys_user` VALUES (1,'13800000000','$2a$10$7JB720yubVSZvUI0rEqK/.Vq4VfH4FjPvhV7r0h1hA9x.VcmQYVce','ROLE_ADMIN','系统管理员','客流智能统计系统 运营指挥中心','系统运维部',999,NULL,'2099-12-31 23:59:59','',1,'2026-10-26 10:25:52','2026-10-26 10:25:52'),(2,'13454118762','$2a$10$G5SxS/6gDfUCX20ZOf1WrewwXw0gHfq894R2egst0xzwM2nAuXrbq','ROLE_USER','客流测试','杭州栩文科技有限公司','黄敬佩',5,2,'2027-10-26 02:29:05','',1,'2026-10-26 10:30:01','2026-10-27 00:02:22'),(3,'13454118763','$2a$10$y7P2L9lCrg3yhZQtJq1w3eDLEch4MjivBFjtkWNw83OseTCO9avEG','ROLE_USER','未来科技城一期居民区','未来科技城一期','13454118763',5,NULL,'2027-10-26 14:56:00','',1,'2026-10-26 22:57:12','2026-10-26 22:57:12');
 /*!40000 ALTER TABLE `sys_user` ENABLE KEYS */;
 UNLOCK TABLES;
 

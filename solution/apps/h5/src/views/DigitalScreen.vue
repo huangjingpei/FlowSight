@@ -40,7 +40,7 @@
               class="hud-select tenant-select"
               @change="handleTenantChange"
             >
-              <option :value="0">🌐 FlowSight 全域指挥中心</option>
+              <option :value="0">🌐 客流智能统计系统 · 全域指挥中心</option>
               <option
                 v-for="t in tenantList"
                 :key="t.id"
@@ -467,7 +467,7 @@ const updateClock = () => {
 };
 
 // ==================== 业务状态机与数据源 ====================
-const screenTitle = ref('FlowSight · 智能视觉分析调度中心');
+const screenTitle = ref('客流智能统计系统 · 视觉分析调度中心');
 const selectedPointId = ref<number>(0); // 0 为全域汇总，>0 为指定点位
 const pointCards = ref<any[]>([]);
 const totalCount = ref(0);
@@ -700,7 +700,7 @@ const loadUserProfileAndTenants = async () => {
         if (activeTenantUserId.value > 0) {
           screenTitle.value = `${company} · 智能视觉全景调度大屏`;
         } else {
-          screenTitle.value = 'FlowSight 运营指挥中心 · 全域智能视觉大屏';
+          screenTitle.value = '客流智能统计系统 · 全域智能视觉大屏';
         }
 
         // 如果当前登录身份是平台超级管理员，拉取商户用户列表供快速切屏

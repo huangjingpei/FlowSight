@@ -12,7 +12,7 @@ const routes = [
   {
     path: '/screen',
     component: DigitalScreen,
-    meta: { title: 'FlowSight 智能视觉数字全景大屏' }
+    meta: { title: '客流智能统计系统 · 智能视觉数字全景大屏' }
   },
   { path: '/dashboard', component: Dashboard },
   { path: '/trends', component: Trends },

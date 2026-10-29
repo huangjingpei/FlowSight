@@ -3,7 +3,7 @@
     <el-aside width="240px" class="aside">
       <div class="logo-bar">
         <span class="logo-icon">👁️</span>
-        <span class="logo-text">FlowSight Cloud</span>
+        <span class="logo-text">客流智能统计系统</span>
       </div>
       <el-menu
         :default-active="route.path"

@@ -3,7 +3,7 @@
     <div class="login-card">
       <!-- 极简品牌头部 (纯平设计，无旋转圈套) -->
       <div class="brand-box">
-        <h1 class="brand-title">FlowSight 移动决策中台</h1>
+        <h1 class="brand-title">客流智能统计系统 · 移动决策中台</h1>
         <p class="brand-sub">边缘视觉感知 · 商业客流数字孪生中枢</p>
       </div>
 
@@ -37,7 +37,7 @@
       </form>
 
       <div class="login-foot">
-        <span>FlowSight AI Edge-Cloud Platform v1.2</span>
+        <span>客流智能统计系统 v1.2</span>
       </div>
     </div>
   </div>

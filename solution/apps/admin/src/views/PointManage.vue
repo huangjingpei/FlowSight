@@ -241,7 +241,7 @@
             </div>
           </div>
           <div style="font-size: 12px; color: #909399; margin-top: 4px;">
-            修改感知模式后，现场绑定的 FlowSight.exe 客户端在同步配置时将自动无感热切换算法模型
+            修改感知模式后，现场绑定的边缘采集客户端（客流智能统计系统）在同步配置时将自动无感热切换算法模型
           </div>
         </el-form-item>
         <el-form-item label="点位编码">
