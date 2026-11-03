@@ -1,8 +1,10 @@
 #include "AnalyticsWidget.hpp"
+#include "storage/ConfigManager.hpp"
 #include "ui/components/RealtimeTotalChartWidget.hpp"
 #include "ui/components/RealtimeAverageChartWidget.hpp"
 #include "ui/components/AnalyticsChartWidget.hpp"
 #include "storage/DatabaseManager.hpp"
+#include <QSqlQuery>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QScrollArea>
@@ -51,6 +53,8 @@ void AnalyticsWidget::setup_ui() {
 
     const QString lbl_style = "color: #8b949e; font-size: 13px; font-weight: 500; border: none; background: transparent;";
 
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+
     // 时间预设
     auto* lbl_preset = new QLabel("统计时段:", filter_card);
     lbl_preset->setStyleSheet(lbl_style);
@@ -59,7 +63,7 @@ void AnalyticsWidget::setup_ui() {
     combo_preset_ = new QComboBox(filter_card);
     combo_preset_->setFixedWidth(118);
     combo_preset_->setFixedHeight(30);
-    combo_preset_->addItems({"今日客流汇总", "最近 3 天趋势", "最近 7 天报表", "自定义时段"});
+    combo_preset_->addItems({is_veh ? "今日车流汇总" : "今日客流汇总", "最近 3 天趋势", "最近 7 天报表", "自定义时段"});
     combo_preset_->setToolTip("选择常用快捷时间窗口或自定义检索");
     filter_layout->addWidget(combo_preset_);
 
@@ -100,21 +104,26 @@ void AnalyticsWidget::setup_ui() {
     combo_direction_->setFixedWidth(108);
     combo_direction_->setFixedHeight(30);
     combo_direction_->addItem("全部方向", -1);
-    combo_direction_->addItem("🟢 仅进入 (IN)", static_cast<int>(PassageDirection::ENTRY));
-    combo_direction_->addItem("🔴 仅离开 (OUT)", static_cast<int>(PassageDirection::EXIT));
-    combo_direction_->setToolTip("按进出通道穿行方向过滤");
+    combo_direction_->addItem(is_veh ? "🟢 仅进车 (IN)" : "🟢 仅进入 (IN)", static_cast<int>(PassageDirection::ENTRY));
+    combo_direction_->addItem(is_veh ? "🔴 仅出车 (OUT)" : "🔴 仅离开 (OUT)", static_cast<int>(PassageDirection::EXIT));
+    combo_direction_->setToolTip(is_veh ? "按车辆进出卡口方向过滤" : "按进出通道穿行方向过滤");
     filter_layout->addWidget(combo_direction_);
 
-    // 客群性别筛选 (宽度增至 95px，彻底解决“全部性”字符截断问题)
-    auto* lbl_gender = new QLabel("性别:", filter_card);
-    lbl_gender->setStyleSheet(lbl_style);
-    filter_layout->addWidget(lbl_gender);
+    // 结构化画像属性筛选
+    lbl_gender_ = new QLabel(is_veh ? "车型:" : "性别:", filter_card);
+    lbl_gender_->setStyleSheet(lbl_style);
+    filter_layout->addWidget(lbl_gender_);
 
     combo_gender_ = new QComboBox(filter_card);
     combo_gender_->setFixedWidth(95);
     combo_gender_->setFixedHeight(30);
-    combo_gender_->addItems({"全部性别", "男", "女"});
-    combo_gender_->setToolTip("按客群识别性别特征过滤");
+    if (is_veh) {
+        combo_gender_->addItems({"全部车型", "轿车", "SUV", "客车", "货车", "摩托车"});
+        combo_gender_->setToolTip("按车辆分类特征过滤");
+    } else {
+        combo_gender_->addItems({"全部性别", "男", "女"});
+        combo_gender_->setToolTip("按客群识别性别特征过滤");
+    }
     filter_layout->addWidget(combo_gender_);
 
     // 操作按钮组
@@ -126,13 +135,13 @@ void AnalyticsWidget::setup_ui() {
 
     btn_reset_ = new QPushButton("🔄 重置", filter_card);
     btn_reset_->setFixedHeight(30);
-    btn_reset_->setToolTip("一键恢复默认今日实时统计");
+    btn_reset_->setToolTip(is_veh ? "一键恢复默认今日车流实时统计" : "一键恢复默认今日实时统计");
     filter_layout->addWidget(btn_reset_);
 
     btn_export_ = new QPushButton("📥 导出报表", filter_card);
     btn_export_->setObjectName("btn_primary");
     btn_export_->setFixedHeight(30);
-    btn_export_->setToolTip("将当前筛选范围内全部明细记录导出为标准 CSV 表格");
+    btn_export_->setToolTip(is_veh ? "将当前筛选范围内全部车流明细记录导出为标准 CSV 表格" : "将当前筛选范围内全部明细记录导出为标准 CSV 表格");
     filter_layout->addWidget(btn_export_);
 
     filter_layout->addStretch();
@@ -144,11 +153,11 @@ void AnalyticsWidget::setup_ui() {
     auto* kpi_layout = new QHBoxLayout();
     kpi_layout->setSpacing(10);
 
-    kpi_layout->addWidget(create_kpi_card("今日总客流量", total_flow_val_, total_flow_sub_));
-    kpi_layout->addWidget(create_kpi_card("进站/入场量", entry_val_, entry_sub_));
-    kpi_layout->addWidget(create_kpi_card("出站/离场量", exit_val_, exit_sub_));
-    kpi_layout->addWidget(create_kpi_card("客群性别画像", gender_val_, gender_sub_));
-    kpi_layout->addWidget(create_kpi_card("客流高峰时段", peak_hour_val_, peak_hour_sub_));
+    kpi_layout->addWidget(create_kpi_card(is_veh ? "今日总车流量" : "今日总客流量", total_flow_val_, total_flow_sub_, card_title_total_));
+    kpi_layout->addWidget(create_kpi_card(is_veh ? "进车/驶入量" : "进站/入场量", entry_val_, entry_sub_, card_title_entry_));
+    kpi_layout->addWidget(create_kpi_card(is_veh ? "出车/驶出量" : "出站/离场量", exit_val_, exit_sub_, card_title_exit_));
+    kpi_layout->addWidget(create_kpi_card(is_veh ? "车型结构画像" : "客群性别画像", gender_val_, gender_sub_, card_title_gender_));
+    kpi_layout->addWidget(create_kpi_card(is_veh ? "车流高峰时段" : "客流高峰时段", peak_hour_val_, peak_hour_sub_, card_title_peak_));
 
     main_layout->addLayout(kpi_layout);
 
@@ -158,19 +167,19 @@ void AnalyticsWidget::setup_ui() {
     tab_charts_ = new QTabWidget(container);
     tab_charts_->setMinimumHeight(410);
 
-    // Tab 1: 实时的总计人数动态 (默认激活 Tab)
+    // Tab 1: 实时总计走势 (默认激活 Tab)
     realtime_total_chart_ = new RealtimeTotalChartWidget(tab_charts_);
-    tab_charts_->addTab(realtime_total_chart_, "📈  实时总计走势 (动态时序)");
+    tab_charts_->addTab(realtime_total_chart_, is_veh ? "📈  实时总车流走势 (动态时序)" : "📈  实时总计走势 (动态时序)");
 
-    // Tab 2: 平均人数动态 (5s / 10s / 30s)
+    // Tab 2: 平均通量动态 (5s / 10s / 30s)
     realtime_avg_chart_ = new RealtimeAverageChartWidget(tab_charts_);
-    tab_charts_->addTab(realtime_avg_chart_, "⏱️  平均人数走势 (5s/10s/30s)");
+    tab_charts_->addTab(realtime_avg_chart_, is_veh ? "⏱️  平均车流动态 (5s/10s/30s)" : "⏱️  平均人数走势 (5s/10s/30s)");
 
     // Tab 3: 24小时时段分布
     hourly_chart_ = new AnalyticsChartWidget(tab_charts_);
-    tab_charts_->addTab(hourly_chart_, "📊  24小时各时段进出分布");
+    tab_charts_->addTab(hourly_chart_, is_veh ? "📊  24小时车流进出分布" : "📊  24小时各时段进出分布");
 
-    tab_charts_->setCurrentIndex(0); // 默认选定第 1 个 Tab (实时总计人数动态)
+    tab_charts_->setCurrentIndex(0); // 默认选定第 1 个 Tab (实时动态时序)
     main_layout->addWidget(tab_charts_, 1);
 
     scroll_area->setWidget(container);
@@ -197,7 +206,7 @@ void AnalyticsWidget::setup_ui() {
     refresh_report();
 }
 
-QWidget* AnalyticsWidget::create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub) {
+QWidget* AnalyticsWidget::create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub, QLabel*& out_title) {
     auto* box = new QWidget();
     box->setObjectName("kpi_card");
     box->setStyleSheet(
@@ -212,16 +221,17 @@ QWidget* AnalyticsWidget::create_kpi_card(const QString& title, QLabel*& out_val
     v->setContentsMargins(14, 12, 14, 12);
     v->setSpacing(4);
 
-    auto* t_lbl = new QLabel(title, box);
-    t_lbl->setStyleSheet("color: #8c96a3; font-size: 12px; font-weight: 500; border: none; background: transparent;");
+    out_title = new QLabel(title, box);
+    out_title->setStyleSheet("color: #8c96a3; font-size: 12px; font-weight: 500; border: none; background: transparent;");
 
-    out_val = new QLabel("0 人次", box);
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    out_val = new QLabel(is_veh ? "0 车次" : "0 人次", box);
     out_val->setStyleSheet("color: #f0f6fc; font-size: 24px; font-weight: 700; font-family: 'Segoe UI', sans-serif; border: none; background: transparent; margin: 2px 0;");
 
     out_sub = new QLabel("--", box);
     out_sub->setStyleSheet("color: #6e7681; font-size: 11px; border: none; background: transparent;");
 
-    v->addWidget(t_lbl);
+    v->addWidget(out_title);
     v->addWidget(out_val);
     v->addWidget(out_sub);
     return box;
@@ -332,67 +342,103 @@ void AnalyticsWidget::on_btn_reset_clicked() {
 }
 
 void AnalyticsWidget::refresh_report() {
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    const QString unit = is_veh ? "车次" : "人次";
+    const QString in_str = is_veh ? "进车" : "进";
+    const QString out_str = is_veh ? "出车" : "出";
+
     AnalyticsFilterCriteria criteria;
     criteria.start_ms = dt_start_->dateTime().toMSecsSinceEpoch();
     criteria.end_ms = dt_end_->dateTime().toMSecsSinceEpoch();
     criteria.direction_filter = combo_direction_->currentData().toInt();
 
-    QString sel_gender = combo_gender_->currentText();
-    if (sel_gender != "全部性别") {
-        criteria.gender_filter = sel_gender;
+    if (!is_veh) {
+        QString sel_gender = combo_gender_->currentText();
+        if (sel_gender != "全部性别") {
+            criteria.gender_filter = sel_gender;
+        }
     }
 
     // 调用底层多维综合聚合查询
     auto summary = DatabaseManager::instance().query_analytics_summary(criteria);
 
-    // 1. 卡片1: 总客流
-    total_flow_val_->setText(QString("%1 人次").arg(summary.total_flow));
+    // 1. 卡片1: 总流量
+    total_flow_val_->setText(QString("%1 %2").arg(summary.total_flow).arg(unit));
     int net = summary.entry_count - summary.exit_count;
-    total_flow_sub_->setText(QString("进: %1 │ 出: %2 │ 净增: %3%4")
+    total_flow_sub_->setText(QString("%1: %2 │ %3: %4 │ 净增: %5%6")
+        .arg(in_str)
         .arg(summary.entry_count)
+        .arg(out_str)
         .arg(summary.exit_count)
         .arg(net > 0 ? "+" : "")
         .arg(net));
 
-    // 2. 卡片2: 进入人次
-    entry_val_->setText(QString("%1 人次").arg(summary.entry_count));
+    // 2. 卡片2: 进入量
+    entry_val_->setText(QString("%1 %2").arg(summary.entry_count).arg(unit));
     if (summary.total_flow > 0) {
         int entry_pct = (summary.entry_count * 100) / summary.total_flow;
         entry_sub_->setText(QString("占比: %1%").arg(entry_pct));
     } else {
-        entry_sub_->setText("所选范围无进入");
+        entry_sub_->setText(is_veh ? "所选范围无进车" : "所选范围无进入");
     }
 
-    // 3. 卡片3: 离开人次
-    exit_val_->setText(QString("%1 人次").arg(summary.exit_count));
+    // 3. 卡片3: 离开量
+    exit_val_->setText(QString("%1 %2").arg(summary.exit_count).arg(unit));
     if (summary.total_flow > 0) {
         int exit_pct = (summary.exit_count * 100) / summary.total_flow;
         exit_sub_->setText(QString("占比: %1%").arg(exit_pct));
     } else {
-        exit_sub_->setText("所选范围无离开");
+        entry_sub_->setText(is_veh ? "所选范围无出车" : "所选范围无离开");
     }
 
-    // 4. 卡片4: 客群性别比例
-    int valid_gender = summary.male_count + summary.female_count;
-    if (valid_gender > 0) {
-        int m_pct = (summary.male_count * 100) / valid_gender;
-        int f_pct = 100 - m_pct;
-        gender_val_->setText(QString("男 %1% │ 女 %2%").arg(m_pct).arg(f_pct));
-        gender_sub_->setText(QString("男: %1人 │ 女: %2人").arg(summary.male_count).arg(summary.female_count));
+    // 4. 卡片4: 结构化画像 (车流展示车型分布，客流展示性别比例)
+    if (is_veh) {
+        QSqlDatabase db = DatabaseManager::instance().get_database();
+        QSqlQuery q(db);
+        q.prepare("SELECT vehicle_type, COUNT(*) FROM passage_events WHERE timestamp_ms >= ? AND timestamp_ms <= ? AND vehicle_type != '' GROUP BY vehicle_type ORDER BY COUNT(*) DESC LIMIT 2;");
+        q.addBindValue(static_cast<qint64>(criteria.start_ms));
+        q.addBindValue(static_cast<qint64>(criteria.end_ms));
+        QString top_types = "";
+        int total_sample = 0;
+        if (q.exec()) {
+            while (q.next()) {
+                QString t = q.value(0).toString().trimmed();
+                if (t.isEmpty()) t = "轿车";
+                int c = q.value(1).toInt();
+                total_sample += c;
+                if (!top_types.isEmpty()) top_types += " │ ";
+                top_types += QString("%1 %2辆").arg(t).arg(c);
+            }
+        }
+        if (!top_types.isEmpty()) {
+            gender_val_->setText(top_types);
+            gender_sub_->setText(QString("有效车型样本: %1 辆").arg(total_sample));
+        } else {
+            gender_val_->setText("暂无车型数据");
+            gender_sub_->setText("有效识别样本: 0 辆");
+        }
     } else {
-        gender_val_->setText("暂无数据");
-        gender_sub_->setText("有效识别样本: 0 人");
+        int valid_gender = summary.male_count + summary.female_count;
+        if (valid_gender > 0) {
+            int m_pct = (summary.male_count * 100) / valid_gender;
+            int f_pct = 100 - m_pct;
+            gender_val_->setText(QString("男 %1% │ 女 %2%").arg(m_pct).arg(f_pct));
+            gender_sub_->setText(QString("男: %1人 │ 女: %2人").arg(summary.male_count).arg(summary.female_count));
+        } else {
+            gender_val_->setText("暂无数据");
+            gender_sub_->setText("有效识别样本: 0 人");
+        }
     }
 
-    // 5. 卡片5: 客流高峰时段
+    // 5. 卡片5: 高峰时段
     if (summary.peak_hour >= 0 && summary.peak_hour_count > 0) {
         peak_hour_val_->setText(QString("%1:00 ~ %2:00")
             .arg(summary.peak_hour, 2, 10, QChar('0'))
             .arg((summary.peak_hour + 1) % 24, 2, 10, QChar('0')));
-        peak_hour_sub_->setText(QString("小时峰值: %1 人次").arg(summary.peak_hour_count));
+        peak_hour_sub_->setText(QString("小时峰值: %1 %2").arg(summary.peak_hour_count).arg(unit));
     } else {
         peak_hour_val_->setText("-- : --");
-        peak_hour_sub_->setText("客流平缓或无数据");
+        peak_hour_sub_->setText(is_veh ? "车流平缓或无数据" : "客流平缓或无数据");
     }
 
     // 同步刷新 24 小时各时段分布图表
@@ -409,18 +455,23 @@ void AnalyticsWidget::refresh_report() {
 }
 
 void AnalyticsWidget::update_realtime_stats(const StatisticsSnapshot& stats) {
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    const QString unit = is_veh ? "车次" : "人次";
+    const QString in_str = is_veh ? "进车" : "进";
+    const QString out_str = is_veh ? "出车" : "出";
+
     if (realtime_total_chart_) {
         realtime_total_chart_->set_counts(stats.today_total, stats.today_entry, stats.today_exit);
     }
 
     if (is_live_today_view_) {
-        total_flow_val_->setText(QString("%1 人次").arg(stats.today_total));
+        total_flow_val_->setText(QString("%1 %2").arg(stats.today_total).arg(unit));
         int net = stats.today_entry - stats.today_exit;
-        total_flow_sub_->setText(QString("进: %1 │ 出: %2 │ 净增: %3%4")
-            .arg(stats.today_entry).arg(stats.today_exit).arg(net > 0 ? "+" : "").arg(net));
+        total_flow_sub_->setText(QString("%1: %2 │ %3: %4 │ 净增: %5%6")
+            .arg(in_str).arg(stats.today_entry).arg(out_str).arg(stats.today_exit).arg(net > 0 ? "+" : "").arg(net));
 
-        entry_val_->setText(QString("%1 人次").arg(stats.today_entry));
-        exit_val_->setText(QString("%1 人次").arg(stats.today_exit));
+        entry_val_->setText(QString("%1 %2").arg(stats.today_entry).arg(unit));
+        exit_val_->setText(QString("%1 %2").arg(stats.today_exit).arg(unit));
 
         if (stats.today_total > 0) {
             entry_sub_->setText(QString("占比: %1%").arg((stats.today_entry * 100) / stats.today_total));
@@ -445,18 +496,28 @@ void AnalyticsWidget::reset_realtime_data() {
 }
 
 void AnalyticsWidget::on_btn_export_csv() {
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
     int64_t start_ms = dt_start_->dateTime().toMSecsSinceEpoch();
     int64_t end_ms = dt_end_->dateTime().toMSecsSinceEpoch();
     int dir_filter = combo_direction_->currentData().toInt();
-    QString gender_filter = combo_gender_->currentText();
-    if (gender_filter == "全部性别") gender_filter = "";
+    QString gender_filter = "";
+    QString keyword_filter = "";
 
-    auto events = DatabaseManager::instance().query_filtered_events(dir_filter, start_ms, end_ms, "", 50000, gender_filter);
+    if (!is_veh) {
+        gender_filter = combo_gender_->currentText();
+        if (gender_filter == "全部性别") gender_filter = "";
+    } else {
+        QString veh_type = combo_gender_->currentText();
+        if (veh_type != "全部车型") keyword_filter = veh_type;
+    }
+
+    auto events = DatabaseManager::instance().query_filtered_events(dir_filter, start_ms, end_ms, keyword_filter, 50000, gender_filter);
 
     if (events.empty()) {
         auto reply = QMessageBox::question(
             this, "导出提示",
-            "当前筛选时段与过滤条件下没有检索到通行明细记录。\n是否仍要导出一份空表？",
+            is_veh ? "当前筛选时段与过滤条件下没有检索到车辆通行明细记录。\n是否仍要导出一份空表？"
+                   : "当前筛选时段与过滤条件下没有检索到客流通行明细记录。\n是否仍要导出一份空表？",
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No
         );
         if (reply != QMessageBox::Yes) {
@@ -468,11 +529,17 @@ void AnalyticsWidget::on_btn_export_csv() {
     if (!dir.exists()) dir.mkpath(".");
 
     QString preset_clean = combo_preset_->currentText().remove(QRegularExpression("[^a-zA-Z0-9\\x4e00-\\x9fa5]"));
-    QString default_filename = QString("exports/report_%1_%2.csv")
-        .arg(preset_clean.isEmpty() ? "客流统计" : preset_clean)
+    QString default_filename = QString("exports/%1_%2_%3.csv")
+        .arg(is_veh ? "车流采集明细" : "客流采集明细")
+        .arg(preset_clean.isEmpty() ? (is_veh ? "车流统计" : "客流统计") : preset_clean)
         .arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss"));
 
-    QString filename = QFileDialog::getSaveFileName(this, "导出客流明细 CSV 报表", default_filename, "CSV 表格文件 (*.csv);;所有文件 (*.*)");
+    QString filename = QFileDialog::getSaveFileName(
+        this,
+        is_veh ? "导出车流采集明细 CSV 报表" : "导出客流采集明细 CSV 报表",
+        default_filename,
+        "CSV 表格文件 (*.csv);;所有文件 (*.*)"
+    );
     if (filename.isEmpty()) {
         return; // 用户主动取消
     }
@@ -486,30 +553,63 @@ void AnalyticsWidget::on_btn_export_csv() {
     QTextStream out(&file);
     // 写入 UTF-8 BOM，彻底解决 Windows Excel 打开中文显示为乱码的问题
     out.setGenerateByteOrderMark(true);
-    out << "序号,通行时间,检测区域ID,检测区域名称,跟踪ID,通行方向,置信度,性别,年龄段,抓拍切片本地路径\n";
 
-    int id = 1;
-    for (const auto& ev : events) {
-        QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd HH:mm:ss");
-        QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "进入 (IN)" : "离开 (OUT)";
-        QString roi_name_str = QString::fromStdString(ev.roi_name);
-        out << id++ << ","
-            << time_str << ","
-            << ev.roi_id << ",\""
-            << roi_name_str << "\","
-            << ev.track_id << ","
-            << dir_str << ","
-            << QString::number(ev.confidence, 'f', 2) << ","
-            << QString::fromStdString(ev.gender) << ","
-            << QString::fromStdString(ev.age_group) << ",\""
-            << QString::fromStdString(ev.clip_path) << "\"\n";
+    if (is_veh) {
+        out << "序号,通行时间,监测卡口编号,卡口名称,车辆跟踪ID,通行方向,置信度,车型分类,车身颜色,车牌号码,号牌颜色,抓拍切片本地路径\n";
+        int id = 1;
+        for (const auto& ev : events) {
+            QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd HH:mm:ss");
+            QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "进车 (IN)" : "出车 (OUT)";
+            QString roi_name_str = QString::fromStdString(ev.roi_name.empty() ? "卡口通道" : ev.roi_name);
+            QString vtype = QString::fromStdString(ev.vehicle_type.empty() ? "轿车" : ev.vehicle_type);
+            QString vcolor = QString::fromStdString(ev.vehicle_color.empty() ? "白色" : ev.vehicle_color);
+            QString pnum = QString::fromStdString(ev.plate_number.empty() ? "未识别" : ev.plate_number);
+            QString pcolor = QString::fromStdString(ev.plate_color.empty() ? "蓝牌" : ev.plate_color);
+
+            out << id++ << ","
+                << time_str << ","
+                << ev.roi_id << ",\""
+                << roi_name_str << "\","
+                << ev.track_id << ","
+                << dir_str << ","
+                << QString::number(ev.confidence, 'f', 2) << ",\""
+                << vtype << "\",\""
+                << vcolor << "\",\""
+                << pnum << "\",\""
+                << pcolor << "\",\""
+                << QString::fromStdString(ev.clip_path) << "\"\n";
+        }
+    } else {
+        out << "序号,通行时间,检测通道编号,通道名称,行人跟踪ID,通行方向,置信度,性别画像,年龄段画像,抓拍切片本地路径\n";
+        int id = 1;
+        for (const auto& ev : events) {
+            QString time_str = QDateTime::fromMSecsSinceEpoch(ev.timestamp_ms).toString("yyyy-MM-dd HH:mm:ss");
+            QString dir_str = (ev.direction == PassageDirection::ENTRY) ? "进入 (IN)" : "离开 (OUT)";
+            QString roi_name_str = QString::fromStdString(ev.roi_name.empty() ? "A门主通道" : ev.roi_name);
+            QString gender = QString::fromStdString(ev.gender.empty() ? "未知" : ev.gender);
+            QString age = QString::fromStdString(ev.age_group.empty() ? "未知" : ev.age_group);
+
+            out << id++ << ","
+                << time_str << ","
+                << ev.roi_id << ",\""
+                << roi_name_str << "\","
+                << ev.track_id << ","
+                << dir_str << ","
+                << QString::number(ev.confidence, 'f', 2) << ",\""
+                << gender << "\",\""
+                << age << "\",\""
+                << QString::fromStdString(ev.clip_path) << "\"\n";
+        }
     }
 
     file.close();
 
     QMessageBox msgBox(this);
     msgBox.setWindowTitle("导出成功");
-    msgBox.setText(QString("客流明细报表 (共 %1 条记录) 已成功导出至:\n%2").arg(events.size()).arg(filename));
+    msgBox.setText(QString("%1 (共 %2 条记录) 已成功导出至:\n%3")
+        .arg(is_veh ? "车流明细报表" : "客流明细报表")
+        .arg(events.size())
+        .arg(filename));
     auto* btn_open_dir = msgBox.addButton("打开所在文件夹", QMessageBox::ActionRole);
     msgBox.addButton("完成", QMessageBox::AcceptRole);
     msgBox.exec();

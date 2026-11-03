@@ -1,4 +1,5 @@
 #include "RealtimeTotalChartWidget.hpp"
+#include "storage/ConfigManager.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -85,7 +86,9 @@ void RealtimeTotalChartWidget::paintEvent(QPaintEvent*) {
     p.drawRoundedRect(full_rect, 8, 8);
 
     // 2. 顶部标题栏
-    QString title = "📈 实时总计人数动态走势";
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    QString title = is_veh ? "📈 实时总计车流动态走势" : "📈 实时总计人数动态走势";
+    QString unit = is_veh ? "车次" : "人次";
     p.setFont(QFont("Segoe UI", 11, QFont::Bold));
     p.setPen(QColor("#58a6ff"));
     p.drawText(20, 26, title);
@@ -98,18 +101,18 @@ void RealtimeTotalChartWidget::paintEvent(QPaintEvent*) {
     
     // 当前总计
     p.setPen(QColor("#388bfd"));
-    p.drawText(chip_x, 26, QString("总计: %1 人次").arg(current_total_));
-    chip_x += p.fontMetrics().horizontalAdvance(QString("总计: %1 人次").arg(current_total_)) + 16;
+    p.drawText(chip_x, 26, QString("总计: %1 %2").arg(current_total_).arg(unit));
+    chip_x += p.fontMetrics().horizontalAdvance(QString("总计: %1 %2").arg(current_total_).arg(unit)) + 16;
 
     // 进
     p.setPen(QColor("#2ea043"));
-    p.drawText(chip_x, 26, QString("进: %1").arg(current_entry_));
-    chip_x += p.fontMetrics().horizontalAdvance(QString("进: %1").arg(current_entry_)) + 16;
+    p.drawText(chip_x, 26, QString("%1: %2").arg(is_veh ? "进车" : "进").arg(current_entry_));
+    chip_x += p.fontMetrics().horizontalAdvance(QString("%1: %2").arg(is_veh ? "进车" : "进").arg(current_entry_)) + 16;
 
     // 出
     p.setPen(QColor("#f85149"));
-    p.drawText(chip_x, 26, QString("出: %1").arg(current_exit_));
-    chip_x += p.fontMetrics().horizontalAdvance(QString("出: %1").arg(current_exit_)) + 16;
+    p.drawText(chip_x, 26, QString("%1: %2").arg(is_veh ? "出车" : "出").arg(current_exit_));
+    chip_x += p.fontMetrics().horizontalAdvance(QString("%1: %2").arg(is_veh ? "出车" : "出").arg(current_exit_)) + 16;
 
     // 净增
     int net = current_entry_ - current_exit_;
@@ -414,19 +417,21 @@ void RealtimeTotalChartWidget::draw_hover_card(QPainter& p, const QRect& plot_re
     p.setBrush(QColor(13, 17, 23, 235));
     p.drawRoundedRect(card_rect, 6, 6);
 
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+
     p.setFont(QFont("Segoe UI", 9, QFont::Bold));
     p.setPen(QColor("#f0f6fc"));
     p.drawText(card_x + 10, card_y + 18, QString("🕒 %1").arg(QDateTime::fromMSecsSinceEpoch(pt.time_ms).toString("hh:mm:ss")));
 
     p.setFont(QFont("Segoe UI", 8));
     p.setPen(QColor("#388bfd"));
-    p.drawText(card_x + 10, card_y + 36, QString("👥 实时总计: %1 人次").arg(pt.total));
+    p.drawText(card_x + 10, card_y + 36, QString(is_veh ? "🚗 实时总计: %1 车次" : "👥 实时总计: %1 人次").arg(pt.total));
 
     p.setPen(QColor("#2ea043"));
-    p.drawText(card_x + 10, card_y + 52, QString("🟢 累计进入: %1 人次").arg(pt.entry));
+    p.drawText(card_x + 10, card_y + 52, QString(is_veh ? "🟢 累计进车: %1 车次" : "🟢 累计进入: %1 人次").arg(pt.entry));
 
     p.setPen(QColor("#f85149"));
-    p.drawText(card_x + 10, card_y + 68, QString("🔴 累计离开: %1 人次").arg(pt.exit));
+    p.drawText(card_x + 10, card_y + 68, QString(is_veh ? "🔴 累计出车: %1 车次" : "🔴 累计离开: %1 人次").arg(pt.exit));
 
     int net = pt.entry - pt.exit;
     p.setPen(net >= 0 ? QColor("#3fb950") : QColor("#ffa502"));

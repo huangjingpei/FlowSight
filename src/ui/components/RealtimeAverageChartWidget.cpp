@@ -1,4 +1,5 @@
 #include "RealtimeAverageChartWidget.hpp"
+#include "storage/ConfigManager.hpp"
 #include "storage/DatabaseManager.hpp"
 #include <QPainter>
 #include <QPainterPath>
@@ -195,7 +196,8 @@ void RealtimeAverageChartWidget::paintEvent(QPaintEvent*) {
     p.drawRoundedRect(full_rect, 8, 8);
 
     // 2. 顶部标题与当前指标概览
-    QString title = QString("⏱️ 客流均值动态走势 (%1秒滑动窗口)").arg(window_sec_);
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
+    QString title = QString(is_veh ? "⏱️ 车流均值动态走势 (%1秒滑动窗口)" : "⏱️ 客流均值动态走势 (%1秒滑动窗口)").arg(window_sec_);
     p.setFont(QFont("Segoe UI", 11, QFont::Bold));
     p.setPen(QColor("#ffa502"));
     p.drawText(20, 27, title);
@@ -209,15 +211,15 @@ void RealtimeAverageChartWidget::paintEvent(QPaintEvent*) {
     p.setFont(QFont("Segoe UI", 9));
     int info_x = 20 + title_w + 25;
     p.setPen(QColor("#f0f6fc"));
-    p.drawText(info_x, 27, QString("当前窗口: %1 人").arg(cur_cnt));
-    info_x += p.fontMetrics().horizontalAdvance(QString("当前窗口: %1 人").arg(cur_cnt)) + 18;
+    p.drawText(info_x, 27, QString(is_veh ? "当前窗口: %1 辆" : "当前窗口: %1 人").arg(cur_cnt));
+    info_x += p.fontMetrics().horizontalAdvance(QString(is_veh ? "当前窗口: %1 辆" : "当前窗口: %1 人").arg(cur_cnt)) + 18;
 
     p.setPen(QColor("#00d2d3"));
-    p.drawText(info_x, 27, QString("实时速率: %1 人次/分").arg(QString::number(cur_rate, 'f', 1)));
-    info_x += p.fontMetrics().horizontalAdvance(QString("实时速率: %1 人次/分").arg(QString::number(cur_rate, 'f', 1))) + 18;
+    p.drawText(info_x, 27, QString(is_veh ? "实时速率: %1 车次/分" : "实时速率: %1 人次/分").arg(QString::number(cur_rate, 'f', 1)));
+    info_x += p.fontMetrics().horizontalAdvance(QString(is_veh ? "实时速率: %1 车次/分" : "实时速率: %1 人次/分").arg(QString::number(cur_rate, 'f', 1))) + 18;
 
     p.setPen(QColor("#ffa502"));
-    p.drawText(info_x, 27, QString("峰值速率: %1 人次/分").arg(QString::number(peak_rate_, 'f', 1)));
+    p.drawText(info_x, 27, QString(is_veh ? "峰值速率: %1 车次/分" : "峰值速率: %1 人次/分").arg(QString::number(peak_rate_, 'f', 1)));
 
     // 3. 计算坐标范围
     float max_rate = 12.0f;
@@ -479,16 +481,17 @@ void RealtimeAverageChartWidget::draw_hover_card(QPainter& p, const QRect& plot_
     p.setPen(QColor("#f0f6fc"));
     p.drawText(card_x + 10, card_y + 18, QString("🕒 %1 (采样 %2s)").arg(QDateTime::fromMSecsSinceEpoch(pt.time_ms).toString("hh:mm:ss")).arg(window_sec_));
 
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
     p.setFont(QFont("Segoe UI", 8));
     p.setPen(QColor("#ffa502"));
-    p.drawText(card_x + 10, card_y + 36, QString("👥 窗口通行: %1 人 (进%2/出%3)").arg(pt.window_count).arg(pt.entry_count).arg(pt.exit_count));
+    p.drawText(card_x + 10, card_y + 36, QString(is_veh ? "🚗 窗口通行: %1 辆 (进%2/出%3)" : "👥 窗口通行: %1 人 (进%2/出%3)").arg(pt.window_count).arg(pt.entry_count).arg(pt.exit_count));
 
     p.setPen(QColor("#00d2d3"));
-    p.drawText(card_x + 10, card_y + 53, QString("⚡ 折算速率: %1 人次/分").arg(QString::number(pt.rate_per_min, 'f', 1)));
+    p.drawText(card_x + 10, card_y + 53, QString(is_veh ? "⚡ 折算速率: %1 车次/分" : "⚡ 折算速率: %1 人次/分").arg(QString::number(pt.rate_per_min, 'f', 1)));
 
     float r_sec = pt.rate_per_min / 60.0f;
     p.setPen(QColor("#a29bfe"));
-    p.drawText(card_x + 10, card_y + 70, QString("📊 瞬时密度: %1 人/秒").arg(QString::number(r_sec, 'f', 2)));
+    p.drawText(card_x + 10, card_y + 70, QString(is_veh ? "📊 瞬时密度: %1 车/秒" : "📊 瞬时密度: %1 人/秒").arg(QString::number(r_sec, 'f', 2)));
 
     p.restore();
 }

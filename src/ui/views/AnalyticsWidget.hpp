@@ -37,31 +37,37 @@ private slots:
 
 private:
     void setup_ui();
-    QWidget* create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub);
+    QWidget* create_kpi_card(const QString& title, QLabel*& out_val, QLabel*& out_sub, QLabel*& out_title);
 
     // 顶部综合筛选控件
     QComboBox* combo_preset_ = nullptr;
     QDateTimeEdit* dt_start_ = nullptr;
     QDateTimeEdit* dt_end_ = nullptr;
     QComboBox* combo_direction_ = nullptr;
+    QLabel* lbl_gender_ = nullptr;
     QComboBox* combo_gender_ = nullptr;
     QPushButton* btn_query_ = nullptr;
     QPushButton* btn_reset_ = nullptr;
     QPushButton* btn_export_ = nullptr;
 
     // 核心概览指标卡片
+    QLabel* card_title_total_ = nullptr;
     QLabel* total_flow_val_ = nullptr;
     QLabel* total_flow_sub_ = nullptr;
 
+    QLabel* card_title_entry_ = nullptr;
     QLabel* entry_val_ = nullptr;
     QLabel* entry_sub_ = nullptr;
 
+    QLabel* card_title_exit_ = nullptr;
     QLabel* exit_val_ = nullptr;
     QLabel* exit_sub_ = nullptr;
 
+    QLabel* card_title_gender_ = nullptr;
     QLabel* gender_val_ = nullptr;
     QLabel* gender_sub_ = nullptr;
 
+    QLabel* card_title_peak_ = nullptr;
     QLabel* peak_hour_val_ = nullptr;
     QLabel* peak_hour_sub_ = nullptr;
 

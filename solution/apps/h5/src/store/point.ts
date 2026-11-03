@@ -23,13 +23,17 @@ export const usePointStore = defineStore('point', () => {
 
   const setPoints = (list: PointItem[]) => {
     points.value = list;
-    if (list.length > 0 && activePointId.value === null) {
-      // 优先加载用户设置的默认业务座舱
-      if (defaultPointId.value && list.some(p => p.id === defaultPointId.value)) {
-        activePointId.value = defaultPointId.value;
-      } else {
-        activePointId.value = list[0].id;
+    if (list.length > 0) {
+      if (activePointId.value === null || !list.some(p => p.id === activePointId.value)) {
+        // 优先加载用户设置的默认业务座舱
+        if (defaultPointId.value && list.some(p => p.id === defaultPointId.value)) {
+          activePointId.value = defaultPointId.value;
+        } else {
+          activePointId.value = list[0].id;
+        }
       }
+    } else {
+      activePointId.value = null;
     }
   };
 

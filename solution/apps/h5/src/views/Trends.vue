@@ -6,8 +6,19 @@
         <span class="header-dot"></span>
         <span class="header-title">时序走势分析</span>
       </div>
-      <div class="realtime-badge">
-        <span>实时时序流</span>
+      <div class="header-right">
+        <div class="realtime-badge">
+          <span>实时时序流</span>
+        </div>
+        <button
+          class="flat-export-btn"
+          :disabled="isExporting"
+          @click="handleExportExcel"
+          :title="isVehicleMode ? '导出车流时序Excel报表并可分享到微信' : '导出客流时序Excel报表并可分享到微信'"
+        >
+          <span v-if="isExporting">导出中...</span>
+          <span v-else>📥 导出报表</span>
+        </button>
       </div>
     </header>
 
@@ -71,6 +82,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue';
 import * as echarts from 'echarts';
+import * as XLSX from 'xlsx';
+import { showToast, showDialog } from 'vant';
 import { h5Api, TrendReportVO } from '../api';
 import { usePointStore } from '../store/point';
 import { useThemeStore } from '../store/theme';
@@ -125,8 +138,10 @@ const loadPoints = async () => {
   try {
     const list: any = await h5Api.getMyPoints();
     pointStore.setPoints(list);
-    if (list.length > 0 && !activePointId.value) {
-      activePointId.value = list[0].id;
+    if (list.length > 0) {
+      if (!activePointId.value || !list.some((p: any) => p.id === activePointId.value)) {
+        activePointId.value = pointStore.activePointId || list[0].id;
+      }
     }
   } catch (e) {}
 };
@@ -275,6 +290,230 @@ const onPointChange = () => {
   loadTrends();
 };
 
+const isExporting = ref(false);
+
+const handleExportExcel = async () => {
+  if (isExporting.value) return;
+  isExporting.value = true;
+  showToast({ type: 'loading', message: '正在生成报表...', duration: 0 });
+
+  try {
+    const curPoint = pointStore.points.find((p) => p.id === activePointId.value);
+    const pointName = curPoint ? curPoint.pointName : `通道#${activePointId.value}`;
+    const pointCode = curPoint?.pointCode || `P-${activePointId.value}`;
+    const isVeh = isVehicleMode.value;
+    const dimObj = dimensionOptions.find((d) => d.key === currentDimension.value);
+    const dimLabel = dimObj ? dimObj.label : currentDimension.value;
+    const now = new Date();
+    const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
+    const nowStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const fileTimestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+    // 1. 组装 Sheet 1: 时序趋势汇总报表
+    const sheet1Rows: any[][] = [];
+    sheet1Rows.push([`FlowSight - ${isVeh ? '车流' : '客流'}时序走势分析报表`]);
+    sheet1Rows.push([
+      `监测${isVeh ? '卡口' : '通道'}: [${activePointId.value}] ${pointName}`,
+      `编码: ${pointCode}`,
+      `业务模式: ${isVeh ? '车流计数与感知' : '客流统计与感知'}`,
+      `统计维度: ${dimLabel}`,
+      `导出时间: ${nowStr}`
+    ]);
+    sheet1Rows.push([]); // 空行
+
+    // KPI 汇总卡片行
+    sheet1Rows.push([
+      isVeh ? '周期总车流' : '周期总客流',
+      isVeh ? '车流高峰时段' : '客流高峰时段',
+      isVeh ? '峰值最高' : '峰值最高',
+      isVeh ? '时序平均车流' : '时序平均客流'
+    ]);
+    sheet1Rows.push([
+      `${trendData.value.totalPeriodCount || 0} ${isVeh ? '车次' : '人次'}`,
+      trendData.value.peakTime || '-',
+      `${trendData.value.peakValue || 0} ${isVeh ? '辆' : '人'}`,
+      `${trendData.value.averageCount || '0.0'} ${isVeh ? '车/点' : '人/点'}`
+    ]);
+    sheet1Rows.push([]); // 空行
+
+    // 时序明细数据表头
+    if (isVeh) {
+      sheet1Rows.push(['序号', '统计时段/分类', '进车车次 (车次)', '出车车次 (车次)', '双向总车流 (车次)', '净增车流 (车次)']);
+    } else {
+      sheet1Rows.push(['序号', '统计时段/分类', '进入人次 (人次)', '离开人次 (人次)', '双向总客流 (人次)', '净增客流 (人次)']);
+    }
+
+    const categories = trendData.value.categories || [];
+    const entryList = trendData.value.entryList || [];
+    const exitList = trendData.value.exitList || [];
+    const totalList = trendData.value.totalList || [];
+
+    categories.forEach((cat, idx) => {
+      const entry = entryList[idx] || 0;
+      const exit = exitList[idx] || 0;
+      const total = totalList[idx] || (entry + exit);
+      const net = entry - exit;
+      sheet1Rows.push([idx + 1, cat, entry, exit, total, net]);
+    });
+
+    const ws1 = XLSX.utils.aoa_to_sheet(sheet1Rows);
+    ws1['!cols'] = [
+      { wch: 8 },  // 序号
+      { wch: 22 }, // 时段/分类
+      { wch: 18 }, // 进
+      { wch: 18 }, // 出
+      { wch: 20 }, // 总
+      { wch: 16 }  // 净增
+    ];
+
+    // 2. 尝试抓取当前卡口/通道的最近采集记录 (Sheet 2)
+    const sheet2Rows: any[][] = [];
+    try {
+      const eventsRes: any = await h5Api.getEvents({
+        pointId: activePointId.value,
+        page: 1,
+        size: 500
+      });
+      const records = eventsRes?.records || [];
+      if (records.length > 0) {
+        if (isVeh) {
+          sheet2Rows.push(['序号', '通行时间', '监测卡口编号', '卡口名称', '车辆跟踪ID', '通行方向', '置信度', '车型分类', '车身颜色', '车牌号码', '号牌颜色']);
+          records.forEach((ev: any, idx: number) => {
+            const dirStr = ev.direction === 'ENTRY' || ev.direction === '进' || ev.direction === '1' ? '进车 (IN)' : '出车 (OUT)';
+            sheet2Rows.push([
+              idx + 1,
+              ev.datetime || ev.createTime || '-',
+              ev.pointId || activePointId.value,
+              ev.pointName || pointName,
+              ev.trackId,
+              dirStr,
+              typeof ev.confidence === 'number' ? ev.confidence.toFixed(2) : (ev.confidence || '0.92'),
+              ev.vehicleType || '轿车',
+              ev.vehicleColor || '白色',
+              ev.plateNumber || '未识别',
+              ev.plateColor || '蓝牌'
+            ]);
+          });
+        } else {
+          sheet2Rows.push(['序号', '通行时间', '检测通道编号', '通道名称', '行人跟踪ID', '通行方向', '置信度', '性别画像', '年龄段画像']);
+          records.forEach((ev: any, idx: number) => {
+            const dirStr = ev.direction === 'ENTRY' || ev.direction === '进' || ev.direction === '1' ? '进入 (IN)' : '离开 (OUT)';
+            sheet2Rows.push([
+              idx + 1,
+              ev.datetime || ev.createTime || '-',
+              ev.pointId || activePointId.value,
+              ev.pointName || pointName,
+              ev.trackId,
+              dirStr,
+              typeof ev.confidence === 'number' ? ev.confidence.toFixed(2) : (ev.confidence || '0.90'),
+              ev.gender || '未知',
+              ev.ageGroup || '未知'
+            ]);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('获取明细失败，仅导出时序汇总表', e);
+    }
+
+    // 3. 构建工作簿
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, isVeh ? '车流时序汇总' : '客流时序汇总');
+
+    if (sheet2Rows.length > 0) {
+      const ws2 = XLSX.utils.aoa_to_sheet(sheet2Rows);
+      if (isVeh) {
+        ws2['!cols'] = [
+          { wch: 8 }, { wch: 20 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
+          { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 12 }
+        ];
+      } else {
+        ws2['!cols'] = [
+          { wch: 8 }, { wch: 20 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
+          { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 16 }
+        ];
+      }
+      XLSX.utils.book_append_sheet(wb, ws2, isVeh ? '车辆采集明细' : '客流采集明细');
+    }
+
+    const cleanPointName = pointName.replace(/[^\w\u4e00-\u9fa5]/g, '_');
+    const fileName = `${isVeh ? '车流时序走势报表' : '客流时序走势报表'}_${cleanPointName}_${dimLabel}_${fileTimestamp}.xlsx`;
+
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    // 4. 环境判定与分发（移动端分享到微信，电脑端本地下载）
+    const ua = navigator.userAgent;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || window.innerWidth <= 768;
+    const isWeChat = /MicroMessenger/i.test(ua);
+
+    // 本地触发文件下载
+    const downloadLocally = () => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    if (isMobile) {
+      // 移动端：若支持原生 Web Share API 且允许分享文件，则调起系统面板直接分享给微信好友
+      const file = new File([blob], fileName, {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: isVeh ? '车流时序走势分析报表' : '客流时序走势分析报表',
+            text: `FlowSight [${pointName}] ${dimLabel} 统计导出`,
+            files: [file]
+          });
+          showToast({ type: 'success', message: '已调起微信/系统分享' });
+          return;
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            // 用户在分享面板主动取消，直接返回
+            return;
+          }
+        }
+      }
+
+      // 若未能通过系统原生面板唤起微信（如微信内置浏览器环境或部分 Android 机型），执行下载并弹出指引
+      downloadLocally();
+
+      if (isWeChat) {
+        showDialog({
+          title: '报表已生成',
+          message: '微信内置环境已生成该 Excel 报表！\n\n💡 提示：若当前未弹出文件保存提示，请点击微信右上角【···】选择【在浏览器中打开】即可直接保存。\n\n保存后，可通过【微信文件传输助手】或聊天窗口中的【+ ➜ 文件】直接转发分享给微信好友。',
+          confirmButtonText: '我知道了',
+          confirmButtonColor: '#00D2FF'
+        });
+      } else {
+        showDialog({
+          title: '报表导出成功',
+          message: `Excel 报表已下载至手机【下载 / Download】文件夹。\n\n📱 分享到微信方法：\n打开微信好友或文件传输助手聊天窗口，点击右下角【+】号 ➜【文件】➜ 选择该 Excel 文件即可发送！`,
+          confirmButtonText: '我知道了',
+          confirmButtonColor: '#00D2FF'
+        });
+      }
+    } else {
+      // 电脑端：直接触发极速下载保存至本地
+      downloadLocally();
+      showToast({ type: 'success', message: '报表已成功下载至本地电脑' });
+    }
+  } catch (error: any) {
+    showToast({ type: 'fail', message: `导出失败: ${error?.message || '未知异常'}` });
+  } finally {
+    isExporting.value = false;
+  }
+};
+
 const handleResize = () => {
   if (myChart) myChart.resize();
 };
@@ -348,6 +587,12 @@ onUnmounted(() => {
   color: var(--fs-text-main, #FFFFFF);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .realtime-badge {
   font-size: 10px;
   font-weight: 700;
@@ -355,6 +600,35 @@ onUnmounted(() => {
   background: rgba(0, 210, 255, 0.12);
   padding: 2px 8px;
   border-radius: 4px;
+  white-space: nowrap;
+}
+
+.flat-export-btn {
+  height: 26px;
+  background: linear-gradient(135deg, rgba(0, 210, 255, 0.18), rgba(14, 165, 233, 0.28));
+  border: 1px solid rgba(0, 210, 255, 0.45);
+  color: #00D2FF;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  outline: none;
+}
+
+.flat-export-btn:active {
+  background: rgba(0, 210, 255, 0.35);
+  transform: scale(0.96);
+}
+
+.flat-export-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* 主体单屏 */

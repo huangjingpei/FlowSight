@@ -1,4 +1,5 @@
 #include "AnalyticsChartWidget.hpp"
+#include "storage/ConfigManager.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -202,16 +203,17 @@ void AnalyticsChartWidget::draw_hover_card(QPainter& p, const QRect& plot_rect) 
         .arg(hovered_hour_, 2, 10, QChar('0'))
         .arg((hovered_hour_ + 1) % 24, 2, 10, QChar('0')));
 
+    bool is_veh = ConfigManager::instance().is_vehicle_mode();
     p.setFont(QFont("Segoe UI", 8));
     p.setPen(QColor("#00d2d3"));
-    p.drawText(card_x + 10, card_y + 36, QString("🟢 进入: %1 人次").arg(entry_cnt));
+    p.drawText(card_x + 10, card_y + 36, QString(is_veh ? "🟢 进车: %1 车次" : "🟢 进入: %1 人次").arg(entry_cnt));
 
     p.setPen(QColor("#ff4757"));
-    p.drawText(card_x + 10, card_y + 52, QString("🔴 离开: %1 人次").arg(exit_cnt));
+    p.drawText(card_x + 10, card_y + 52, QString(is_veh ? "🔴 出车: %1 车次" : "🔴 离开: %1 人次").arg(exit_cnt));
 
     int net = entry_cnt - exit_cnt;
     p.setPen(net >= 0 ? QColor("#3fb950") : QColor("#ffa502"));
-    p.drawText(card_x + 10, card_y + 68, QString("📊 净增: %1%2 人次").arg(net > 0 ? "+" : "").arg(net));
+    p.drawText(card_x + 10, card_y + 68, QString(is_veh ? "📊 净增: %1%2 车次" : "📊 净增: %1%2 人次").arg(net > 0 ? "+" : "").arg(net));
 
     p.restore();
 }
