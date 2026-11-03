@@ -430,6 +430,32 @@ const onStorageChange = (e: StorageEvent) => {
   }
 };
 
+const summary = ref<DashboardSummaryVO>({
+  pointId: 0,
+  pointName: '',
+  clientName: '',
+  appVersion: 'v1.2.0',
+  lastHeartbeat: '',
+  streamStatus: 'ONLINE',
+  currentOccupancy: 0,
+  todayEntry: 0,
+  todayExit: 0,
+  todayTotal: 0,
+  snapshotUrl: '',
+  demographics: {
+    maleCount: 0,
+    femaleCount: 0,
+    maleRatio: 0.5,
+    femaleRatio: 0.5,
+    topAgeGroup: '青年(18-35)'
+  },
+  hourlyChart: []
+});
+
+const showSnapshotModal = ref(false);
+const isSurged = computed(() => (summary.value.currentOccupancy || 0) >= 25);
+const isVehicleMode = computed(() => summary.value?.bizType === 'VEHICLE');
+
 const isOnlyVehicle = computed(() => (overviewData.value?.globalMetrics?.pedestrianPoints || 0) === 0 && (overviewData.value?.globalMetrics?.vehiclePoints || 0) > 0);
 const isOnlyPedestrian = computed(() => (overviewData.value?.globalMetrics?.vehiclePoints || 0) === 0);
 
@@ -458,32 +484,6 @@ const syncUserProfile = async () => {
     }
   } catch (err) {}
 };
-
-const summary = ref<DashboardSummaryVO>({
-  pointId: 0,
-  pointName: '',
-  clientName: '',
-  appVersion: 'v1.2.0',
-  lastHeartbeat: '',
-  streamStatus: 'ONLINE',
-  currentOccupancy: 0,
-  todayEntry: 0,
-  todayExit: 0,
-  todayTotal: 0,
-  snapshotUrl: '',
-  demographics: {
-    maleCount: 0,
-    femaleCount: 0,
-    maleRatio: 0.5,
-    femaleRatio: 0.5,
-    topAgeGroup: '青年(18-35)'
-  },
-  hourlyChart: []
-});
-
-const showSnapshotModal = ref(false);
-const isSurged = computed(() => (summary.value.currentOccupancy || 0) >= 25);
-const isVehicleMode = computed(() => summary.value?.bizType === 'VEHICLE');
 
 // 实时动态波形图表实例与定时器
 const pulseChartRef = ref<HTMLDivElement | null>(null);
