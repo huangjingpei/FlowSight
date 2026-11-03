@@ -203,6 +203,27 @@ LOCK TABLES `sys_business_type` WRITE;
 INSERT INTO `sys_business_type` VALUES (1,'PEDESTRIAN','客流检测与客群分析','适用于人员通道、大门、闸机等出入口场景，实时进行人体检测跟踪、双向通行计数及性别、年龄段客群画像分析。','[\"人体检测\",\"轨迹跟踪\",\"进出防区计数\",\"性别分析\",\"年龄段识别\",\"客流密度\"]','推荐1080P/720P，帧率15-25fps，架高2.5m~3.5m下视角','User','#388bfd',1,1,1,'2026-10-26 16:06:02','2026-10-26 16:06:02'),(2,'VEHICLE','车流检测与车辆分析','适用于停车场出入口、道路卡口、园区车道场景，实时进行机动车检测、车辆出入计数、车牌号码识别及车型、车身颜色分析。','[\"车辆检测\",\"车辆跟踪\",\"车牌识别\",\"号牌颜色识别\",\"车型分类\",\"车身颜色分析\"]','推荐1080P/2K，推荐抓拍焦距6~12mm，车道正面角度≤30度','Van','#e3b341',1,2,1,'2026-10-26 16:06:02','2026-10-26 16:06:02');
 /*!40000 ALTER TABLE `sys_business_type` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table sys_system_config
+--
+
+DROP TABLE IF EXISTS sys_system_config;
+CREATE TABLE sys_system_config (
+  id bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  config_key varchar(64) NOT NULL COMMENT '配置标识键名',
+  config_value varchar(1024) NOT NULL COMMENT '配置值',
+  config_name varchar(128) NOT NULL COMMENT '配置显示名称',
+  description varchar(500) DEFAULT '' COMMENT '功能配置说明',
+  update_time datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_config_key (config_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全局系统功能开关配置表';
+
+LOCK TABLES sys_system_config WRITE;
+INSERT INTO sys_system_config VALUES (1,'video_playback_enabled','false','视频播放与证据切片功能','开启后前端展示视频监控与证据切片回放导航，关闭时自动隐藏切片页面以节省带宽与算力',NOW());
+UNLOCK TABLES;
+
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;

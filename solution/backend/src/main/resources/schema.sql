@@ -133,3 +133,21 @@ ON DUPLICATE KEY UPDATE
     `description`=VALUES(`description`), 
     `features`=VALUES(`features`), 
     `device_req`=VALUES(`device_req`);
+
+-- 7. 全局系统功能与特性开关配置表
+CREATE TABLE IF NOT EXISTS `sys_system_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `config_key` VARCHAR(64) NOT NULL COMMENT '配置标识键名',
+    `config_value` VARCHAR(1024) NOT NULL COMMENT '配置值',
+    `config_name` VARCHAR(128) NOT NULL COMMENT '配置显示名称',
+    `description` VARCHAR(500) DEFAULT '' COMMENT '功能配置说明',
+    `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_config_key` (`config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='全局系统功能开关配置表';
+
+-- 预置种子功能开关: 视频播放与证据切片 (默认关闭 false)
+INSERT INTO `sys_system_config` (`id`, `config_key`, `config_value`, `config_name`, `description`)
+VALUES (1, 'video_playback_enabled', 'false', '视频播放与证据切片功能', '开启后前端展示视频监控与证据切片回放导航，关闭时自动隐藏切片页面以节省带宽与算力')
+ON DUPLICATE KEY UPDATE `config_name`=VALUES(`config_name`), `description`=VALUES(`description`);
+

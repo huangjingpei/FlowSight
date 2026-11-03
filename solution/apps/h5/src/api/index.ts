@@ -143,6 +143,7 @@ export interface DashboardOverviewVO {
 }
 
 export const h5Api = {
+  getSystemFeatures: () => api.get<any, { videoPlaybackEnabled: boolean }>('/system/features'),
   getUserProfile: () => api.get<any, any>('/h5/user/profile'),
   getMyPoints: () => api.get('/h5/points'),
   getDashboardOverview: () => api.get<any, DashboardOverviewVO>('/h5/dashboard/overview'),

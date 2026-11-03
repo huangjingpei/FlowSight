@@ -31,6 +31,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/v1/**")
                 .excludePathPatterns(
                         "/api/v1/auth/**",      // 登录、扫码放行
+                        "/api/v1/system/features", // 系统能力特性公开查询放行
                         "/api/v1/edge/**",      // 边缘采集端(使用 X-Point-Token 独立鉴权)
                         "/api/v1/clips/**",     // 本地切片回放静态资源直接放行 (用于 MinIO 降级服务)
                         "/api/v1/snapshots/**", // 现场快照缩略图静态放行

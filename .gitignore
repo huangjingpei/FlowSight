@@ -37,4 +37,6 @@ deploy/*_nginx/
 models/pedestrian_gender_int8.onnx
 scratch/
 test_*.mp4
+~$*
+
 

@@ -5,6 +5,7 @@ import Trends from '../views/Trends.vue';
 import Playback from '../views/Playback.vue';
 import Settings from '../views/Settings.vue';
 import DigitalScreen from '../views/DigitalScreen.vue';
+import { useSystemStore } from '../store/system';
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -26,7 +27,7 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 支持投屏免密 Token 注入
   if (to.query && to.query.token) {
     localStorage.setItem('flowsight_token', to.query.token as string);
@@ -35,9 +36,22 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('flowsight_token');
   if (to.path !== '/login' && !token) {
     next('/login');
-  } else {
-    next();
+    return;
   }
+
+  // 关键控制：若视频播放/切片功能未开启，拦截 /playback 页面直接重定向至 /dashboard
+  if (to.path === '/playback') {
+    const systemStore = useSystemStore();
+    if (!systemStore.loaded) {
+      await systemStore.fetchFeatures();
+    }
+    if (!systemStore.videoPlaybackEnabled) {
+      next('/dashboard');
+      return;
+    }
+  }
+
+  next();
 });
 
 export default router;

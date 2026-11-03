@@ -55,5 +55,9 @@ export const adminApi = {
   createBusinessType: (data: any) => api.post('/business-types', data),
   updateBusinessType: (id: number, data: any) => api.put(`/business-types/${id}`, data),
   deleteBusinessType: (id: number) => api.delete(`/business-types/${id}`),
-  toggleBusinessTypeStatus: (id: number, status: number) => api.patch(`/business-types/${id}/status`, null, { params: { status } })
+  toggleBusinessTypeStatus: (id: number, status: number) => api.patch(`/business-types/${id}/status`, null, { params: { status } }),
+
+  // 全局系统功能与开关配置
+  getSystemConfigs: () => api.get('/admin/config'),
+  updateSystemConfig: (data: { configKey: string; configValue: string }) => api.post('/admin/config/update', data)
 };

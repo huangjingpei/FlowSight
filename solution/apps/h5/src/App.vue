@@ -10,7 +10,7 @@
         </router-view>
       </div>
 
-      <!-- 扁平化底部 4 键导航栏 (完全嵌入视口内部，纯平质感无多余装饰) -->
+      <!-- 扁平化底部导航栏 (根据后端开关动态自适应 3 键或 4 键，纯平居中平衡) -->
       <nav v-if="showTabBar" class="flat-tabbar">
         <router-link to="/dashboard" class="tab-item" active-class="tab-active">
           <span class="tab-icon">⚡</span>
@@ -20,7 +20,12 @@
           <span class="tab-icon">📈</span>
           <span class="tab-label">时序走势</span>
         </router-link>
-        <router-link to="/playback" class="tab-item" active-class="tab-active">
+        <router-link
+          v-if="systemStore.videoPlaybackEnabled"
+          to="/playback"
+          class="tab-item"
+          active-class="tab-active"
+        >
           <span class="tab-icon">🎬</span>
           <span class="tab-label">证据切片</span>
         </router-link>
@@ -34,13 +39,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { useSystemStore } from './store/system';
 
 const route = useRoute();
+const systemStore = useSystemStore();
 
 const showTabBar = computed(() => {
-  return route.path !== '/login';
+  return route.path !== '/login' && route.path !== '/screen';
+});
+
+onMounted(() => {
+  systemStore.fetchFeatures();
 });
 </script>
 
