@@ -13,7 +13,12 @@ const routes = [
   {
     path: '/screen',
     component: DigitalScreen,
-    meta: { title: '客流智能统计系统 · 智能视觉数字全景大屏' }
+    meta: { title: '智能视觉数字全景大屏' }
+  },
+  {
+    path: '/screen/:userId',
+    component: DigitalScreen,
+    meta: { title: '智能视觉数字全景大屏' }
   },
   { path: '/dashboard', component: Dashboard },
   { path: '/trends', component: Trends },
@@ -37,6 +42,32 @@ router.beforeEach(async (to, from, next) => {
   if (to.path !== '/login' && !token) {
     next('/login');
     return;
+  }
+
+  // 大屏访问规范控制：大屏必须在某个用户下面，URL 必须关联到用户 (禁止无归属的裸 /screen URL)
+  if (to.path === '/screen') {
+    const hasUser = !!(to.query && to.query.userId) || !!(to.params && to.params.userId);
+    if (!hasUser) {
+      // 检查当前登录商户账号，尝试自动矫正并重定向至带商户归属的合法大屏 URL
+      const userStr = localStorage.getItem('flowsight_user');
+      let merchantUserId = 0;
+      if (userStr) {
+        try {
+          const u = JSON.parse(userStr);
+          if (u.role !== 'ROLE_ADMIN' && u.userId) {
+            merchantUserId = u.userId;
+          }
+        } catch (e) {}
+      }
+      if (merchantUserId > 0) {
+        next({ path: '/screen', query: { ...to.query, userId: merchantUserId } });
+        return;
+      } else {
+        // 无有效商户关联，彻底拦截裸 /screen 访问
+        next('/dashboard');
+        return;
+      }
+    }
   }
 
   // 关键控制：若视频播放/切片功能未开启，拦截 /playback 页面直接重定向至 /dashboard

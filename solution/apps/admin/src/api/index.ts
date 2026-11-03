@@ -40,6 +40,7 @@ export const adminApi = {
   createUser: (data: any) => api.post('/admin/users', data),
   updateUser: (id: number, data: any) => api.put(`/admin/users/${id}`, data),
   deleteUser: (id: number) => api.delete(`/admin/users/${id}`),
+  getMerchantScreenUrl: (id: number) => api.get(`/admin/users/${id}/screen-url`),
 
   getPoints: (page = 1, size = 10, userId?: number, keyword = '', bizType = '') => api.get('/points', { params: { page, size, userId, keyword, bizType } }),
   createPoint: (data: any) => api.post('/points', data),

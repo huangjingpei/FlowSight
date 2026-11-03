@@ -70,10 +70,13 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button size="small" link type="primary" @click="jumpToPoints(row)">
               点位管理
+            </el-button>
+            <el-button size="small" link type="success" @click="openMerchantScreen(row)">
+              专属大屏
             </el-button>
             <el-button size="small" link type="warning" @click="openEditDialog(row)">
               编辑商户
@@ -253,6 +256,19 @@ const jumpToPoints = (row: any) => {
     path: '/points',
     query: { userId: row.id, phone: row.phone }
   });
+};
+
+const openMerchantScreen = async (row: any) => {
+  try {
+    const res: any = await adminApi.getMerchantScreenUrl(row.id);
+    if (res && res.screenUrl) {
+      window.open(res.screenUrl, '_blank');
+    } else {
+      window.open(`/#/screen?userId=${row.id}`, '_blank');
+    }
+  } catch (e: any) {
+    window.open(`/#/screen?userId=${row.id}`, '_blank');
+  }
 };
 
 const openCreateDialog = () => {

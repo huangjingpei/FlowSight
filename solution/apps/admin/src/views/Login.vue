@@ -3,8 +3,8 @@
     <div class="login-card">
       <div class="login-title">
         <span class="logo">👁️</span>
-        <h2>客流智能统计系统 运营管理平台</h2>
-        <p>多租户客流大数据与边缘设备管控中心</p>
+        <h2>智能视觉流量统计系统 运营管理平台</h2>
+        <p>全域多租户通行流量感知与边缘计算管控中心</p>
       </div>
 
       <el-form :model="form" :rules="rules" ref="formRef" size="large" @keyup.enter="handleLogin">
@@ -16,7 +16,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" class="login-btn" @click="handleLogin">
-            立即登录管理中台
+            立即登录
           </el-button>
         </el-form-item>
       </el-form>

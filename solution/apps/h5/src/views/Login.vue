@@ -1,10 +1,10 @@
 <template>
   <div class="login-viewport">
     <div class="login-card">
-      <!-- 极简品牌头部 (纯平设计，无旋转圈套) -->
+      <!-- 极简品牌头部 (专业中立，涵盖客流与车流业务) -->
       <div class="brand-box">
-        <h1 class="brand-title">客流智能统计系统 · 移动决策中台</h1>
-        <p class="brand-sub">边缘视觉感知 · 商业客流数字孪生中枢</p>
+        <h1 class="brand-title">智能视觉流量统计系统</h1>
+        <p class="brand-sub">边缘 AI 视觉感知 · 通行流量数字化决策中心</p>
       </div>
 
       <!-- 扁平登录表单 -->
@@ -32,12 +32,12 @@
         </div>
 
         <button type="submit" class="btn-submit" :disabled="loading">
-          <span>{{ loading ? '身份验证中...' : '登录中台 ➔' }}</span>
+          <span>{{ loading ? '正在登录...' : '立即登录' }}</span>
         </button>
       </form>
 
       <div class="login-foot">
-        <span>客流智能统计系统 v1.2</span>
+        <span>智能视觉统计系统 v1.2</span>
       </div>
     </div>
   </div>

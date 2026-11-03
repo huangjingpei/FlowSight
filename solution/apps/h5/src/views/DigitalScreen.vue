@@ -394,11 +394,30 @@ if (route.query.token) {
   localStorage.setItem('flowsight_admin_token', route.query.token as string);
 }
 
-// 多租户隔离状态
-const activeTenantUserId = ref<number>(route.query.userId ? Number(route.query.userId) : 0);
+// 多租户隔离状态 (大屏必须关联到某个用户下面，URL必须带有 userId 标识)
+const rawUserId = route.query.userId || route.params.userId;
+const activeTenantUserId = ref<number>(rawUserId ? Number(rawUserId) : 0);
 const isAdmin = ref(false);
 const tenantList = ref<any[]>([]);
 const currentMerchantName = ref('');
+
+// 校验与自动补全用户关联：严禁裸 /screen 访问
+if (!activeTenantUserId.value) {
+  const userStr = localStorage.getItem('flowsight_user');
+  let fallbackId = 0;
+  if (userStr) {
+    try {
+      const u = JSON.parse(userStr);
+      if (u.role !== 'ROLE_ADMIN' && u.userId) fallbackId = u.userId;
+    } catch (e) {}
+  }
+  if (fallbackId > 0) {
+    activeTenantUserId.value = fallbackId;
+    router.replace({ path: '/screen', query: { ...route.query, userId: fallbackId } });
+  } else {
+    router.replace('/dashboard');
+  }
+}
 
 // ==================== 自适应等比缩放引擎 ====================
 const screenWrapperRef = ref<HTMLElement | null>(null);
@@ -714,6 +733,9 @@ const loadUserProfileAndTenants = async () => {
 
 const handleTenantChange = () => {
   selectedPointId.value = 0;
+  if (activeTenantUserId.value > 0) {
+    router.replace({ path: '/screen', query: { ...route.query, userId: activeTenantUserId.value } });
+  }
   loadUserProfileAndTenants();
   fetchData();
 };
