@@ -551,7 +551,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue';
+import { ref, computed, onMounted, onUnmounted, onActivated, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { showToast, showDialog } from 'vant';
 import { storeToRefs } from 'pinia';
@@ -665,7 +665,11 @@ const handleSelectDefaultPoint = async (pointId: number | null) => {
   try {
     await h5Api.setDefaultPoint(pointId);
     pointStore.setDefaultPoint(pointId);
+    if (pointId) {
+      pointStore.setActivePoint(pointId);
+    }
     showToast(pointId ? '默认业务座舱已锁定' : '已恢复自动首项');
+    await loadSummary();
     closeModal();
   } catch (err: any) {
     showToast(err.message || '设置失败');
@@ -874,13 +878,23 @@ const handleSelectFontScale = (scale: FontSizeScale) => {
   closeModal();
 };
 
-// 汇总数据 (包含客群/车辆属性)
+// 当前选中的目标点位ID (严格遵从全局激活点位 -> 默认座舱 -> 首个点位)
+const currentPointId = computed(() => {
+  return pointStore.activePointId || pointStore.defaultPointId || (pointStore.points[0]?.id) || 1;
+});
+
+const currentPoint = computed(() => {
+  return pointStore.points.find(p => p.id === currentPointId.value);
+});
+
+// 汇总数据模式判定 (车流 vs 客流)
 const isVehicleMode = computed(() => {
-  if (summary.value?.bizType === 'VEHICLE') return true;
-  const def = pointStore.points.find(p => p.id === pointStore.defaultPointId);
-  if (def) return def.bizType === 'VEHICLE';
-  const first = pointStore.points[0];
-  if (first) return first.bizType === 'VEHICLE';
+  if (currentPoint.value?.bizType) {
+    return currentPoint.value.bizType === 'VEHICLE';
+  }
+  if (summary.value?.bizType) {
+    return summary.value.bizType === 'VEHICLE';
+  }
   return false;
 });
 
@@ -909,13 +923,20 @@ const loadSummary = async () => {
   try {
     const points: any = await h5Api.getMyPoints();
     if (points && points.length > 0) {
-      const pid = points[0].id;
+      pointStore.setPoints(points);
+      const pid = pointStore.activePointId || pointStore.defaultPointId || points[0].id;
       const data: any = await h5Api.getDashboardSummary(pid);
       summary.value = data;
       loadPointCredential(pid);
     }
   } catch (e) {}
 };
+
+watch(() => pointStore.activePointId, (newId) => {
+  if (newId) {
+    loadSummary();
+  }
+});
 
 const handleLogout = () => {
   showDialog({
@@ -947,6 +968,7 @@ onMounted(() => {
 onActivated(() => {
   dashboardStore.syncFromStorage();
   loadUserProfile();
+  loadSummary();
 });
 
 onUnmounted(() => {

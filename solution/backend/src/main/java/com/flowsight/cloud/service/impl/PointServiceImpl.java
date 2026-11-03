@@ -80,7 +80,7 @@ public class PointServiceImpl implements PointService {
     @Override
     public List<PointVO> listUserPoints(Long userId) {
         SysUser user = userMapper.selectById(userId);
-        LambdaQueryWrapper<BizPoint> wrapper = new LambdaQueryWrapper<BizPoint>().orderByDesc(BizPoint::getId);
+        LambdaQueryWrapper<BizPoint> wrapper = new LambdaQueryWrapper<BizPoint>().orderByAsc(BizPoint::getId);
         if (user != null && !"ROLE_ADMIN".equals(user.getRole())) {
             wrapper.eq(BizPoint::getUserId, userId);
         }
