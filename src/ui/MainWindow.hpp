@@ -46,6 +46,8 @@ private:
     QLabel* status_infer_label_ = nullptr;
     QLabel* status_fps_label_ = nullptr;
     QLabel* gpu_badge_label_ = nullptr;
+    QLabel* brand_title_ = nullptr;
+    QLabel* brand_sub_ = nullptr;
 
     StatisticsSnapshot latest_stats_;
     QTimer* cloud_heartbeat_timer_ = nullptr;

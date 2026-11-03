@@ -28,7 +28,8 @@
 #include <QDir>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("客流智能统计系统 v1.2");
+    bool is_veh_init = ConfigManager::instance().is_vehicle_mode();
+    setWindowTitle(is_veh_init ? "车流智能统计系统 v1.2" : "客流智能统计系统 v1.2");
     resize(1366, 800);
     setMinimumSize(1100, 680);
 
@@ -193,6 +194,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         }
     });
     connect(view_settings_, &SettingsWidget::biz_type_changed, this, [this](const QString& type) {
+        bool is_veh = (type.compare("VEHICLE", Qt::CaseInsensitive) == 0);
+        setWindowTitle(is_veh ? "车流智能统计系统 v1.2" : "客流智能统计系统 v1.2");
+        if (brand_title_) brand_title_->setText(is_veh ? "车流智能统计系统" : "客流智能统计系统");
+        if (brand_sub_) brand_sub_->setText(is_veh ? "NVR 车流分析控制台" : "NVR 客流分析控制台");
         if (pipeline_) {
             pipeline_->set_biz_type(type.toStdString());
         }
@@ -333,12 +338,13 @@ void MainWindow::setup_ui() {
     brand_layout->setContentsMargins(14, 10, 10, 10);
     brand_layout->setSpacing(2);
 
-    auto* brand_title = new QLabel("客流智能统计系统", brand_widget);
-    brand_title->setStyleSheet("color: #388bfd; font-weight: bold; font-size: 13px; letter-spacing: 0.5px;");
-    auto* brand_sub = new QLabel("NVR 客流分析控制台", brand_widget);
-    brand_sub->setStyleSheet("color: #8c96a3; font-size: 11px;");
-    brand_layout->addWidget(brand_title);
-    brand_layout->addWidget(brand_sub);
+    bool is_veh_init = ConfigManager::instance().is_vehicle_mode();
+    brand_title_ = new QLabel(is_veh_init ? "车流智能统计系统" : "客流智能统计系统", brand_widget);
+    brand_title_->setStyleSheet("color: #388bfd; font-weight: bold; font-size: 13px; letter-spacing: 0.5px;");
+    brand_sub_ = new QLabel(is_veh_init ? "NVR 车流分析控制台" : "NVR 客流分析控制台", brand_widget);
+    brand_sub_->setStyleSheet("color: #8c96a3; font-size: 11px;");
+    brand_layout->addWidget(brand_title_);
+    brand_layout->addWidget(brand_sub_);
     sidebar_vbox->addWidget(brand_widget);
 
     // 导航列表项

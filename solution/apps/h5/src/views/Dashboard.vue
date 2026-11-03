@@ -151,9 +151,12 @@
               </div>
             </div>
 
-            <div class="hero-metric-grid">
-              <!-- 客流全局 -->
-              <div class="hero-subcard border-cyan">
+            <div class="hero-metric-grid" :class="{ 'grid-single-hero': isOnlyVehicle || isOnlyPedestrian }">
+              <!-- 客流全局 (仅在有客流通道或纯客流场景下展示) -->
+              <div
+                v-if="(overviewData?.globalMetrics?.pedestrianPoints || 0) > 0 || (overviewData?.globalMetrics?.vehiclePoints || 0) === 0"
+                class="hero-subcard border-cyan"
+              >
                 <div class="subcard-header">
                   <span class="subcard-tag tag-cyan">客流大盘</span>
                   <span class="subcard-count">{{ overviewData?.globalMetrics?.pedestrianPoints || 0 }}通道</span>
@@ -167,8 +170,11 @@
                 </div>
               </div>
 
-              <!-- 车流全局 -->
-              <div class="hero-subcard border-amber">
+              <!-- 车流全局 (仅在有车流通道时展示) -->
+              <div
+                v-if="(overviewData?.globalMetrics?.vehiclePoints || 0) > 0"
+                class="hero-subcard border-amber"
+              >
                 <div class="subcard-header">
                   <span class="subcard-tag tag-amber">车流大盘</span>
                   <span class="subcard-count">{{ overviewData?.globalMetrics?.vehiclePoints || 0 }}通道</span>
@@ -424,16 +430,25 @@ const onStorageChange = (e: StorageEvent) => {
   }
 };
 
+const isOnlyVehicle = computed(() => (overviewData.value?.globalMetrics?.pedestrianPoints || 0) === 0 && (overviewData.value?.globalMetrics?.vehiclePoints || 0) > 0);
+const isOnlyPedestrian = computed(() => (overviewData.value?.globalMetrics?.vehiclePoints || 0) === 0);
+
 const currentCompanyName = computed(() => {
   try {
     const raw = localStorage.getItem('flowsight_user');
     if (raw) {
       const u = JSON.parse(raw);
-      return u.companyName || u.nickname || '客流智能统计系统 实时监控';
+      if (u.companyName || u.nickname) {
+        return u.companyName || u.nickname;
+      }
     }
   } catch (e) {}
-  return '客流智能统计系统 实时监控';
+  return isVehicleMode.value ? '车流智能统计系统 实时监控' : '客流智能统计系统 实时监控';
 });
+
+watch(isVehicleMode, (val) => {
+  document.title = val ? '车流智能统计系统 · 移动决策看板' : '客流智能统计系统 · 移动决策看板';
+}, { immediate: true });
 
 const syncUserProfile = async () => {
   try {
@@ -1637,6 +1652,10 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.hero-metric-grid.grid-single-hero {
+  grid-template-columns: 1fr;
 }
 
 .hero-subcard {

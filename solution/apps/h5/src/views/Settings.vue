@@ -64,8 +64,8 @@
       <div class="menu-group">
         <div class="menu-cell" @click="openModal('demographics')">
           <div class="cell-left">
-            <span class="cell-icon">👥</span>
-            <span class="cell-title">客群画像</span>
+            <span class="cell-icon">{{ isVehicleMode ? '🚗' : '👥' }}</span>
+            <span class="cell-title">{{ isVehicleMode ? '车辆特征画像' : '客群画像' }}</span>
           </div>
           <div class="cell-right">
             <span class="cell-value">查看</span>
@@ -272,29 +272,50 @@
     <div v-if="activeModal === 'demographics'" class="dialog-overlay" @click.self="closeModal">
       <div class="dialog-card">
         <div class="dialog-header">
-          <span class="dh-title">客群画像</span>
+          <span class="dh-title">{{ isVehicleMode ? '车辆特征画像' : '客群画像' }}</span>
           <button class="dh-close" @click="closeModal">✕</button>
         </div>
         <div class="dialog-body">
           <div class="demo-modal-content">
-            <div class="gender-text-row" v-if="summary.demographics">
-              <span class="text-cyan">男 {{ (summary.demographics.maleRatio * 100).toFixed(0) }}% ({{ summary.demographics.maleCount }}人)</span>
-              <span class="text-pink">女 {{ (summary.demographics.femaleRatio * 100).toFixed(0) }}% ({{ summary.demographics.femaleCount }}人)</span>
-            </div>
+            <!-- 车辆模式 -->
+            <template v-if="isVehicleMode">
+              <div class="gender-text-row">
+                <span class="text-cyan">🚙 燃油车 (蓝牌): 78%</span>
+                <span class="text-green" style="color: #3fb950;">🔋 新能源 (绿牌): 22%</span>
+              </div>
+              <div class="flat-progress-bar">
+                <div class="bar-cyan" style="width: 78%; background: linear-gradient(90deg, #00D2FF, #0055ff);"></div>
+                <div class="bar-green" style="width: 22%; background: linear-gradient(90deg, #3fb950, #2ea043);"></div>
+              </div>
+              <div class="age-info-row">
+                <span class="info-lbl">主力通行车型:</span>
+                <span class="age-pill">小型轿车 / SUV</span>
+              </div>
+              <div class="demo-count-row">
+                <span>今日累计车流：<b>{{ summary.todayTotal || 0 }}</b> 车次</span>
+              </div>
+            </template>
+            <!-- 客流模式 -->
+            <template v-else>
+              <div class="gender-text-row" v-if="summary.demographics">
+                <span class="text-cyan">男 {{ (summary.demographics.maleRatio * 100).toFixed(0) }}% ({{ summary.demographics.maleCount }}人)</span>
+                <span class="text-pink">女 {{ (summary.demographics.femaleRatio * 100).toFixed(0) }}% ({{ summary.demographics.femaleCount }}人)</span>
+              </div>
 
-            <div class="flat-progress-bar" v-if="summary.demographics">
-              <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
-              <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
-            </div>
+              <div class="flat-progress-bar" v-if="summary.demographics">
+                <div class="bar-cyan" :style="{ width: (summary.demographics.maleRatio * 100) + '%' }"></div>
+                <div class="bar-pink" :style="{ width: (summary.demographics.femaleRatio * 100) + '%' }"></div>
+              </div>
 
-            <div class="age-info-row" v-if="summary.demographics">
-              <span class="info-lbl">主力年龄段:</span>
-              <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
-            </div>
+              <div class="age-info-row" v-if="summary.demographics">
+                <span class="info-lbl">主力年龄段:</span>
+                <span class="age-pill">{{ summary.demographics.topAgeGroup || '青年(18-35)' }}</span>
+              </div>
 
-            <div class="demo-count-row">
-              <span>今日累计样本：<b>{{ summary.todayTotal || 0 }}</b> 人次</span>
-            </div>
+              <div class="demo-count-row">
+                <span>今日累计样本：<b>{{ summary.todayTotal || 0 }}</b> 人次</span>
+              </div>
+            </template>
 
             <button class="btn-modal-action btn-gray-fill" style="margin-top: 14px;" @click="closeModal">
               完成
@@ -853,7 +874,16 @@ const handleSelectFontScale = (scale: FontSizeScale) => {
   closeModal();
 };
 
-// 汇总数据 (包含客群属性)
+// 汇总数据 (包含客群/车辆属性)
+const isVehicleMode = computed(() => {
+  if (summary.value?.bizType === 'VEHICLE') return true;
+  const def = pointStore.points.find(p => p.id === pointStore.defaultPointId);
+  if (def) return def.bizType === 'VEHICLE';
+  const first = pointStore.points[0];
+  if (first) return first.bizType === 'VEHICLE';
+  return false;
+});
+
 const summary = ref<DashboardSummaryVO>({
   pointId: 1,
   pointName: '',

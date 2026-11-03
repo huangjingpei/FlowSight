@@ -40,7 +40,7 @@
               class="hud-select tenant-select"
               @change="handleTenantChange"
             >
-              <option :value="0">🌐 客流智能统计系统 · 全域指挥中心</option>
+              <option :value="0">🌐 {{ isVehicleMode ? '车流智能统计系统' : '客流智能统计系统' }} · 全域指挥中心</option>
               <option
                 v-for="t in tenantList"
                 :key="t.id"
@@ -104,34 +104,34 @@
             </div>
             <div class="panel-body kpi-grid">
               <div class="kpi-card glow-cyan">
-                <div class="kpi-label">今日总通行</div>
-                <div class="kpi-value">{{ formatNumber(todayTotal) }}<span class="unit">人次</span></div>
+                <div class="kpi-label">{{ isVehicleMode ? '今日总通行车次' : '今日总通行' }}</div>
+                <div class="kpi-value">{{ formatNumber(todayTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
                 <div class="kpi-footer">
-                  <span>进出汇流总量</span>
+                  <span>{{ isVehicleMode ? '进出双向汇流总量' : '进出汇流总量' }}</span>
                   <span class="badge badge-cyan">实时统计</span>
                 </div>
               </div>
               <div class="kpi-card glow-green">
-                <div class="kpi-label">当前在场滞留</div>
-                <div class="kpi-value val-green">{{ formatNumber(currentOccupancy) }}<span class="unit">人</span></div>
+                <div class="kpi-label">{{ isVehicleMode ? '场内滞留车辆' : '当前在场滞留' }}</div>
+                <div class="kpi-value val-green">{{ formatNumber(currentOccupancy) }}<span class="unit">{{ isVehicleMode ? '辆' : '人' }}</span></div>
                 <div class="kpi-footer">
-                  <span>场内活跃负荷</span>
+                  <span>{{ isVehicleMode ? '场内停泊滞留负荷' : '场内活跃负荷' }}</span>
                   <span class="beacon-dot"></span>
                 </div>
               </div>
               <div class="kpi-card glow-blue">
-                <div class="kpi-label">今日累计进入</div>
-                <div class="kpi-value val-blue">{{ formatNumber(todayEntry) }}<span class="unit">人次</span></div>
+                <div class="kpi-label">{{ isVehicleMode ? '今日累计进车' : '今日累计进入' }}</div>
+                <div class="kpi-value val-blue">{{ formatNumber(todayEntry) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
                 <div class="kpi-footer">
-                  <span>进站占比: {{ entryRatio }}%</span>
+                  <span>{{ isVehicleMode ? '进车占比' : '进站占比' }}: {{ entryRatio }}%</span>
                   <span class="arrow-up">▲</span>
                 </div>
               </div>
               <div class="kpi-card glow-coral">
-                <div class="kpi-label">今日累计离开</div>
-                <div class="kpi-value val-coral">{{ formatNumber(todayExit) }}<span class="unit">人次</span></div>
+                <div class="kpi-label">{{ isVehicleMode ? '今日累计出车' : '今日累计离开' }}</div>
+                <div class="kpi-value val-coral">{{ formatNumber(todayExit) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
                 <div class="kpi-footer">
-                  <span>净流增量: {{ netIncrement > 0 ? `+${netIncrement}` : netIncrement }}</span>
+                  <span>净流增量: {{ netIncrement > 0 ? `+${netIncrement}` : netIncrement }} {{ isVehicleMode ? '辆' : '' }}</span>
                   <span class="arrow-down">▼</span>
                 </div>
               </div>
@@ -223,7 +223,7 @@
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
               <span class="panel-title"><i class="title-icon">📊</i> 24小时各时段进出分布</span>
               <span class="peak-badge" v-if="peakHourInfo">
-                🏆 客流高峰: {{ peakHourInfo }}
+                🏆 {{ isVehicleMode ? '车流高峰' : '客流高峰' }}: {{ peakHourInfo }}
               </span>
             </div>
             <div class="panel-body chart-body">
@@ -232,18 +232,35 @@
           </div>
         </section>
 
-        <!-- ===== 右翼: 客群属性画像与实时抓拍事件流 ===== -->
+        <!-- ===== 右翼: 属性特征画像与实时抓拍事件流 ===== -->
         <section class="column-right">
-          <!-- 1. 客群属性结构多维画像 -->
+          <!-- 1. 属性结构多维画像 (车/人模式自适应) -->
           <div class="hud-panel demo-panel">
             <div class="panel-header">
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-              <span class="panel-title"><i class="title-icon">👥</i> 客群属性识别画像</span>
-              <span class="panel-tag">{{ isVehicleMode ? '车流特征' : '行人特征' }}</span>
+              <span class="panel-title">
+                <i class="title-icon">{{ isVehicleMode ? '🚗' : '👥' }}</i>
+                {{ isVehicleMode ? '车辆属性特征画像' : '客群属性识别画像' }}
+              </span>
+              <span class="panel-tag">{{ isVehicleMode ? '车牌与车型' : '行人特征' }}</span>
             </div>
             <div class="panel-body demo-body">
-              <!-- 性别画像对比 -->
-              <div class="demo-sub-section">
+              <!-- 车辆模式: 能源与号牌类型比例 -->
+              <div v-if="isVehicleMode" class="demo-sub-section">
+                <div class="sub-title">能源与号牌类型比例</div>
+                <div class="gender-bar-wrapper">
+                  <div class="gender-text">
+                    <span class="male-label" style="color: #00f0ff;">🚙 燃油车 (蓝牌): 78.5%</span>
+                    <span class="female-label" style="color: #3fb950;">🔋 新能源 (绿牌): 21.5%</span>
+                  </div>
+                  <div class="gender-progress">
+                    <div class="bar-male" style="width: 78.5%; background: linear-gradient(90deg, #00f0ff, #0055ff);"></div>
+                    <div class="bar-female" style="width: 21.5%; background: linear-gradient(90deg, #3fb950, #2ea043);"></div>
+                  </div>
+                </div>
+              </div>
+              <!-- 行人模式: 性别画像对比 -->
+              <div v-else class="demo-sub-section">
                 <div class="sub-title">性别结构比例</div>
                 <div class="gender-bar-wrapper">
                   <div class="gender-text">
@@ -257,9 +274,9 @@
                 </div>
               </div>
 
-              <!-- 年龄段分布环形/饼图 -->
+              <!-- 环形分布图: 车型结构 vs 年龄客层 -->
               <div class="demo-sub-section age-chart-section">
-                <div class="sub-title">主导年龄客层分布</div>
+                <div class="sub-title">{{ isVehicleMode ? '主导通行车型分布' : '主导年龄客层分布' }}</div>
                 <div ref="ageChartRef" class="age-chart-container"></div>
               </div>
             </div>
@@ -270,7 +287,7 @@
             <div class="panel-header fids-header">
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
               <div class="header-title-box">
-                <span class="panel-title"><i class="title-icon">🚨</i> 实时动态抓拍动态流水</span>
+                <span class="panel-title"><i class="title-icon">🚨</i> {{ isVehicleMode ? '实时车辆抓拍动态流水' : '实时动态抓拍动态流水' }}</span>
                 <span class="fids-sub-badge">FIDS 滚动播报</span>
               </div>
               <div class="header-status-group">
@@ -286,8 +303,8 @@
               <div class="fids-table-header">
                 <div class="fids-col col-time">抓拍时间</div>
                 <div class="fids-col col-point">监测点位</div>
-                <div class="fids-col col-dir">通行方向</div>
-                <div class="fids-col col-attr">识别特征画像</div>
+                <div class="fids-col col-dir">{{ isVehicleMode ? '进出方向' : '通行方向' }}</div>
+                <div class="fids-col col-attr">{{ isVehicleMode ? '识别车型与号牌' : '识别特征画像' }}</div>
                 <div class="fids-col col-conf">置信度</div>
                 <div class="fids-col col-action">切片</div>
               </div>
@@ -327,10 +344,10 @@
                     <!-- 3. 方向 (机场航班式 ARR / DEP 动态指示牌) -->
                     <div class="fids-col col-dir">
                       <span v-if="ev.direction === 'ENTRY'" class="fids-badge badge-arr">
-                        <i class="dir-icon">↘</i> 进 [ARR]
+                        <i class="dir-icon">↘</i> {{ isVehicleMode ? '进场 [IN]' : '进 [ARR]' }}
                       </span>
                       <span v-else class="fids-badge badge-dep">
-                        <i class="dir-icon">↗</i> 出 [DEP]
+                        <i class="dir-icon">↗</i> {{ isVehicleMode ? '出场 [OUT]' : '出 [DEP]' }}
                       </span>
                     </div>
 
@@ -413,7 +430,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import * as echarts from 'echarts';
 import api, { adminApi } from '../api';
@@ -489,8 +506,18 @@ const currentPoint = computed(() => {
 
 const isSinglePointMode = computed(() => selectedPointId.value > 0);
 const currentPointName = computed(() => currentPoint.value?.pointName || (pointCards.value[0]?.pointName ?? '全域通道'));
-const currentBizTypeName = computed(() => currentPoint.value?.bizTypeName || '客流检测分析');
-const isVehicleMode = computed(() => currentPoint.value?.bizType === 'VEHICLE');
+const isVehicleMode = computed(() => {
+  if (currentPoint.value) {
+    return currentPoint.value.bizType === 'VEHICLE';
+  }
+  // 全域模式时：根据点位列表中车流与客流点位的分布动态判定
+  const vehPoints = pointCards.value.filter((p) => p.bizType === 'VEHICLE').length;
+  const pedPoints = pointCards.value.filter((p) => p.bizType !== 'VEHICLE').length;
+  if (vehPoints > 0 && pedPoints === 0) return true;
+  if (vehPoints > 0 && vehPoints >= pedPoints) return true;
+  return false;
+});
+const currentBizTypeName = computed(() => currentPoint.value?.bizTypeName || (isVehicleMode.value ? '车流检测分析' : '客流检测分析'));
 const currentPointOnline = computed(() => (currentPoint.value ? currentPoint.value.streamStatus === 'ONLINE' : onlineCount.value > 0));
 const currentSnapshotUrl = computed(() => currentPoint.value?.snapshotUrl || pointCards.value[0]?.snapshotUrl || '');
 const currentPointStatusClass = computed(() => (currentPointOnline.value ? 'status-online' : 'status-offline'));
@@ -700,7 +727,7 @@ const loadUserProfileAndTenants = async () => {
         if (activeTenantUserId.value > 0) {
           screenTitle.value = `${company} · 智能视觉全景调度大屏`;
         } else {
-          screenTitle.value = '客流智能统计系统 · 全域智能视觉大屏';
+          screenTitle.value = isVehicleMode.value ? '车流智能统计系统 · 全域智能视觉大屏' : '客流智能统计系统 · 全域智能视觉大屏';
         }
 
         // 如果当前登录身份是平台超级管理员，拉取商户用户列表供快速切屏
@@ -855,7 +882,7 @@ const renderFlowChart = () => {
     },
     series: [
       {
-        name: '进入人次',
+        name: isVehicleMode.value ? '进车量' : '进入人次',
         type: 'line',
         smooth: true,
         data: entries,
@@ -868,7 +895,7 @@ const renderFlowChart = () => {
         }
       },
       {
-        name: '离开人次',
+        name: isVehicleMode.value ? '出车量' : '离开人次',
         type: 'line',
         smooth: true,
         data: exits,
@@ -915,9 +942,9 @@ const renderHourlyChart = (hourlyData: any[]) => {
   }
 
   if (peakHour >= 0 && maxTotal > 0) {
-    peakHourInfo.value = `${peakHour}:00 ~ ${peakHour + 1}:00 (峰值 ${maxTotal} 人次)`;
+    peakHourInfo.value = `${peakHour}:00 ~ ${peakHour + 1}:00 (峰值 ${maxTotal} ${isVehicleMode.value ? '车次' : '人次'})`;
   } else {
-    peakHourInfo.value = '客流平稳';
+    peakHourInfo.value = isVehicleMode.value ? '车流平稳' : '客流平稳';
   }
 
   const option = {
@@ -930,7 +957,7 @@ const renderHourlyChart = (hourlyData: any[]) => {
       textStyle: { color: '#f0f6fc' }
     },
     legend: {
-      data: ['进入量', '离开量'],
+      data: [isVehicleMode.value ? '进车量' : '进入量', isVehicleMode.value ? '出车量' : '离开量'],
       right: '4%',
       top: '2%',
       textStyle: { color: '#8b9cb5', fontSize: 12 }
@@ -948,7 +975,7 @@ const renderHourlyChart = (hourlyData: any[]) => {
     },
     series: [
       {
-        name: '进入量',
+        name: isVehicleMode.value ? '进车量' : '进入量',
         type: 'bar',
         data: entryArr,
         barWidth: '35%',
@@ -961,7 +988,7 @@ const renderHourlyChart = (hourlyData: any[]) => {
         }
       },
       {
-        name: '离开量',
+        name: isVehicleMode.value ? '出车量' : '离开量',
         type: 'bar',
         data: exitArr,
         barWidth: '35%',
@@ -978,12 +1005,25 @@ const renderHourlyChart = (hourlyData: any[]) => {
   hourlyChart.setOption(option);
 };
 
-// 3. 客群年龄段画像环形图
+// 3. 属性画像环形图 (车辆车型分布 vs 客群年龄分布)
 const renderAgeChart = () => {
   if (!ageChartRef.value) return;
   if (!ageChart) {
     ageChart = echarts.init(ageChartRef.value);
   }
+
+  const isVeh = isVehicleMode.value;
+  const seriesData = isVeh ? [
+    { value: 62, name: '小型轿车', itemStyle: { color: '#00f0ff' } },
+    { value: 24, name: 'SUV / 越野', itemStyle: { color: '#0088ff' } },
+    { value: 9, name: '商务 / 客车', itemStyle: { color: '#7928ca' } },
+    { value: 5, name: '载货 / 卡车', itemStyle: { color: '#ff9900' } }
+  ] : [
+    { value: 68, name: '青年(18-35)', itemStyle: { color: '#00f0ff' } },
+    { value: 22, name: '中年(36-50)', itemStyle: { color: '#0088ff' } },
+    { value: 7, name: '中老年(50+)', itemStyle: { color: '#7928ca' } },
+    { value: 3, name: '儿童少年', itemStyle: { color: '#ff007f' } }
+  ];
 
   const option = {
     backgroundColor: 'transparent',
@@ -991,23 +1031,18 @@ const renderAgeChart = () => {
     legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { color: '#8b9cb5', fontSize: 11 } },
     series: [
       {
-        name: '年龄客层',
+        name: isVeh ? '车型结构' : '年龄客层',
         type: 'pie',
         radius: ['45%', '72%'],
         center: ['40%', '50%'],
         avoidLabelOverlap: false,
         label: { show: false },
         emphasis: { label: { show: true, fontSize: 13, fontWeight: 'bold', color: '#00f0ff' } },
-        data: [
-          { value: 68, name: '青年(18-35)', itemStyle: { color: '#00f0ff' } },
-          { value: 22, name: '中年(36-50)', itemStyle: { color: '#0088ff' } },
-          { value: 7, name: '中老年(50+)', itemStyle: { color: '#7928ca' } },
-          { value: 3, name: '儿童少年', itemStyle: { color: '#ff007f' } }
-        ]
+        data: seriesData
       }
     ]
   };
-  ageChart.setOption(option);
+  ageChart.setOption(option, true);
 };
 
 // ==================== 格式化辅助方法 ====================
@@ -1024,6 +1059,16 @@ const formatTime = (ts: any) => {
   const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 };
+
+// 监听业务类型动态自适应 (车流 vs 客流)
+watch(isVehicleMode, (val) => {
+  document.title = val ? '车流智能统计系统 · 智能视觉数字全景大屏' : '客流智能统计系统 · 智能视觉数字全景大屏';
+  if (!route.query.title && !activeTenantUserId.value) {
+    screenTitle.value = val ? '车流智能统计系统 · 全域智能视觉大屏' : '客流智能统计系统 · 全域智能视觉大屏';
+  }
+  renderAgeChart();
+  renderFlowChart();
+});
 
 // ==================== 轮询与生命周期 ====================
 let dataPollingTimer: any = null;

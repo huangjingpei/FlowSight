@@ -45,7 +45,7 @@
         </div>
         <div class="kpi-cell">
           <span class="cell-label">峰值最高</span>
-          <span class="cell-val text-cyan">{{ trendData.peakTime }} ({{ trendData.peakValue }}{{ isVehicleMode ? '车' : '人' }})</span>
+          <span class="cell-val text-cyan">{{ trendData.peakTime }} ({{ trendData.peakValue }} {{ isVehicleMode ? '辆' : '人' }})</span>
         </div>
         <div class="kpi-cell">
           <span class="cell-label">时序均值</span>
@@ -58,8 +58,8 @@
         <div class="chart-legend-row">
           <span class="legend-title">{{ trendData.title || (isVehicleMode ? '通行时序曲线 (车流动态流)' : '通行时序曲线 (客流动态流)') }}</span>
           <div class="legend-items">
-            <span class="leg-item"><i class="leg-dot cyan"></i>进入</span>
-            <span class="leg-item"><i class="leg-dot pink"></i>离开</span>
+            <span class="leg-item"><i class="leg-dot cyan"></i>{{ isVehicleMode ? '进车' : '进入' }}</span>
+            <span class="leg-item"><i class="leg-dot pink"></i>{{ isVehicleMode ? '出车' : '离开' }}</span>
           </div>
         </div>
         <div ref="chartRef" class="echarts-container"></div>
@@ -201,7 +201,7 @@ const renderECharts = () => {
     },
     yAxis: {
       type: 'value',
-      name: '人次 (人)',
+      name: isVehicleMode.value ? '车次 (辆)' : '人次 (人)',
       nameLocation: 'end',
       nameTextStyle: { color: isLight ? '#64748B' : '#94A3B8', fontSize: 11, padding: [0, 0, 6, 0] },
       minInterval: 1,
@@ -224,7 +224,7 @@ const renderECharts = () => {
     },
     series: [
       {
-        name: '进入',
+        name: isVehicleMode.value ? '进车' : '进入',
         type: isBar ? 'bar' : 'line',
         smooth: 0.3,
         showSymbol: categories.length <= 15,
@@ -240,7 +240,7 @@ const renderECharts = () => {
         data: entryData
       },
       {
-        name: '离开',
+        name: isVehicleMode.value ? '出车' : '离开',
         type: isBar ? 'bar' : 'line',
         smooth: 0.3,
         showSymbol: categories.length <= 15,
