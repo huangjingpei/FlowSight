@@ -200,8 +200,14 @@ void SettingsWidget::setup_ui() {
     url_lbl->setFixedWidth(135);
     cloud_row1->addWidget(url_lbl);
 
-    QString default_url = cfg.get_cloud_server_url();
-    if (default_url.isEmpty()) default_url = "https://flowsight.1t90.com";
+    QString default_url = cfg.get_cloud_server_url().trimmed();
+    while (default_url.endsWith('/')) default_url.chop(1);
+    if (default_url.startsWith("http://flowsight.1t90.com", Qt::CaseInsensitive)) {
+        default_url.replace(0, 4, "https");
+    }
+    if (default_url.isEmpty() || default_url == "http://localhost:8080") {
+        default_url = "https://flowsight.1t90.com";
+    }
     cloud_url_edit_ = new QLineEdit(default_url, cloud_group);
     cloud_url_edit_->setPlaceholderText("例如: https://flowsight.1t90.com 或 http://124.221.179.44:8088");
     cloud_row1->addWidget(cloud_url_edit_, 1);
@@ -550,6 +556,12 @@ void SettingsWidget::setup_ui() {
     // 商户账号登录并拉取点位
     connect(btn_cloud_login_, &QPushButton::clicked, this, [this]() {
         QString url = cloud_url_edit_->text().trimmed();
+        while (url.endsWith('/')) url.chop(1);
+        if (url.startsWith("http://flowsight.1t90.com", Qt::CaseInsensitive)) {
+            url.replace(0, 4, "https");
+        }
+        cloud_url_edit_->setText(url);
+
         QString phone = cloud_phone_edit_->text().trimmed();
         QString pwd = cloud_password_edit_->text().trimmed();
 
@@ -631,6 +643,11 @@ void SettingsWidget::setup_ui() {
         bool isOccupied = map["occupied"].toBool();
         QString boundClient = map["boundClient"].toString();
         QString url = cloud_url_edit_->text().trimmed();
+        while (url.endsWith('/')) url.chop(1);
+        if (url.startsWith("http://flowsight.1t90.com", Qt::CaseInsensitive)) {
+            url.replace(0, 4, "https");
+        }
+        cloud_url_edit_->setText(url);
         QString client_name = ConfigManager::instance().get_cloud_client_name();
 
         bool force = false;

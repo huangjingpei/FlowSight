@@ -12,6 +12,19 @@
 #include <QFileInfo>
 #include <QFile>
 
+namespace {
+QString sanitize_cloud_url(QString url) {
+    url = url.trimmed();
+    while (url.endsWith('/')) {
+        url.chop(1);
+    }
+    if (url.startsWith("http://flowsight.1t90.com", Qt::CaseInsensitive)) {
+        url.replace(0, 4, "https");
+    }
+    return url;
+}
+}
+
 EdgeReportManager& EdgeReportManager::instance() {
     static EdgeReportManager inst;
     return inst;
@@ -31,7 +44,7 @@ void EdgeReportManager::init(QObject* parent) {
     }
 
     auto& cfg = ConfigManager::instance();
-    cloud_base_url_ = cfg.get_cloud_server_url();
+    cloud_base_url_ = sanitize_cloud_url(cfg.get_cloud_server_url());
     bound_point_id_ = cfg.get_cloud_point_id();
     bound_point_name_ = cfg.get_cloud_point_name();
     bound_point_token_ = cfg.get_cloud_point_token();
@@ -88,7 +101,8 @@ void EdgeReportManager::shutdown() {
 void EdgeReportManager::login_with_credentials(const QString& base_url, const QString& phone, const QString& password, LoginCallback callback) {
     if (!nam_) nam_ = new QNetworkAccessManager(this);
 
-    QUrl login_url(base_url.trimmed() + "/api/v1/auth/login");
+    QString clean_url = sanitize_cloud_url(base_url);
+    QUrl login_url(clean_url + "/api/v1/auth/login");
     QNetworkRequest request(login_url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
@@ -98,7 +112,7 @@ void EdgeReportManager::login_with_credentials(const QString& base_url, const QS
     QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
 
     QNetworkReply* reply = nam_->post(request, body);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, base_url, callback]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, clean_url, callback]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             if (callback) callback(false, QString("登录网络异常: %1").arg(reply->errorString()), QJsonArray());
@@ -123,7 +137,7 @@ void EdgeReportManager::login_with_credentials(const QString& base_url, const QS
         cfg.save();
 
         // 登录成功后，以颁发的 JWT 凭据获取该手机账号关联的点位列表
-        QUrl points_url(base_url.trimmed() + "/api/v1/h5/points");
+        QUrl points_url(clean_url + "/api/v1/h5/points");
         QNetworkRequest p_req(points_url);
         p_req.setRawHeader("Authorization", "Bearer " + token.toUtf8());
 
@@ -145,7 +159,8 @@ void EdgeReportManager::login_with_credentials(const QString& base_url, const QS
 void EdgeReportManager::login_with_device_credentials(const QString& base_url, const QString& point_code, const QString& device_password, const QString& client_name, DeviceLoginCallback callback) {
     if (!nam_) nam_ = new QNetworkAccessManager(this);
 
-    QUrl dev_login_url(base_url.trimmed() + "/api/v1/edge/auth/device-login");
+    QString clean_url = sanitize_cloud_url(base_url);
+    QUrl dev_login_url(clean_url + "/api/v1/edge/auth/device-login");
     QNetworkRequest request(dev_login_url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
@@ -156,7 +171,7 @@ void EdgeReportManager::login_with_device_credentials(const QString& base_url, c
     QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
 
     QNetworkReply* reply = nam_->post(request, body);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, base_url, point_code, device_password, client_name, callback]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, clean_url, point_code, device_password, client_name, callback]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             if (callback) callback(false, QString("设备认证网络异常: %1").arg(reply->errorString()), 0, "", "");
@@ -180,7 +195,7 @@ void EdgeReportManager::login_with_device_credentials(const QString& base_url, c
         auto& cfg = ConfigManager::instance();
         cfg.set_cloud_point_code(point_code.trimmed());
         cfg.set_cloud_device_password(device_password.trimmed());
-        bind_point(base_url, pid, pname, ptoken, client_name);
+        bind_point(clean_url, pid, pname, ptoken, client_name);
 
         if (callback) callback(true, "设备身份认证成功！已接入云端通道。", pid, pname, ptoken);
     });
@@ -189,7 +204,8 @@ void EdgeReportManager::login_with_device_credentials(const QString& base_url, c
 void EdgeReportManager::pair_with_code(const QString& base_url, const QString& pairing_code, const QString& client_name, PairingCallback callback) {
     if (!nam_) nam_ = new QNetworkAccessManager(this);
 
-    QUrl pair_url(base_url.trimmed() + "/api/v1/edge/auth/pair-with-code");
+    QString clean_url = sanitize_cloud_url(base_url);
+    QUrl pair_url(clean_url + "/api/v1/edge/auth/pair-with-code");
     QNetworkRequest request(pair_url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
@@ -199,7 +215,7 @@ void EdgeReportManager::pair_with_code(const QString& base_url, const QString& p
     QByteArray body = QJsonDocument(obj).toJson(QJsonDocument::Compact);
 
     QNetworkReply* reply = nam_->post(request, body);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, base_url, client_name, callback]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, clean_url, client_name, callback]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             if (callback) callback(false, QString("配对网络异常: %1").arg(reply->errorString()), 0, "", "");
@@ -225,7 +241,7 @@ void EdgeReportManager::pair_with_code(const QString& base_url, const QString& p
         if (!pcode.isEmpty()) {
             cfg.set_cloud_point_code(pcode);
         }
-        bind_point(base_url, pid, pname, ptoken, client_name);
+        bind_point(clean_url, pid, pname, ptoken, client_name);
 
         if (callback) callback(true, "6位配对码接入成功！通道已绑定并上线。", pid, pname, ptoken);
     });
@@ -239,7 +255,7 @@ void EdgeReportManager::unbind_current_point(std::function<void(bool success, co
 
     if (!nam_) nam_ = new QNetworkAccessManager(this);
 
-    QUrl unbind_url(cloud_base_url_.trimmed() + "/api/v1/edge/unbind");
+    QUrl unbind_url(sanitize_cloud_url(cloud_base_url_) + "/api/v1/edge/unbind");
     QNetworkRequest request(unbind_url);
     request.setRawHeader("X-Point-Token", bound_point_token_.toUtf8());
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
@@ -273,7 +289,7 @@ void EdgeReportManager::bind_point(const QString& base_url, qint64 point_id, con
         reset_batch(); // 清空旧点位的待上报聚合数据，防止数据串流
     }
 
-    QString trimmed_url = base_url.trimmed();
+    QString trimmed_url = sanitize_cloud_url(base_url);
     QString target_client = client_name.trimmed().isEmpty() ? client_name_ : client_name.trimmed();
     if (target_client.isEmpty()) target_client = "FlowSight-Node-1";
 
