@@ -80,10 +80,10 @@
             <div class="feature-info">
               <div class="feature-name-row">
                 <span class="f-name">大屏历年累计起算基准日</span>
-                <el-tag size="small" type="info" effect="plain" class="ml-10">当前展示: 自{{ historicalStartDate || '2027年1月1日' }}起</el-tag>
+                <el-tag size="small" type="success" effect="plain" class="ml-10">当前展示: 自{{ historicalStartDate || '2026年10月26日' }}起</el-tag>
               </div>
               <p class="f-desc">
-                控制数字大屏【现场客流/车流量统计】中【历年累计】卡片的起算日期说明，默认为 2027年1月1日。
+                控制数字大屏【现场客流/车流量统计】中【历年累计】卡片的起算日期说明，默认为系统部署上线日（2026年10月26日），您可在此自由选择或输入任意基准日期。
               </p>
               <div class="f-meta">
                 <span>配置键名: <code>historical_start_date</code></span>
@@ -93,10 +93,13 @@
           </div>
 
           <div class="feature-right">
-            <el-input
+            <el-date-picker
               v-model="historicalStartDate"
-              placeholder="例如: 2027年1月1日"
-              style="width: 170px; margin-right: 10px;"
+              type="date"
+              format="YYYY年M月D日"
+              value-format="YYYY年M月D日"
+              placeholder="选择起算基准日"
+              style="width: 175px; margin-right: 10px;"
             />
             <el-button
               type="primary"
@@ -152,7 +155,7 @@ import { adminApi } from '../api';
 const loading = ref(false);
 const savingKey = ref('');
 const videoPlaybackEnabled = ref(false);
-const historicalStartDate = ref('2027年1月1日');
+const historicalStartDate = ref('2026年10月26日');
 
 const loadConfigs = async () => {
   loading.value = true;

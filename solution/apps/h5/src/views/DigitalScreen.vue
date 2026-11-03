@@ -135,7 +135,7 @@
                 <div class="kpi-label">历年累计：</div>
                 <div class="kpi-value val-coral">{{ formatNumber(historicalTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
                 <div class="kpi-footer justify-between">
-                  <span class="history-start-date">自{{ historicalStartDate || '2027年1月1日' }}起</span>
+                  <span class="history-start-date">自{{ historicalStartDate || '2026年10月26日' }}起</span>
                   <span class="arrow-down">▼</span>
                 </div>
               </div>
@@ -502,7 +502,7 @@ const todayExit = ref(0);
 const monthTotal = ref(0);
 const yearTotal = ref(0);
 const historicalTotal = ref(0);
-const historicalStartDate = ref('2027年1月1日');
+const historicalStartDate = ref('2026年10月26日');
 const netIncrement = computed(() => todayEntry.value - todayExit.value);
 const entryRatio = computed(() => (todayTotal.value > 0 ? Math.round((todayEntry.value * 100) / todayTotal.value) : 50));
 
@@ -787,7 +787,7 @@ const fetchData = async () => {
         monthTotal.value = isVehicleMode.value ? (gm.totalVehicleMonth || 0) : (gm.totalPedestrianMonth || 0);
         yearTotal.value = isVehicleMode.value ? (gm.totalVehicleYear || 0) : (gm.totalPedestrianYear || 0);
         historicalTotal.value = isVehicleMode.value ? (gm.totalVehicleHistorical || 0) : (gm.totalPedestrianHistorical || 0);
-        historicalStartDate.value = gm.historicalStartDate || '2027年1月1日';
+        historicalStartDate.value = gm.historicalStartDate || '2026年10月26日';
       }
     }
 
@@ -804,7 +804,7 @@ const fetchData = async () => {
           monthTotal.value = summaryRes.monthTotal || 0;
           yearTotal.value = summaryRes.yearTotal || 0;
           historicalTotal.value = summaryRes.historicalTotal || 0;
-          historicalStartDate.value = summaryRes.historicalStartDate || '2027年1月1日';
+          historicalStartDate.value = summaryRes.historicalStartDate || '2026年10月26日';
         }
 
         // 客群画像比例

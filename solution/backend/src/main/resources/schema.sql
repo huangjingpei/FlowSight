@@ -150,6 +150,6 @@ CREATE TABLE IF NOT EXISTS `sys_system_config` (
 INSERT INTO `sys_system_config` (`id`, `config_key`, `config_value`, `config_name`, `description`)
 VALUES 
 (1, 'video_playback_enabled', 'false', '视频播放与证据切片功能', '开启后前端展示视频监控与证据切片回放导航，关闭时自动隐藏切片页面以节省带宽与算力'),
-(2, 'historical_start_date', '2027年1月1日', '历年累计统计起始基准日期', '数字大屏与报表中【历年累计】卡片的起算日期基准，默认2027年1月1日')
+(2, 'historical_start_date', '2026年10月26日', '历年累计统计起始基准日期', '数字大屏与报表中【历年累计】卡片的起算日期基准，默认2026年10月26日系统部署上线日')
 ON DUPLICATE KEY UPDATE `config_name`=VALUES(`config_name`), `description`=VALUES(`description`);
 

@@ -95,7 +95,7 @@ public class EventServiceImpl implements EventService {
                 log.warn("获取历年统计起始日期异常: {}", e.getMessage());
             }
         }
-        return "2027年1月1日";
+        return "2026年10月26日";
     }
 
     // 待绑定切片池内存兜底: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
