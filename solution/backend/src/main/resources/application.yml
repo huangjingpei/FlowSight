@@ -21,13 +21,10 @@ spring:
       max-lifetime: 1800000
       connection-timeout: 30000
 
-  # 启动时自动初始化 schema.sql 数据表结构
+  # 数据库生产保护：严禁在每次启动或部署时执行脚本，确保既有数据绝对持久化
   sql:
     init:
-      mode: always
-      schema-locations: classpath:schema.sql
-      encoding: UTF-8
-      continue-on-error: true
+      mode: never
 
 
   data:
