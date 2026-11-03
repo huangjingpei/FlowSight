@@ -76,6 +76,75 @@
         <div ref="chartRef" class="echarts-container"></div>
       </div>
     </main>
+
+    <!-- 移动端导出完成与微信转发弹窗 -->
+    <div v-if="showExportModal" class="export-modal-mask" @click.self="showExportModal = false">
+      <div class="export-modal-card">
+        <div class="modal-header">
+          <div class="modal-title-row">
+            <span class="modal-icon">📊</span>
+            <span class="modal-title">报表已生成并保存</span>
+          </div>
+          <button class="modal-close-btn" @click="showExportModal = false">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- 文件信息卡片 -->
+          <div class="file-info-box">
+            <div class="file-name-row">
+              <span class="file-type-badge">{{ isVehicleMode ? '🚗 车流' : '🚶 客流' }}</span>
+              <span class="file-name-text" :title="exportFileName">{{ exportFileName }}</span>
+            </div>
+            <div class="file-meta-row">
+              <span>通道: {{ currentPointName }}</span>
+              <span>格式: Excel (.xlsx)</span>
+            </div>
+          </div>
+
+          <!-- 微信机制说明与发送操作步骤 -->
+          <div class="wechat-guide-card">
+            <div class="guide-title">
+              <span class="guide-badge">微信发送指南</span>
+              <span class="guide-sub">微信安全策略要求在聊天窗口中选择本地文件发送</span>
+            </div>
+            <div class="guide-steps">
+              <div class="step-item">
+                <span class="step-num">1</span>
+                <span class="step-text">报表已自动下载至手机【下载 / 文件】目录</span>
+              </div>
+              <div class="step-item">
+                <span class="step-num">2</span>
+                <span class="step-text">进入微信任意好友、群聊或【文件传输助手】</span>
+              </div>
+              <div class="step-item">
+                <span class="step-num">3</span>
+                <span class="step-text">点击聊天框右下角 <b>【+】➜【文件】</b>，选择刚生成的表格发送</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 操作按钮矩阵 -->
+          <div class="modal-actions-grid">
+            <button class="action-btn wechat-btn" @click="handleOpenWeChat">
+              <span class="btn-icon">💬</span>
+              <span>快捷打开微信发送</span>
+            </button>
+            <button class="action-btn copy-btn" @click="handleCopySummary">
+              <span class="btn-icon">📋</span>
+              <span>复制数据快报文字</span>
+            </button>
+            <button class="action-btn download-btn" @click="handleReDownload">
+              <span class="btn-icon">📥</span>
+              <span>重新下载 Excel 文件</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="confirm-btn" @click="showExportModal = false">我知道了</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -291,6 +360,66 @@ const onPointChange = () => {
 };
 
 const isExporting = ref(false);
+const showExportModal = ref(false);
+const exportFileName = ref('');
+const lastExportBlob = ref<Blob | null>(null);
+
+const currentPointName = computed(() => {
+  const curPoint = pointStore.points.find((p) => p.id === activePointId.value);
+  return curPoint ? `[${curPoint.id}] ${curPoint.pointName}` : `通道#${activePointId.value}`;
+});
+
+const handleOpenWeChat = () => {
+  showToast({ message: '正在调起微信...', duration: 1500 });
+  setTimeout(() => {
+    window.location.href = 'weixin://';
+  }, 300);
+};
+
+const handleCopySummary = async () => {
+  const isVeh = isVehicleMode.value;
+  const dimObj = dimensionOptions.find((d) => d.key === currentDimension.value);
+  const dimLabel = dimObj ? dimObj.label : currentDimension.value;
+  const text = `【FlowSight ${isVeh ? '车流' : '客流'}时序走势快报】
+通道/卡口: ${currentPointName.value}
+统计维度: ${dimLabel}
+周期总量: ${trendData.value.totalPeriodCount || 0} ${isVeh ? '车次' : '人次'}
+峰值最高: ${trendData.value.peakTime || '-'} (${trendData.value.peakValue || 0} ${isVeh ? '辆' : '人'})
+时序均值: ${trendData.value.averageCount || '0.0'} ${isVeh ? '车/点' : '人/点'}
+（完整 Excel 数据表格已保存至手机本地文件，在微信聊天窗口点击【+】->【文件】即可发送）`;
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    showToast({ type: 'success', message: '数据快报已复制，可直接粘贴到微信聊天' });
+  } catch (e) {
+    showToast({ message: '已准备快报内容' });
+  }
+};
+
+const handleReDownload = () => {
+  if (lastExportBlob.value && exportFileName.value) {
+    const url = URL.createObjectURL(lastExportBlob.value);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = exportFileName.value;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast({ type: 'success', message: '已重新触发下载' });
+  } else {
+    handleExportExcel();
+  }
+};
 
 const handleExportExcel = async () => {
   if (isExporting.value) return;
@@ -444,67 +573,29 @@ const handleExportExcel = async () => {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     });
 
-    // 4. 环境判定与分发（移动端分享到微信，电脑端本地下载）
+    // 4. 环境判定与分发（电脑端直接下载，移动端保存并弹窗引导）
     const ua = navigator.userAgent;
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || window.innerWidth <= 768;
-    const isWeChat = /MicroMessenger/i.test(ua);
 
-    // 本地触发文件下载
-    const downloadLocally = () => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    };
+    exportFileName.value = fileName;
+    lastExportBlob.value = blob;
+
+    // 无论任何环境，第一时间触发本地极速下载保存，确保文件稳妥落地到手机/电脑
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
 
     if (isMobile) {
-      // 移动端：若支持原生 Web Share API 且允许分享文件，则调起系统面板直接分享给微信好友
-      const file = new File([blob], fileName, {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            title: isVeh ? '车流时序走势分析报表' : '客流时序走势分析报表',
-            text: `FlowSight [${pointName}] ${dimLabel} 统计导出`,
-            files: [file]
-          });
-          showToast({ type: 'success', message: '已调起微信/系统分享' });
-          return;
-        } catch (err: any) {
-          if (err.name === 'AbortError') {
-            // 用户在分享面板主动取消，直接返回
-            return;
-          }
-        }
-      }
-
-      // 若未能通过系统原生面板唤起微信（如微信内置浏览器环境或部分 Android 机型），执行下载并弹出指引
-      downloadLocally();
-
-      if (isWeChat) {
-        showDialog({
-          title: '报表已生成',
-          message: '微信内置环境已生成该 Excel 报表！\n\n💡 提示：若当前未弹出文件保存提示，请点击微信右上角【···】选择【在浏览器中打开】即可直接保存。\n\n保存后，可通过【微信文件传输助手】或聊天窗口中的【+ ➜ 文件】直接转发分享给微信好友。',
-          confirmButtonText: '我知道了',
-          confirmButtonColor: '#00D2FF'
-        });
-      } else {
-        showDialog({
-          title: '报表导出成功',
-          message: `Excel 报表已下载至手机【下载 / Download】文件夹。\n\n📱 分享到微信方法：\n打开微信好友或文件传输助手聊天窗口，点击右下角【+】号 ➜【文件】➜ 选择该 Excel 文件即可发送！`,
-          confirmButtonText: '我知道了',
-          confirmButtonColor: '#00D2FF'
-        });
-      }
+      // 移动端：直接弹出专业微信转发与打开指引浮层，杜绝系统分享产生的静默丢弃与找不到文件
+      showExportModal.value = true;
+      showToast({ type: 'success', message: '报表已生成并保存' });
     } else {
       // 电脑端：直接触发极速下载保存至本地
-      downloadLocally();
       showToast({ type: 'success', message: '报表已成功下载至本地电脑' });
     }
   } catch (error: any) {
@@ -940,5 +1031,298 @@ onUnmounted(() => {
 
 :global(.theme-light) .leg-dot.pink {
   background: #E11D48;
+}
+
+/* 移动端导出完成与微信转发弹窗 */
+.export-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.export-modal-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--fs-card, #121722);
+  border: 1px solid var(--fs-primary, #00D2FF);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 210, 255, 0.2);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-header {
+  height: 46px;
+  background: linear-gradient(90deg, rgba(0, 210, 255, 0.15), rgba(14, 165, 233, 0.05));
+  border-bottom: 1px solid var(--fs-card-border, #1E2636);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  box-sizing: border-box;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-icon {
+  font-size: 16px;
+}
+
+.modal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--fs-text-sub, #94A3B8);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+}
+
+.file-info-box {
+  background: rgba(0, 210, 255, 0.06);
+  border: 1px dashed rgba(0, 210, 255, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 210, 255, 0.2);
+  color: #00D2FF;
+  flex-shrink: 0;
+}
+
+.file-name-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #F8FAFC;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--fs-text-sub, #94A3B8);
+}
+
+.wechat-guide-card {
+  background: #161D2B;
+  border: 1px solid #233048;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guide-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guide-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: #10B981;
+}
+
+.guide-sub {
+  font-size: 10px;
+  color: #64748B;
+}
+
+.guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: #CBD5E1;
+  line-height: 1.4;
+}
+
+.step-num {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.step-text b {
+  color: #00D2FF;
+}
+
+.modal-actions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.action-btn {
+  height: 38px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.action-btn:active {
+  transform: scale(0.98);
+}
+
+.wechat-btn {
+  background: linear-gradient(135deg, #07C160, #059648);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(7, 193, 96, 0.3);
+}
+
+.copy-btn {
+  background: rgba(0, 210, 255, 0.12);
+  border: 1px solid rgba(0, 210, 255, 0.4);
+  color: #00D2FF;
+}
+
+.download-btn {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94A3B8;
+}
+
+.modal-footer {
+  padding: 4px 14px 14px;
+}
+
+.confirm-btn {
+  width: 100%;
+  height: 34px;
+  background: #1E293B;
+  border: 1px solid #334155;
+  color: #CBD5E1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 亮色模式适配 */
+:global(.theme-light) .export-modal-card {
+  background: #FFFFFF;
+  border-color: #0284C7;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+}
+
+:global(.theme-light) .modal-header {
+  background: #F0F9FF;
+  border-bottom-color: #E2E8F0;
+}
+
+:global(.theme-light) .modal-title {
+  color: #0F172A;
+}
+
+:global(.theme-light) .file-info-box {
+  background: #F8FAFC;
+  border-color: #BAE6FD;
+}
+
+:global(.theme-light) .file-name-text {
+  color: #0F172A;
+}
+
+:global(.theme-light) .wechat-guide-card {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+}
+
+:global(.theme-light) .step-item {
+  color: #334155;
+}
+
+:global(.theme-light) .step-text b {
+  color: #0284C7;
+}
+
+:global(.theme-light) .confirm-btn {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #475569;
 }
 </style>
