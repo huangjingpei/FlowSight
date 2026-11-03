@@ -286,114 +286,60 @@
             </div>
           </div>
 
-          <!-- 2. 实时动态抓拍动态流水 (火车站/机场航班信息大屏 FIDS 滚动表格) -->
-          <div class="hud-panel events-panel">
-            <div class="panel-header fids-header">
+          <!-- 2. 全网实时流量统计 (人次/车次，按设计图精确还原) -->
+          <div class="hud-panel network-panel">
+            <div class="panel-header">
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-              <div class="header-title-box">
-                <span class="panel-title"><i class="title-icon">🚨</i> {{ isVehicleMode ? '实时车辆抓拍动态流水' : '实时动态抓拍动态流水' }}</span>
-                <span class="fids-sub-badge">FIDS 滚动播报</span>
-              </div>
-              <div class="header-status-group">
-                <span class="scroll-status-tag" :class="{ 'is-paused': isTablePaused }">
-                  {{ isTablePaused ? '⏸ 悬停已暂停' : '▶ 动态滚动中' }}
-                </span>
-                <span class="live-dot-pulse">LIVE</span>
-              </div>
+              <span class="panel-title">
+                <i class="title-icon">⚡</i>
+                {{ isVehicleMode ? '全网实时流量统计（车次）' : '全网实时流量统计（人次）' }}
+              </span>
+              <span class="panel-tag status-live-tag">全网</span>
             </div>
 
-            <div class="panel-body fids-table-panel">
-              <!-- 火车站航班屏固定表头 -->
-              <div class="fids-table-header">
-                <div class="fids-col col-time">抓拍时间</div>
-                <div class="fids-col col-point">监测点位</div>
-                <div class="fids-col col-dir">{{ isVehicleMode ? '进出方向' : '通行方向' }}</div>
-                <div class="fids-col col-attr">{{ isVehicleMode ? '识别车型与号牌' : '识别特征画像' }}</div>
-                <div class="fids-col col-conf">置信度</div>
-                <div class="fids-col col-action">切片</div>
+            <div class="panel-body network-body">
+              <!-- 上部卡片: 本月/当年/累计 在线观众或车流统计 -->
+              <div class="network-upper-box">
+                <div class="network-stat-row">
+                  <span class="stat-row-label">{{ isVehicleMode ? '本月在线车流：' : '本月在线观众：' }}</span>
+                  <span class="stat-row-val val-green">{{ networkMonthTotal || 0 }}</span>
+                </div>
+                <div class="network-stat-row">
+                  <span class="stat-row-label">{{ isVehicleMode ? '当年在线车流：' : '当年在线观众：' }}</span>
+                  <span class="stat-row-val val-cyan">{{ networkYearTotal || 0 }}</span>
+                </div>
+                <div class="network-stat-row">
+                  <span class="stat-row-label">{{ isVehicleMode ? '累计在线车流：' : '累计在线观众：' }}</span>
+                  <span class="stat-row-val val-cyan">{{ networkHistoricalTotal || 0 }}</span>
+                </div>
               </div>
 
-              <!-- 火车站航班屏无缝连续平滑滚动体 -->
-              <div
-                class="fids-scroll-viewport"
-                ref="fidsScrollRef"
-                @mouseenter="onTableMouseEnter"
-                @mouseleave="onTableMouseLeave"
-              >
-                <div class="fids-scroll-track" v-if="displayEventList.length > 0">
-                  <div
-                    v-for="(ev, idx) in displayEventList"
-                    :key="`${ev.id || ev.timestampMs}_${idx}`"
-                    class="fids-row"
-                    :class="[
-                      idx % 2 === 0 ? 'row-even' : 'row-odd',
-                      ev.direction === 'ENTRY' ? 'row-entry' : 'row-exit',
-                      { 'has-clip': !!(ev.playUrl || ev.clipUrl) }
-                    ]"
-                    @click="handleRowClick(ev)"
-                  >
-                    <!-- 1. 时间 -->
-                    <div class="fids-col col-time">
-                      <span class="fids-time-mono">{{ formatTime(ev.timestampMs || ev.datetime) }}</span>
-                    </div>
-
-                    <!-- 2. 点位 -->
-                    <div class="fids-col col-point" :title="ev.pointName || currentPointName">
-                      <span class="point-pill">
-                        <span class="point-dot"></span>
-                        <span class="point-name-text">{{ ev.pointName || currentPointName }}</span>
-                      </span>
-                    </div>
-
-                    <!-- 3. 方向 (机场航班式 ARR / DEP 动态指示牌) -->
-                    <div class="fids-col col-dir">
-                      <span v-if="ev.direction === 'ENTRY'" class="fids-badge badge-arr">
-                        <i class="dir-icon">↘</i> {{ isVehicleMode ? '进场 [IN]' : '进 [ARR]' }}
-                      </span>
-                      <span v-else class="fids-badge badge-dep">
-                        <i class="dir-icon">↗</i> {{ isVehicleMode ? '出场 [OUT]' : '出 [DEP]' }}
-                      </span>
-                    </div>
-
-                    <!-- 4. 智能识别特征画像 -->
-                    <div class="fids-col col-attr">
-                      <span v-if="ev.plateNumber" class="attr-veh-tag">
-                        🚗 <span class="plate-highlight">{{ ev.plateNumber }}</span>
-                        <span v-if="ev.vehicleColor || ev.vehicleType" class="sub-detail">
-                          · {{ ev.vehicleColor }}{{ ev.vehicleType }}
-                        </span>
-                      </span>
-                      <span v-else-if="ev.gender || ev.ageGroup" class="attr-ped-tag">
-                        👤 {{ ev.gender || '行人' }} · {{ ev.ageGroup || '未知' }}
-                      </span>
-                      <span v-else class="attr-ped-tag text-muted">
-                        👤 动态目标
-                      </span>
-                    </div>
-
-                    <!-- 5. 置信度 -->
-                    <div class="fids-col col-conf">
-                      <span class="conf-mono">{{ formatConfidence(ev.confidence) }}</span>
-                    </div>
-
-                    <!-- 6. 证据切片操作 -->
-                    <div class="fids-col col-action">
-                      <button
-                        v-if="ev.playUrl || ev.clipUrl"
-                        class="fids-clip-btn"
-                        @click.stop="openClipModal(ev)"
-                        title="点击播放视频存证切片"
-                      >
-                        ▶ 播放
-                      </button>
-                      <span v-else class="fids-no-clip">就绪</span>
-                    </div>
+              <!-- 下部卡片: 今日累计进入与今日累计离开 2列对称网格 -->
+              <div class="network-lower-grid">
+                <!-- 今日累计进入 -->
+                <div class="network-sub-card glow-cyan">
+                  <div class="sub-card-label">{{ isVehicleMode ? '今日累计进场' : '今日累计进入' }}</div>
+                  <div class="sub-card-val val-cyan">
+                    {{ networkTodayEntry || 0 }}
+                    <span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span>
+                  </div>
+                  <div class="sub-card-footer">
+                    <span class="footer-meta">{{ isVehicleMode ? '进场占比' : '进站占比' }}: {{ networkEntryRatio }}%</span>
+                    <span class="arrow-up">▲</span>
                   </div>
                 </div>
 
-                <div v-else class="stream-empty">
-                  <span class="empty-icon">📡</span>
-                  <span>现场雷达待命中，等待新通行事件流入...</span>
+                <!-- 今日累计离开 -->
+                <div class="network-sub-card glow-coral">
+                  <div class="sub-card-label">{{ isVehicleMode ? '今日累计出场' : '今日累计离开' }}</div>
+                  <div class="sub-card-val val-coral">
+                    {{ networkTodayExit || 0 }}
+                    <span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span>
+                  </div>
+                  <div class="sub-card-footer">
+                    <span class="footer-meta">净增流量: {{ networkNetIncrement > 0 ? `+${networkNetIncrement}` : networkNetIncrement }}</span>
+                    <span class="arrow-down">▼</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -505,6 +451,16 @@ const historicalTotal = ref(0);
 const historicalStartDate = ref('2026年10月26日');
 const netIncrement = computed(() => todayEntry.value - todayExit.value);
 const entryRatio = computed(() => (todayTotal.value > 0 ? Math.round((todayEntry.value * 100) / todayTotal.value) : 50));
+
+// 全网流量指标状态 (对应右翼【全网实时流量统计】卡片)
+const networkMonthTotal = ref(0);
+const networkYearTotal = ref(0);
+const networkHistoricalTotal = ref(0);
+const networkTodayEntry = ref(0);
+const networkTodayExit = ref(0);
+const networkTodayTotal = computed(() => networkTodayEntry.value + networkTodayExit.value);
+const networkNetIncrement = computed(() => networkTodayEntry.value - networkTodayExit.value);
+const networkEntryRatio = computed(() => (networkTodayTotal.value > 0 ? Math.round((networkTodayEntry.value * 100) / networkTodayTotal.value) : 50));
 
 // 单点位状态
 const currentPoint = computed(() => {
@@ -777,6 +733,13 @@ const fetchData = async () => {
       totalCount.value = gm.totalPoints || 0;
       onlineCount.value = gm.onlinePoints || 0;
       pointCards.value = overviewRes.pointCards || [];
+
+      // 全网指标聚合数据更新 (全网卡片展示全域/租户大盘总计)
+      networkMonthTotal.value = isVehicleMode.value ? (gm.totalVehicleMonth || 0) : (gm.totalPedestrianMonth || 0);
+      networkYearTotal.value = isVehicleMode.value ? (gm.totalVehicleYear || 0) : (gm.totalPedestrianYear || 0);
+      networkHistoricalTotal.value = isVehicleMode.value ? (gm.totalVehicleHistorical || 0) : (gm.totalPedestrianHistorical || 0);
+      networkTodayEntry.value = isVehicleMode.value ? (gm.totalVehicleEntry || 0) : (gm.totalPedestrianEntry || 0);
+      networkTodayExit.value = isVehicleMode.value ? (gm.totalVehicleExit || 0) : (gm.totalPedestrianExit || 0);
 
       // 若未选择特定点位，展示当前商户(或全域)汇总
       if (selectedPointId.value === 0) {
@@ -1804,318 +1767,147 @@ onUnmounted(() => {
   min-height: 130px;
 }
 
-/* ==================== 实时动态抓拍动态流水 (火车站/机场航班信息大屏 FIDS 表格) ==================== */
-.events-panel {
+/* ==================== 2. 全网实时流量统计卡片 (按设计图高精还原) ==================== */
+.network-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-.fids-header {
+.network-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 20px;
+  gap: 16px;
+}
+
+/* 上部大卡片: 本月/当年/累计 在线观众或车流统计 */
+.network-upper-box {
+  background: rgba(13, 27, 49, 0.72);
+  border: 1px solid rgba(0, 160, 255, 0.22);
+  border-radius: 8px;
+  padding: 24px 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  flex: 1.15;
+  box-shadow: inset 0 0 20px rgba(0, 160, 255, 0.05);
+}
+
+.network-stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+.stat-row-label {
+  color: #ffffff;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.stat-row-val {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: "DIN Alternate", "Roboto", "Helvetica Neue", monospace, sans-serif;
+  letter-spacing: 1px;
+}
+
+.stat-row-val.val-green {
+  color: #00e676;
+  text-shadow: 0 0 12px rgba(0, 230, 118, 0.45);
+}
+
+.stat-row-val.val-cyan {
+  color: #00d2ff;
+  text-shadow: 0 0 12px rgba(0, 210, 255, 0.45);
+}
+
+/* 下部 2 列卡片: 今日累计进入与离开 */
+.network-lower-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  flex: 0.85;
+}
+
+.network-sub-card {
+  background: rgba(13, 27, 49, 0.72);
+  border: 1px solid rgba(0, 160, 255, 0.22);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: inset 0 0 20px rgba(0, 160, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.network-sub-card:hover {
+  border-color: rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.2), inset 0 0 20px rgba(0, 160, 255, 0.08);
+}
+
+.sub-card-label {
+  font-size: 15px;
+  color: #8b9cb5;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.sub-card-val {
+  font-size: 34px;
+  font-weight: 700;
+  font-family: "DIN Alternate", "Roboto", monospace;
+  display: flex;
+  align-items: baseline;
+  line-height: 1.1;
+  margin: 6px 0;
+}
+
+.sub-card-val .unit {
+  font-size: 14px;
+  font-weight: normal;
+  color: #8b9cb5;
+  margin-left: 6px;
+}
+
+.sub-card-val.val-cyan {
+  color: #00d2ff;
+  text-shadow: 0 0 12px rgba(0, 210, 255, 0.45);
+}
+
+.sub-card-val.val-coral {
+  color: #ff3366;
+  text-shadow: 0 0 12px rgba(255, 51, 102, 0.45);
+}
+
+.sub-card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: 6px;
 }
 
-.header-title-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fids-sub-badge {
-  font-size: 10px;
-  color: #00f0ff;
-  background: rgba(0, 240, 255, 0.12);
-  border: 1px solid rgba(0, 240, 255, 0.35);
-  padding: 1px 6px;
-  border-radius: 3px;
-  letter-spacing: 0.5px;
-}
-
-.header-status-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.scroll-status-tag {
-  font-size: 11px;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  padding: 1px 8px;
-  border-radius: 10px;
-  transition: all 0.25s ease;
-}
-
-.scroll-status-tag.is-paused {
-  color: #fbbf24;
-  background: rgba(251, 191, 36, 0.15);
-  border-color: rgba(251, 191, 36, 0.4);
-}
-
-.live-dot-pulse {
-  font-size: 10px;
-  color: #ff3366;
-  background: rgba(255, 51, 102, 0.15);
-  border: 1px solid rgba(255, 51, 102, 0.4);
-  padding: 1px 6px;
-  border-radius: 10px;
-  animation: pulse-beacon 1.5s infinite;
-}
-
-.fids-table-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 6px 8px 10px;
-  overflow: hidden;
-}
-
-/* 固定表头 */
-.fids-table-header {
-  display: flex;
-  align-items: center;
-  height: 32px;
-  background: rgba(12, 22, 40, 0.95);
-  border-bottom: 1px solid rgba(0, 240, 255, 0.35);
-  border-radius: 4px 4px 0 0;
-  padding: 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #7dd3fc;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-}
-
-.fids-col {
-  padding: 0 3px;
-  box-sizing: border-box;
-}
-
-.col-time {
-  width: 66px;
-  flex-shrink: 0;
-}
-
-.col-point {
-  width: 86px;
-  flex-shrink: 0;
-}
-
-.col-dir {
-  width: 76px;
-  flex-shrink: 0;
-}
-
-.col-attr {
-  flex: 1;
-  min-width: 85px;
-}
-
-.col-conf {
-  width: 48px;
-  flex-shrink: 0;
-  text-align: center;
-}
-
-.col-action {
-  width: 52px;
-  flex-shrink: 0;
-  text-align: right;
-}
-
-/* 连续平滑无缝滚动视口 */
-.fids-scroll-viewport {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  /* 机场大屏特有的顶部与底部边缘微弱羽化渐变 */
-  mask-image: linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 12px), transparent 100%);
-}
-
-.fids-scroll-track {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding-top: 4px;
-}
-
-/* 滚动表格行 (类似火车站航班翻滚式黑曜石高对比度条目) */
-.fids-row {
-  display: flex;
-  align-items: center;
-  height: 38px;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #f1f5f9;
-  border-left: 3px solid #00f0ff;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-.fids-row.row-even {
-  background: rgba(16, 28, 48, 0.65);
-}
-
-.fids-row.row-odd {
-  background: rgba(10, 20, 36, 0.45);
-}
-
-.fids-row.row-exit {
-  border-left-color: #ff3366;
-}
-
-.fids-row:hover {
-  background: rgba(0, 240, 255, 0.16);
-  box-shadow: inset 0 0 12px rgba(0, 240, 255, 0.25);
-  cursor: pointer;
-  transform: translateX(2px);
-}
-
-.fids-row.has-clip:hover .fids-clip-btn {
-  background: #00f0ff;
-  color: #030712;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.8);
-}
-
-/* 单元格微视觉样式 */
-.fids-time-mono {
-  font-family: 'JetBrains Mono', 'Roboto Mono', Consolas, monospace;
-  font-size: 12px;
-  font-weight: 600;
-  color: #38bdf8;
-  letter-spacing: 0.5px;
-}
-
-.point-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 100%;
-}
-
-.point-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #00f0ff;
-  box-shadow: 0 0 6px #00f0ff;
-  flex-shrink: 0;
-}
-
-.point-name-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: #e2e8f0;
-}
-
-/* 机场/火车站式进出场状态标签 [ARR] / [DEP] */
-.fids-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-}
-
-.badge-arr {
-  color: #00f0ff;
-  background: rgba(0, 240, 255, 0.15);
-  border: 1px solid rgba(0, 240, 255, 0.4);
-}
-
-.badge-dep {
-  color: #ff3366;
-  background: rgba(255, 51, 102, 0.15);
-  border: 1px solid rgba(255, 51, 102, 0.4);
-}
-
-.dir-icon {
-  font-style: normal;
-  font-weight: bold;
-}
-
-/* 属性特征识别 */
-.attr-veh-tag {
-  color: #cbd5e1;
-  font-size: 11px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.plate-highlight {
-  color: #facc15;
-  font-weight: 700;
-  background: rgba(250, 204, 21, 0.12);
-  border: 1px solid rgba(250, 204, 21, 0.35);
-  padding: 0 4px;
-  border-radius: 2px;
-  font-family: monospace;
-}
-
-.sub-detail {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
-.attr-ped-tag {
-  color: #cbd5e1;
-  font-size: 11px;
-}
-
-.text-muted {
-  color: #64748b;
-}
-
-.conf-mono {
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 11px;
-  color: #38bdf8;
-}
-
-.fids-clip-btn {
-  background: rgba(0, 240, 255, 0.15);
-  color: #00f0ff;
-  border: 1px solid rgba(0, 240, 255, 0.45);
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.fids-clip-btn:hover {
-  background: #00f0ff;
-  color: #030712;
-  box-shadow: 0 0 10px rgba(0, 240, 255, 0.7);
-}
-
-.fids-no-clip {
-  color: #475569;
-  font-size: 10px;
-}
-
-.stream-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 220px;
-  color: #64748b;
+.sub-card-footer .footer-meta {
   font-size: 13px;
-  gap: 8px;
+  color: #7a8ba5;
+  font-family: "DIN Alternate", "Roboto", sans-serif;
+}
+
+.sub-card-footer .arrow-up {
+  color: #00d2ff;
+  font-size: 13px;
+}
+
+.sub-card-footer .arrow-down {
+  color: #ff3366;
+  font-size: 13px;
 }
 
 /* ==================== 抓拍视频存证切片回放弹窗 ==================== */
