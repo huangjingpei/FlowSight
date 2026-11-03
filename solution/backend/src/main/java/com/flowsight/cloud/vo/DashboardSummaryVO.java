@@ -16,6 +16,12 @@ public class DashboardSummaryVO {
     private int todayEntry;
     private int todayExit;
     private int todayTotal;
+
+    // 周期统计 (本月数/本年数/历年累计)
+    private int monthTotal;
+    private int yearTotal;
+    private int historicalTotal;
+    private String historicalStartDate;
     private String snapshotUrl;
     private DemographicsVO demographics;
     private List<HourlyStatVO> hourlyChart;

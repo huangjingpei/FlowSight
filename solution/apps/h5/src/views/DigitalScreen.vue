@@ -99,39 +99,43 @@
           <div class="hud-panel kpi-panel">
             <div class="panel-header">
               <span class="corner corner-tl"></span><span class="corner corner-tr"></span>
-              <span class="panel-title"><i class="title-icon">⚡</i> 实时流量关键指标</span>
-              <span class="panel-tag">{{ isSinglePointMode ? currentPointName : '全域汇总' }}</span>
+              <span class="panel-title"><i class="title-icon">⚡</i> {{ isVehicleMode ? '现场车流量统计' : '现场客流量统计' }}</span>
+              <span class="panel-tag tag-green">{{ isSinglePointMode ? currentPointName : '本地' }}</span>
             </div>
             <div class="panel-body kpi-grid">
+              <!-- 1. 今日入馆 / 今日入场 -->
               <div class="kpi-card glow-cyan">
-                <div class="kpi-label">{{ isVehicleMode ? '今日总通行车次' : '今日总通行' }}</div>
-                <div class="kpi-value">{{ formatNumber(todayTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
-                <div class="kpi-footer">
-                  <span>{{ isVehicleMode ? '进出双向汇流总量' : '进出汇流总量' }}</span>
-                  <span class="badge badge-cyan">实时统计</span>
+                <div class="kpi-label">{{ isVehicleMode ? '今日入场：' : '今日入馆：' }}</div>
+                <div class="kpi-value val-cyan">{{ formatNumber(todayEntry) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+                <div class="kpi-footer justify-end">
+                  <span class="badge-cyan">实时统计</span>
                 </div>
               </div>
+
+              <!-- 2. 本月数 -->
               <div class="kpi-card glow-green">
-                <div class="kpi-label">{{ isVehicleMode ? '场内滞留车辆' : '当前在场滞留' }}</div>
-                <div class="kpi-value val-green">{{ formatNumber(currentOccupancy) }}<span class="unit">{{ isVehicleMode ? '辆' : '人' }}</span></div>
-                <div class="kpi-footer">
-                  <span>{{ isVehicleMode ? '场内停泊滞留负荷' : '场内活跃负荷' }}</span>
+                <div class="kpi-label">本月数：</div>
+                <div class="kpi-value val-green">{{ formatNumber(monthTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+                <div class="kpi-footer justify-end">
                   <span class="beacon-dot"></span>
                 </div>
               </div>
+
+              <!-- 3. 本年数 -->
               <div class="kpi-card glow-blue">
-                <div class="kpi-label">{{ isVehicleMode ? '今日累计进车' : '今日累计进入' }}</div>
-                <div class="kpi-value val-blue">{{ formatNumber(todayEntry) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
-                <div class="kpi-footer">
-                  <span>{{ isVehicleMode ? '进车占比' : '进站占比' }}: {{ entryRatio }}%</span>
+                <div class="kpi-label">本年数：</div>
+                <div class="kpi-value val-cyan">{{ formatNumber(yearTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+                <div class="kpi-footer justify-end">
                   <span class="arrow-up">▲</span>
                 </div>
               </div>
+
+              <!-- 4. 历年累计 -->
               <div class="kpi-card glow-coral">
-                <div class="kpi-label">{{ isVehicleMode ? '今日累计出车' : '今日累计离开' }}</div>
-                <div class="kpi-value val-coral">{{ formatNumber(todayExit) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
-                <div class="kpi-footer">
-                  <span>净流增量: {{ netIncrement > 0 ? `+${netIncrement}` : netIncrement }} {{ isVehicleMode ? '辆' : '' }}</span>
+                <div class="kpi-label">历年累计：</div>
+                <div class="kpi-value val-coral">{{ formatNumber(historicalTotal) }}<span class="unit">{{ isVehicleMode ? '车次' : '人次' }}</span></div>
+                <div class="kpi-footer justify-between">
+                  <span class="history-start-date">自{{ historicalStartDate || '2027年1月1日' }}起</span>
                   <span class="arrow-down">▼</span>
                 </div>
               </div>
@@ -495,6 +499,10 @@ const todayTotal = ref(0);
 const currentOccupancy = ref(0);
 const todayEntry = ref(0);
 const todayExit = ref(0);
+const monthTotal = ref(0);
+const yearTotal = ref(0);
+const historicalTotal = ref(0);
+const historicalStartDate = ref('2027年1月1日');
 const netIncrement = computed(() => todayEntry.value - todayExit.value);
 const entryRatio = computed(() => (todayTotal.value > 0 ? Math.round((todayEntry.value * 100) / todayTotal.value) : 50));
 
@@ -773,9 +781,13 @@ const fetchData = async () => {
       // 若未选择特定点位，展示当前商户(或全域)汇总
       if (selectedPointId.value === 0) {
         todayTotal.value = (gm.totalPedestrianEntry || 0) + (gm.totalPedestrianExit || 0) + (gm.totalVehicleEntry || 0) + (gm.totalVehicleExit || 0);
-        todayEntry.value = (gm.totalPedestrianEntry || 0) + (gm.totalVehicleEntry || 0);
-        todayExit.value = (gm.totalPedestrianExit || 0) + (gm.totalVehicleExit || 0);
-        currentOccupancy.value = (gm.totalPedestrianOccupancy || 0) + (gm.totalVehicleOccupancy || 0);
+        todayEntry.value = isVehicleMode.value ? (gm.totalVehicleEntry || 0) : (gm.totalPedestrianEntry || 0);
+        todayExit.value = isVehicleMode.value ? (gm.totalVehicleExit || 0) : (gm.totalPedestrianExit || 0);
+        currentOccupancy.value = isVehicleMode.value ? (gm.totalVehicleOccupancy || 0) : (gm.totalPedestrianOccupancy || 0);
+        monthTotal.value = isVehicleMode.value ? (gm.totalVehicleMonth || 0) : (gm.totalPedestrianMonth || 0);
+        yearTotal.value = isVehicleMode.value ? (gm.totalVehicleYear || 0) : (gm.totalPedestrianYear || 0);
+        historicalTotal.value = isVehicleMode.value ? (gm.totalVehicleHistorical || 0) : (gm.totalPedestrianHistorical || 0);
+        historicalStartDate.value = gm.historicalStartDate || '2027年1月1日';
       }
     }
 
@@ -789,6 +801,10 @@ const fetchData = async () => {
           todayEntry.value = summaryRes.todayEntry || 0;
           todayExit.value = summaryRes.todayExit || 0;
           currentOccupancy.value = summaryRes.currentOccupancy || 0;
+          monthTotal.value = summaryRes.monthTotal || 0;
+          yearTotal.value = summaryRes.yearTotal || 0;
+          historicalTotal.value = summaryRes.historicalTotal || 0;
+          historicalStartDate.value = summaryRes.historicalStartDate || '2027年1月1日';
         }
 
         // 客群画像比例
@@ -1446,14 +1462,22 @@ onUnmounted(() => {
 .kpi-panel {
   height: 330px;
 }
+.tag-green {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border: 1px solid rgba(16, 185, 129, 0.6) !important;
+  color: #10b981 !important;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 4px;
+}
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 .kpi-card {
-  background: rgba(16, 26, 44, 0.6);
-  border: 1px solid rgba(43, 55, 78, 0.6);
+  background: rgba(13, 22, 39, 0.75);
+  border: 1px solid rgba(30, 58, 95, 0.65);
   border-radius: 6px;
   padding: 14px 12px;
   display: flex;
@@ -1464,27 +1488,31 @@ onUnmounted(() => {
 }
 .kpi-card:hover {
   transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.4);
 }
 .kpi-label {
-  font-size: 12px;
-  color: #8b9cb5;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
 }
 .kpi-value {
-  font-family: 'Segoe UI', sans-serif;
-  font-size: 28px;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-size: 26px;
   font-weight: 800;
-  color: #00f0ff;
   letter-spacing: 0.5px;
   margin: 6px 0;
 }
 .kpi-value .unit {
   font-size: 12px;
   font-weight: normal;
-  color: #8b9cb5;
-  margin-left: 4px;
+  color: #94a3b8;
+  margin-left: 5px;
+}
+.val-cyan {
+  color: #00e5ff;
 }
 .val-green {
-  color: #00ff88;
+  color: #00e676;
 }
 .val-blue {
   color: #38bdf8;
@@ -1496,25 +1524,40 @@ onUnmounted(() => {
 .kpi-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 10px;
+  font-size: 11px;
   color: #6e7681;
 }
+.justify-end {
+  justify-content: flex-end;
+}
+.justify-between {
+  justify-content: space-between;
+}
 .badge-cyan {
-  color: #00f0ff;
+  color: #00e5ff;
+  font-size: 11px;
+  font-weight: 500;
 }
 .beacon-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #00ff88;
-  box-shadow: 0 0 6px #00ff88;
+  background: #00e676;
+  box-shadow: 0 0 8px #00e676;
+  display: inline-block;
 }
 .arrow-up {
-  color: #38bdf8;
+  color: #00e5ff;
+  font-size: 11px;
 }
 .arrow-down {
   color: #ff3366;
+  font-size: 11px;
+}
+.history-start-date {
+  color: #94a3b8;
+  font-size: 11px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 .flow-panel {

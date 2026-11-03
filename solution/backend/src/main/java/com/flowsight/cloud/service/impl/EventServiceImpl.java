@@ -10,12 +10,14 @@ import com.flowsight.cloud.entity.BizPassageEvent;
 import com.flowsight.cloud.entity.BizPoint;
 import com.flowsight.cloud.entity.BizStatsHourly;
 import com.flowsight.cloud.entity.BusinessType;
+import com.flowsight.cloud.entity.SysSystemConfig;
 import com.flowsight.cloud.entity.SysUser;
 import com.flowsight.cloud.mapper.BizDeviceHeartbeatMapper;
 import com.flowsight.cloud.mapper.BizPassageEventMapper;
 import com.flowsight.cloud.mapper.BizPointMapper;
 import com.flowsight.cloud.mapper.BizStatsHourlyMapper;
 import com.flowsight.cloud.mapper.BusinessTypeMapper;
+import com.flowsight.cloud.mapper.SysSystemConfigMapper;
 import com.flowsight.cloud.mapper.SysUserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flowsight.cloud.service.EventService;
@@ -69,6 +71,9 @@ public class EventServiceImpl implements EventService {
     @Autowired(required = false)
     private BusinessTypeMapper businessTypeMapper;
 
+    @Autowired(required = false)
+    private SysSystemConfigMapper systemConfigMapper;
+
     @Autowired
     private MinioService minioService;
 
@@ -77,6 +82,21 @@ public class EventServiceImpl implements EventService {
 
     @Autowired(required = false)
     private ObjectMapper redisObjectMapper;
+
+    private String getHistoricalStartDate() {
+        if (systemConfigMapper != null) {
+            try {
+                SysSystemConfig cfg = systemConfigMapper.selectOne(new LambdaQueryWrapper<SysSystemConfig>()
+                        .eq(SysSystemConfig::getConfigKey, "historical_start_date"));
+                if (cfg != null && cfg.getConfigValue() != null && !cfg.getConfigValue().trim().isEmpty()) {
+                    return cfg.getConfigValue().trim();
+                }
+            } catch (Exception e) {
+                log.warn("获取历年统计起始日期异常: {}", e.getMessage());
+            }
+        }
+        return "2027年1月1日";
+    }
 
     // 待绑定切片池内存兜底: 解决异步上传中切片先于聚合指标或后于聚合指标到达的时序差问题
     private final Map<String, String> pendingClipUrlCache = new ConcurrentHashMap<>();
@@ -643,11 +663,27 @@ public class EventServiceImpl implements EventService {
         } else {
             vo.setLastHeartbeat("暂无上报记录");
         }
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate yearStart = today.withDayOfYear(1);
+        Map<String, Object> periodic = statsMapper.selectPeriodicStatsByPoint(point.getId(), monthStart, yearStart, today);
+        int monthIn = 0;
+        int yearIn = 0;
+        int historicalIn = 0;
+        if (periodic != null) {
+            monthIn = periodic.get("monthEntry") != null ? ((Number) periodic.get("monthEntry")).intValue() : 0;
+            yearIn = periodic.get("yearEntry") != null ? ((Number) periodic.get("yearEntry")).intValue() : 0;
+            historicalIn = periodic.get("historicalEntry") != null ? ((Number) periodic.get("historicalEntry")).intValue() : 0;
+        }
+
         vo.setStreamStatus(currentStatus);
         vo.setCurrentOccupancy(occupancy);
         vo.setTodayEntry(todayIn);
         vo.setTodayExit(todayOut);
         vo.setTodayTotal(todayIn + todayOut);
+        vo.setMonthTotal(monthIn);
+        vo.setYearTotal(yearIn);
+        vo.setHistoricalTotal(historicalIn);
+        vo.setHistoricalStartDate(getHistoricalStartDate());
         vo.setSnapshotUrl(point.getSnapshotUrl() != null ? point.getSnapshotUrl() : "");
         vo.setDemographics(demo);
         vo.setHourlyChart(new ArrayList<>(hourMap.values()));
@@ -1013,12 +1049,42 @@ public class EventServiceImpl implements EventService {
         int totalPedOcc = 0;
         int totalPedIn = 0;
         int totalPedOut = 0;
+        int totalPedMonth = 0;
+        int totalPedYear = 0;
+        int totalPedHistorical = 0;
 
         int totalVehOcc = 0;
         int totalVehIn = 0;
         int totalVehOut = 0;
+        int totalVehMonth = 0;
+        int totalVehYear = 0;
+        int totalVehHistorical = 0;
 
         LocalDate today = LocalDate.now();
+        LocalDate monthStart = today.withDayOfMonth(1);
+        LocalDate yearStart = today.withDayOfYear(1);
+
+        List<Long> pointIds = new ArrayList<>();
+        for (BizPoint p : points) {
+            pointIds.add(p.getId());
+        }
+        Map<Long, Map<String, Object>> periodicMap = new HashMap<>();
+        if (!pointIds.isEmpty()) {
+            try {
+                List<Map<String, Object>> pRows = statsMapper.selectPeriodicStatsBatch(pointIds, monthStart, yearStart, today);
+                if (pRows != null) {
+                    for (Map<String, Object> r : pRows) {
+                        Object pidObj = r.get("pointId");
+                        if (pidObj != null) {
+                            periodicMap.put(((Number) pidObj).longValue(), r);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("批量统计点位周期数据异常: {}", ex.getMessage());
+            }
+        }
+
         List<DashboardPointCardVO> cardList = new ArrayList<>();
 
         for (BizPoint p : points) {
@@ -1035,6 +1101,16 @@ public class EventServiceImpl implements EventService {
                 }
             }
             int todayTotal = todayIn + todayOut;
+
+            Map<String, Object> pStat = periodicMap.get(p.getId());
+            int monthIn = 0;
+            int yearIn = 0;
+            int historicalIn = 0;
+            if (pStat != null) {
+                monthIn = pStat.get("monthEntry") != null ? ((Number) pStat.get("monthEntry")).intValue() : 0;
+                yearIn = pStat.get("yearEntry") != null ? ((Number) pStat.get("yearEntry")).intValue() : 0;
+                historicalIn = pStat.get("historicalEntry") != null ? ((Number) pStat.get("historicalEntry")).intValue() : 0;
+            }
 
             // 2. 查询设备最新心跳与在线判定 (15秒内有心跳即判定 ONLINE)
             BizDeviceHeartbeat hb = heartbeatMapper.selectById(p.getId());
@@ -1067,11 +1143,17 @@ public class EventServiceImpl implements EventService {
                 totalVehOcc += occupancy;
                 totalVehIn += todayIn;
                 totalVehOut += todayOut;
+                totalVehMonth += monthIn;
+                totalVehYear += yearIn;
+                totalVehHistorical += historicalIn;
             } else {
                 pedCount++;
                 totalPedOcc += occupancy;
                 totalPedIn += todayIn;
                 totalPedOut += todayOut;
+                totalPedMonth += monthIn;
+                totalPedYear += yearIn;
+                totalPedHistorical += historicalIn;
             }
 
             // 4. 组装单卡片视图对象
@@ -1086,6 +1168,9 @@ public class EventServiceImpl implements EventService {
             card.setTodayEntry(todayIn);
             card.setTodayExit(todayOut);
             card.setTodayTotal(todayTotal);
+            card.setMonthTotal(monthIn);
+            card.setYearTotal(yearIn);
+            card.setHistoricalTotal(historicalIn);
             card.setSnapshotUrl(p.getSnapshotUrl() != null ? p.getSnapshotUrl() : "");
             card.setDefault(defaultPointId != null && defaultPointId.equals(p.getId()));
             card.setLastHeartbeat(lastHeartbeatStr);
@@ -1102,10 +1187,18 @@ public class EventServiceImpl implements EventService {
         global.setTotalPedestrianOccupancy(totalPedOcc);
         global.setTotalPedestrianEntry(totalPedIn);
         global.setTotalPedestrianExit(totalPedOut);
+        global.setTotalPedestrianMonth(totalPedMonth);
+        global.setTotalPedestrianYear(totalPedYear);
+        global.setTotalPedestrianHistorical(totalPedHistorical);
 
         global.setTotalVehicleOccupancy(totalVehOcc);
         global.setTotalVehicleEntry(totalVehIn);
         global.setTotalVehicleExit(totalVehOut);
+        global.setTotalVehicleMonth(totalVehMonth);
+        global.setTotalVehicleYear(totalVehYear);
+        global.setTotalVehicleHistorical(totalVehHistorical);
+
+        global.setHistoricalStartDate(getHistoricalStartDate());
 
         DashboardOverviewVO overview = new DashboardOverviewVO();
         overview.setDefaultPointId(defaultPointId);

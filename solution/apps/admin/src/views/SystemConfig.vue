@@ -70,6 +70,43 @@
             />
           </div>
         </div>
+
+        <!-- 核心功能 2: 历年累计起算基准日期配置 -->
+        <div class="feature-item mt-20">
+          <div class="feature-left">
+            <div class="feature-icon-box">
+              <span class="f-icon">📅</span>
+            </div>
+            <div class="feature-info">
+              <div class="feature-name-row">
+                <span class="f-name">大屏历年累计起算基准日</span>
+                <el-tag size="small" type="info" effect="plain" class="ml-10">当前展示: 自{{ historicalStartDate || '2027年1月1日' }}起</el-tag>
+              </div>
+              <p class="f-desc">
+                控制数字大屏【现场客流/车流量统计】中【历年累计】卡片的起算日期说明，默认为 2027年1月1日。
+              </p>
+              <div class="f-meta">
+                <span>配置键名: <code>historical_start_date</code></span>
+                <span class="ml-20">影响范围: 可视化数字大屏现场流量统计卡片</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="feature-right">
+            <el-input
+              v-model="historicalStartDate"
+              placeholder="例如: 2027年1月1日"
+              style="width: 170px; margin-right: 10px;"
+            />
+            <el-button
+              type="primary"
+              :loading="savingKey === 'historical_start_date'"
+              @click="handleSaveHistoricalStartDate"
+            >
+              保存基准日
+            </el-button>
+          </div>
+        </div>
       </div>
     </el-card>
 
@@ -109,12 +146,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
-import { Refresh, Operation, InfoFilled } from '@element-plus/icons-vue';
+import { Refresh, Operation, InfoFilled, Calendar } from '@element-plus/icons-vue';
 import { adminApi } from '../api';
 
 const loading = ref(false);
 const savingKey = ref('');
 const videoPlaybackEnabled = ref(false);
+const historicalStartDate = ref('2027年1月1日');
 
 const loadConfigs = async () => {
   loading.value = true;
@@ -128,11 +166,36 @@ const loadConfigs = async () => {
       } else {
         videoPlaybackEnabled.value = false;
       }
+
+      const dateCfg = list.find((item: any) => item.configKey === 'historical_start_date');
+      if (dateCfg && dateCfg.configValue) {
+        historicalStartDate.value = String(dateCfg.configValue).trim();
+      }
     }
   } catch (err: any) {
     ElMessage.error(err.message || '加载系统配置失败');
   } finally {
     loading.value = false;
+  }
+};
+
+const handleSaveHistoricalStartDate = async () => {
+  const dateVal = historicalStartDate.value.trim();
+  if (!dateVal) {
+    ElMessage.warning('起始基准日不能为空！');
+    return;
+  }
+  savingKey.value = 'historical_start_date';
+  try {
+    await adminApi.updateSystemConfig({
+      configKey: 'historical_start_date',
+      configValue: dateVal
+    });
+    ElMessage.success(`已保存历年累计起算基准日为: ${dateVal}`);
+  } catch (err: any) {
+    ElMessage.error(err.message || '保存起始基准日失败');
+  } finally {
+    savingKey.value = '';
   }
 };
 

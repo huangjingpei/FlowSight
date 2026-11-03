@@ -25,4 +25,32 @@ public interface BizStatsHourlyMapper extends BaseMapper<BizStatsHourly> {
             "      FROM biz_stats_hourly WHERE point_id = #{pointId}) t " +
             "GROUP BY t.quarterName ORDER BY t.quarterName ASC")
     List<Map<String, Object>> selectQuarterlyStats(@Param("pointId") Long pointId);
+
+    @Select("SELECT " +
+            "COALESCE(SUM(CASE WHEN stat_date >= #{monthStart} AND stat_date <= #{today} THEN entry_count ELSE 0 END), 0) as monthEntry, " +
+            "COALESCE(SUM(CASE WHEN stat_date >= #{yearStart} AND stat_date <= #{today} THEN entry_count ELSE 0 END), 0) as yearEntry, " +
+            "COALESCE(SUM(entry_count), 0) as historicalEntry " +
+            "FROM biz_stats_hourly " +
+            "WHERE point_id = #{pointId}")
+    Map<String, Object> selectPeriodicStatsByPoint(@Param("pointId") Long pointId,
+                                                  @Param("monthStart") LocalDate monthStart,
+                                                  @Param("yearStart") LocalDate yearStart,
+                                                  @Param("today") LocalDate today);
+
+    @Select("<script>" +
+            "SELECT point_id as pointId, " +
+            "COALESCE(SUM(CASE WHEN stat_date &gt;= #{monthStart} AND stat_date &lt;= #{today} THEN entry_count ELSE 0 END), 0) as monthEntry, " +
+            "COALESCE(SUM(CASE WHEN stat_date &gt;= #{yearStart} AND stat_date &lt;= #{today} THEN entry_count ELSE 0 END), 0) as yearEntry, " +
+            "COALESCE(SUM(entry_count), 0) as historicalEntry " +
+            "FROM biz_stats_hourly " +
+            "WHERE point_id IN " +
+            "<foreach item='item' collection='pointIds' open='(' separator=',' close=')'>" +
+            "#{item}" +
+            "</foreach> " +
+            "GROUP BY point_id" +
+            "</script>")
+    List<Map<String, Object>> selectPeriodicStatsBatch(@Param("pointIds") List<Long> pointIds,
+                                                       @Param("monthStart") LocalDate monthStart,
+                                                       @Param("yearStart") LocalDate yearStart,
+                                                       @Param("today") LocalDate today);
 }
