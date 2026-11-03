@@ -19,7 +19,6 @@
 -- Table structure for table `sys_user`
 --
 
-DROP TABLE IF EXISTS `sys_user`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sys_user` (
@@ -56,7 +55,6 @@ UNLOCK TABLES;
 -- Table structure for table `biz_point`
 --
 
-DROP TABLE IF EXISTS `biz_point`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `biz_point` (
@@ -96,7 +94,6 @@ UNLOCK TABLES;
 -- Table structure for table `biz_passage_event`
 --
 
-DROP TABLE IF EXISTS `biz_passage_event`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `biz_passage_event` (
@@ -138,7 +135,6 @@ UNLOCK TABLES;
 -- Table structure for table `biz_stats_hourly`
 --
 
-DROP TABLE IF EXISTS `biz_stats_hourly`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `biz_stats_hourly` (
@@ -172,7 +168,6 @@ UNLOCK TABLES;
 -- Table structure for table `sys_business_type`
 --
 
-DROP TABLE IF EXISTS `sys_business_type`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `sys_business_type` (
@@ -208,7 +203,6 @@ UNLOCK TABLES;
 -- Table structure for table sys_system_config
 --
 
-DROP TABLE IF EXISTS sys_system_config;
 CREATE TABLE sys_system_config (
   id bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   config_key varchar(64) NOT NULL COMMENT '配置标识键名',

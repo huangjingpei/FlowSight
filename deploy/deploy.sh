@@ -121,14 +121,10 @@ if [ -f "/etc/mysql/debian.cnf" ]; then
     mysql --defaults-file=/etc/mysql/debian.cnf -e "GRANT ALL PRIVILEGES ON ${MYSQL_DB}.* TO '${MYSQL_USER}'@'%';"
     mysql --defaults-file=/etc/mysql/debian.cnf -e "FLUSH PRIVILEGES;"
     
-    # 导入 Schema 与种子测试数据
+    # 导入 Schema (采用 CREATE TABLE IF NOT EXISTS，绝不删除既有数据)
     if [ -f "${SCRIPT_DIR}/schema.sql" ]; then
         mysql --defaults-file=/etc/mysql/debian.cnf ${MYSQL_DB} < "${SCRIPT_DIR}/schema.sql"
-        log_info "表结构架构 schema.sql 导入完成"
-    fi
-    if [ -f "${SCRIPT_DIR}/data_init.sql" ]; then
-        mysql --defaults-file=/etc/mysql/debian.cnf ${MYSQL_DB} < "${SCRIPT_DIR}/data_init.sql"
-        log_info "预置多租户种子数据 data_init.sql 导入完成"
+        log_info "表结构架构 schema.sql 检查完成"
     fi
 else
     log_warn "未找到 debian.cnf，使用标准 mysql 用户验证..."

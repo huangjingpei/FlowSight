@@ -68,10 +68,9 @@ if [ -d "${BUILD_DIR}/clips" ]; then
     cp -rf "${BUILD_DIR}/clips/"* "${TARGET_DIR}/clips/"
 fi
 
-# 更新数据库表与种子数据
-if [ -f "${BUILD_DIR}/deploy/data_init.sql" ] && [ -f "/etc/mysql/debian.cnf" ]; then
+# 数据库结构检查 (严禁执行任何 DROP/TRUNCATE/data_init.sql，确保用户数据资产绝对不被清空)
+if [ -f "${BUILD_DIR}/backend/src/main/resources/schema.sql" ] && [ -f "/etc/mysql/debian.cnf" ]; then
     mysql --defaults-file=/etc/mysql/debian.cnf flowsight_cloud < "${BUILD_DIR}/backend/src/main/resources/schema.sql"
-    mysql --defaults-file=/etc/mysql/debian.cnf flowsight_cloud < "${BUILD_DIR}/deploy/data_init.sql"
 fi
 
 # 配置 Nginx 与 Systemd
